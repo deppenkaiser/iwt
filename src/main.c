@@ -5,7 +5,17 @@
 #include <ocl/ocl.h>
 
 // ============================================================
-// IWT-Konstanten (alles wird berechnet, keine externen Werte)
+// Parameter für die Simulation
+// ============================================================
+
+#define NUM_NODES 1024
+#define NUM_EDGES (NUM_NODES * 12)
+#define NUM_STEPS 10
+#define OUTPUT_INTERVAL 1
+#define SCALE_FACTOR 1.0e6        // Atomare Skala (l0 -> 1e-10 m)
+
+// ============================================================
+// IWT-Konstanten
 // ============================================================
 
 static inline long double iwt_phi(void)
@@ -36,7 +46,7 @@ static inline double iwt_calculate_l0(double hbar, double m_p, double c)
 }
 
 // ============================================================
-// IWT-Parameter aus Naturkonstanten berechnen
+// IWT-Parameter
 // ============================================================
 
 typedef struct {
@@ -52,29 +62,16 @@ static inline IWTParameters iwt_calculate_parameters(double D, double l0)
 {
     IWTParameters params;
 
-    // Gemessene Naturkonstanten
-    double c = 2.99792458e8;          // m/s
-    double hbar = 1.054571817e-34;    // J*s
-    double G = 6.67430e-11;           // m^3/(kg*s^2)
-    double alpha = 7.29735256e-3;     // Feinstrukturkonstante
-    double k_B = 1.380649e-23;        // J/K
-    double m_nu = 0.1;                // eV/c^2 (geschätzt)
+    double c = 2.99792458e8;
+    double G = 6.67430e-11;
+    double alpha = 7.29735256e-3;
+    double k_B = 1.380649e-23;
 
-    // 1. T = l0 / c
     params.T = l0 / c;
-
-    // 2. beta_IWT = G * T^2 / l0^(3-D)
     params.beta = G * (params.T * params.T) / pow(l0, 3.0 - D);
-
-    // 3. alpha_IWT = alpha * beta_IWT
     params.alpha = alpha * params.beta;
-
-    // 4. gamma_IWT = k_B * alpha_IWT * T / l0 * <I>
-    //    <I> = 1.0 (Normierung)
     double I_mean = 1.0;
     params.gamma = k_B * params.alpha * params.T / l0 * I_mean;
-
-    // D und l0 speichern
     params.D = D;
     params.l0 = l0;
 
@@ -85,12 +82,8 @@ static inline IWTParameters iwt_calculate_parameters(double D, double l0)
 // main
 // ============================================================
 
-#define NUM_NODES 1024
-#define NUM_EDGES (NUM_NODES * 12)
-
 int main(int argc, char *argv[])
 {
-    // 1. ocl initialisieren
     struct ocl_core ocl = {0};
     if (!ocl_initialize(&ocl))
     {
@@ -112,35 +105,43 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // 2. IWT-Konstanten berechnen
+    // 1. IWT-Konstanten berechnen (fundamental)
     double D = iwt_calculate_D();
     double hbar = 1.054571817e-34;
     double m_p = 1.67262192369e-27;
     double c = 2.99792458e8;
     double l0 = iwt_calculate_l0(hbar, m_p, c);
 
-    printf("IWT-Konstanten:\n");
+    // 2. Auf atomare Skala skalieren
+    double l0_atom = l0 * SCALE_FACTOR;
+    double T_atom = (l0 / c) * SCALE_FACTOR;
+
+    printf("IWT-Konstanten (fundamental):\n");
     printf("  D  = %.16f\n", D);
     printf("  l0 = %.4e m\n", l0);
+    printf("  T  = %.4e s\n", T_atom / SCALE_FACTOR);
 
-	// 3. IWT-Parameter berechnen
-	IWTParameters params = iwt_calculate_parameters(D, l0);
+    printf("\nIWT-Konstanten (atomar):\n");
+    printf("  l0 = %.4e m\n", l0_atom);
+    printf("  T  = %.4e s\n", T_atom);
 
-	printf("\nIWT-Parameter:\n");
-	printf("  alpha_IWT = %.4e\n", params.alpha);
-	printf("  beta_IWT  = %.4e\n", params.beta);
-	printf("  gamma_IWT = %.4e\n", params.gamma);
-	printf("  T         = %.4e s\n", params.T);
+    // 3. IWT-Parameter berechnen
+    IWTParameters params = iwt_calculate_parameters(D, l0);
 
-    // 4. Host-Daten initialisieren (Ring-Topologie für Test)
-    float *host_nodes = malloc(NUM_NODES * sizeof(float));
+    printf("\nIWT-Parameter:\n");
+    printf("  alpha_IWT = %.4e\n", params.alpha);
+    printf("  beta_IWT  = %.4e\n", params.beta);
+    printf("  gamma_IWT = %.4e\n", params.gamma);
+
+    // 4. Host-Daten initialisieren
+    double *host_nodes = malloc(NUM_NODES * sizeof(double));
     uint32_t *host_adjacency = malloc(NUM_EDGES * sizeof(uint32_t));
-    float *host_flows = malloc(NUM_EDGES * sizeof(float));
+    double *host_flows = malloc(NUM_EDGES * sizeof(double));
 
-    // Ungleiche Verteilung
+    // Knoten initialisieren (Massen in u)
     for (uint32_t i = 0; i < NUM_NODES; i++)
     {
-        host_nodes[i] = 1.0f + 0.001f * (float)(i % 10);
+        host_nodes[i] = 1.0 + 0.1 * (double)(i % 10);   // 1.0 u, 1.1 u, 1.2 u, ...
     }
 
     // Adjazenzliste (Ring mit 12 Nachbarn)
@@ -156,13 +157,12 @@ int main(int argc, char *argv[])
 
     // 5. GPU-Buffer erstellen
     cl_mem d_nodes = ocl_create_buffer(&ocl, OCL_BUF_READ_WRITE,
-                                       NUM_NODES * sizeof(float), host_nodes);
+                                       NUM_NODES * sizeof(double), host_nodes);
     cl_mem d_adjacency = ocl_create_buffer(&ocl, OCL_BUF_READ_ONLY,
                                            NUM_EDGES * sizeof(uint32_t), host_adjacency);
     cl_mem d_flows = ocl_create_buffer(&ocl, OCL_BUF_WRITE_ONLY,
-                                       NUM_EDGES * sizeof(float), NULL);
+                                       NUM_EDGES * sizeof(double), NULL);
 
-    // 6. Kernel holen
     cl_kernel kernel = ocl_get_kernel(&ocl, OCL_KERNEL_IWT_UPDATE);
     if (!kernel)
     {
@@ -171,42 +171,60 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // 7. Parameter setzen (verwende die berechneten Kopplungen)
-    float dt = 0.00001f;
+    // 6. Parameter setzen (Kopplungen unverändert)
+    double G_sim = params.beta;
+    double k_sim = params.alpha;
+    double Q_sim = params.gamma;
+    double dt = T_atom;
 
-    // Die Kopplungen werden im Kernel verwendet:
-    // - G  = params.beta  (für WG)
-    // - k  = params.alpha (für WED)
-    // - Q  = params.gamma (für Q)
-    //
-    // Der Kernel muss diese Werte als Parameter erhalten.
-    // Dazu muss die Setter-Funktion erweitert werden.
+    printf("\nSimulations-Parameter (atomar, Massen in u):\n");
+    printf("  G_sim  = %.4e\n", G_sim);
+    printf("  k_sim  = %.4e\n", k_sim);
+    printf("  Q_sim  = %.4e\n", Q_sim);
+    printf("  dt     = %.4e s\n", dt);
 
-    ocl_set_parameter_iwt_update(kernel, d_nodes, d_adjacency, (float)D, (float)l0, (float)params.beta, (float)params.alpha, (float)params.gamma, NUM_NODES, dt);
+    ocl_set_parameter_iwt_update(kernel, d_nodes, d_adjacency, d_flows,
+                                 D, l0_atom,
+                                 G_sim, k_sim, Q_sim,
+                                 NUM_NODES, dt);
 
-    // 8. Kernel ausführen (10000 Schritte)
-    for (int step = 0; step < 10000; step++)
+    // 7. Simulation
+    printf("\nSimulation läuft...\n");
+
+    for (int step = 0; step < NUM_STEPS; step++)
     {
         if (!ocl_enqueue_kernel(&ocl, kernel, NUM_NODES, 256))
         {
-            fprintf(stderr, "Fehler: Kernel-Ausführung fehlgeschlagen.\n");
+            fprintf(stderr, "Fehler: Kernel-Ausführung bei Schritt %d fehlgeschlagen.\n", step);
             ocl_deinitialize(&ocl);
             return 1;
         }
+
+        if (step % OUTPUT_INTERVAL == 0)
+        {
+            clEnqueueReadBuffer(ocl.queue, d_nodes, CL_TRUE, 0,
+                                NUM_NODES * sizeof(double), host_nodes, 0, NULL, NULL);
+
+            printf("Schritt %d:\n", step);
+            for (int i = 0; i < 10; i++)
+            {
+                printf("  nodes[%d] = %.20f\n", i, host_nodes[i]);
+            }
+            printf("\n");
+        }
     }
 
-    // 9. Ergebnisse zurücklesen
-    clEnqueueReadBuffer(ocl.queue, d_nodes, CL_TRUE, 0,
-                        NUM_NODES * sizeof(float), host_nodes, 0, NULL, NULL);
+    // 8. Flüsse auslesen
+    clEnqueueReadBuffer(ocl.queue, d_flows, CL_TRUE, 0,
+                        NUM_EDGES * sizeof(double), host_flows, 0, NULL, NULL);
 
-    // 10. Ergebnis ausgeben
-    printf("\nErste 10 Knotenwerte nach Update:\n");
-    for (int i = 0; i < 10; i++)
+    printf("\nKräfte für Knoten 0 (erste 4 Flüsse):\n");
+    for (int i = 0; i < 4; i++)
     {
-        printf("  nodes[%d] = %.6f\n", i, host_nodes[i]);
+        printf("  flows[%d] = %.4e\n", i, host_flows[i]);
     }
 
-    // 11. Aufräumen
+    // 9. Aufräumen
     free(host_nodes);
     free(host_adjacency);
     free(host_flows);
