@@ -126,21 +126,11 @@ int main(int argc, char *argv[])
 	// 3. IWT-Parameter berechnen
 	IWTParameters params = iwt_calculate_parameters(D, l0);
 
-	// 4. Feinstrukturkonstante berechnen
-	double alpha = params.alpha / params.beta;
-
 	printf("\nIWT-Parameter:\n");
 	printf("  alpha_IWT = %.4e\n", params.alpha);
 	printf("  beta_IWT  = %.4e\n", params.beta);
 	printf("  gamma_IWT = %.4e\n", params.gamma);
 	printf("  T         = %.4e s\n", params.T);
-
-	printf("\nFeinstrukturkonstante:\n");
-	printf("  alpha = alpha_IWT / beta_IWT = %.4e\n", alpha);
-	printf("  Gemessener Wert: 7.29735256e-3\n");
-	printf("  Abweichung: %.2e (%.2f%%)\n",
-		alpha - 7.29735256e-3,
-		(alpha - 7.29735256e-3) / 7.29735256e-3 * 100.0);
 
     // 4. Host-Daten initialisieren (Ring-Topologie für Test)
     float *host_nodes = malloc(NUM_NODES * sizeof(float));
