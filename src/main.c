@@ -5,77 +5,300 @@
 #include <ocl/ocl.h>
 
 // ============================================================
-// Parameter für die Simulation
+// Konstanten
 // ============================================================
 
 #define NUM_NODES 1024
 #define NUM_EDGES (NUM_NODES * 12)
-#define NUM_STEPS 10
-#define OUTPUT_INTERVAL 1
-#define SCALE_FACTOR 1.0e6        // Atomare Skala (l0 -> 1e-10 m)
+#define NUM_STEPS 100
+#define OUTPUT_INTERVAL 10
+#define MAX_SPECTRUM_DIST 20
 
 // ============================================================
-// IWT-Konstanten
+// Hilfsfunktionen
 // ============================================================
 
-static inline long double iwt_phi(void)
-{
-    return (1.0L + sqrtl(5.0L)) / 2.0L;
-}
-
-static inline long double iwt_pi(void)
-{
-    return 4.0L * atanl(1.0L);
-}
-
-static inline double iwt_calculate_D(void)
-{
-    long double phi = iwt_phi();
-    long double numerator = logl(20.0L * phi);
-    long double denominator = logl(2.0L + phi);
-    return (double)(numerator / denominator);
-}
-
-static inline double iwt_calculate_l0(double hbar, double m_p, double c)
-{
-    long double phi = iwt_phi();
-    long double pi = iwt_pi();
-    long double geometric_factor = (5.0L * phi * phi * phi) / (6.0L * pi);
-    long double l0 = powl(geometric_factor, 1.0L / 3.0L) * ((long double)hbar / ((long double)m_p * (long double)c));
-    return (double)l0;
+static inline double iwt_D(void) {
+    double phi = (1.0 + sqrt(5.0)) / 2.0;
+    return log(20.0 * phi) / log(2.0 + phi);
 }
 
 // ============================================================
-// IWT-Parameter
+// Parameter-Strukturen
 // ============================================================
 
 typedef struct {
-    double alpha;   // alpha_IWT
-    double beta;    // beta_IWT
-    double gamma;   // gamma_IWT
-    double T;       // fundamentaler Zeitschrift
-    double l0;      // fundamentale Länge
-    double D;       // fraktale Dimension
-} IWTParameters;
+    double D;
+    double l0;
+    double G;
+    double k;
+    double Q;
+    double dt;
+} IWTParams;
 
-static inline IWTParameters iwt_calculate_parameters(double D, double l0)
+typedef struct {
+    double *nodes;
+    uint32_t *adjacency;
+    double *flows;
+} HostData;
+
+typedef struct {
+    cl_mem nodes;
+    cl_mem adjacency;
+    cl_mem flows;
+} GPUBuffers;
+
+// ============================================================
+// Umrechnung von IWT-Einheiten in SI-Einheiten
+// ============================================================
+
+typedef struct {
+    double I_phys;
+    double M_phys;
+    double E_phys;
+    double L_phys;
+    double T_phys;
+    double rho_phys;
+} PhysicalQuantities;
+
+PhysicalQuantities convert_iwt_to_si(
+    double I_IWT,
+    double D,
+    double dt_IWT,
+    int step,
+    double I0)
 {
-    IWTParameters params;
+    PhysicalQuantities pq = {0};
 
-    double c = 2.99792458e8;
-    double G = 6.67430e-11;
-    double alpha = 7.29735256e-3;
-    double k_B = 1.380649e-23;
+    double l0_SI = 1.8e-15;
+    double c_SI = 2.99792458e8;
+    double T_SI = l0_SI / c_SI;
+    double m_p_SI = 1.67262192369e-27;
 
-    params.T = l0 / c;
-    params.beta = G * (params.T * params.T) / pow(l0, 3.0 - D);
-    params.alpha = alpha * params.beta;
+    pq.T_phys = (double)step * dt_IWT * T_SI;
+    pq.L_phys = l0_SI;
+    pq.I_phys = I_IWT * I0;
+    pq.M_phys = pq.I_phys * m_p_SI;
+    pq.E_phys = pq.M_phys * c_SI * c_SI;
+    pq.rho_phys = pq.M_phys / (l0_SI * l0_SI * l0_SI);
+
+    return pq;
+}
+
+// ============================================================
+// Initialisierungen
+// ============================================================
+
+IWTParams iwt_params_init(void) {
+    IWTParams p = {
+        .D = iwt_D(),
+        .l0 = 1.0,
+        .G = 1.0,
+        .k = 1.0,
+        .Q = 1.0,
+        .dt = 0.0001
+    };
+    return p;
+}
+
+HostData* host_data_alloc(void) {
+    HostData *h = malloc(sizeof(HostData));
+    if (!h) return NULL;
+    h->nodes = malloc(NUM_NODES * sizeof(double));
+    h->adjacency = malloc(NUM_EDGES * sizeof(uint32_t));
+    h->flows = malloc(NUM_EDGES * sizeof(double));
+    if (!h->nodes || !h->adjacency || !h->flows) {
+        free(h->nodes); free(h->adjacency); free(h->flows); free(h);
+        return NULL;
+    }
+    return h;
+}
+
+void host_data_init(HostData *h) {
+    for (uint32_t i = 0; i < NUM_NODES; i++) {
+        h->nodes[i] = 1.0 + 0.001 * (double)(i % 10);
+    }
+    for (uint32_t i = 0; i < NUM_NODES; i++) {
+        h->adjacency[i * 2] = i * 12;
+        h->adjacency[i * 2 + 1] = i * 12 + 12;
+        for (uint32_t j = 0; j < 12; j++) {
+            h->adjacency[i * 12 + j] = (i + j + 1) % NUM_NODES;
+        }
+    }
+}
+
+void host_data_free(HostData *h) {
+    if (!h) return;
+    free(h->nodes);
+    free(h->adjacency);
+    free(h->flows);
+    free(h);
+}
+
+// ============================================================
+// GPU-Buffer
+// ============================================================
+
+GPUBuffers gpu_buffers_create(struct ocl_core *ocl, HostData *h) {
+    GPUBuffers b = {0};
+    b.nodes = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE,
+                                NUM_NODES * sizeof(double), h->nodes);
+    b.adjacency = ocl_create_buffer(ocl, OCL_BUF_READ_ONLY,
+                                    NUM_EDGES * sizeof(uint32_t), h->adjacency);
+    b.flows = ocl_create_buffer(ocl, OCL_BUF_WRITE_ONLY,
+                                NUM_EDGES * sizeof(double), NULL);
+    return b;
+}
+
+void gpu_buffers_free(GPUBuffers *b) {
+    clReleaseMemObject(b->nodes);
+    clReleaseMemObject(b->adjacency);
+    clReleaseMemObject(b->flows);
+}
+
+// ============================================================
+// Simulation
+// ============================================================
+
+void run_simulation(struct ocl_core *ocl, cl_kernel kernel,
+                    GPUBuffers *buf, HostData *h,
+                    IWTParams *p, double initial_sum)
+{
+    for (int step = 0; step < NUM_STEPS; step++) {
+        if (!ocl_enqueue_kernel(ocl, kernel, NUM_NODES, 256)) {
+            fprintf(stderr, "Fehler: Kernel bei Schritt %d\n", step);
+            return;
+        }
+
+        clEnqueueReadBuffer(ocl->queue, buf->nodes, CL_TRUE, 0,
+                            NUM_NODES * sizeof(double), h->nodes, 0, NULL, NULL);
+
+        double sum = 0.0;
+        for (uint32_t i = 0; i < NUM_NODES; i++) {
+            sum += h->nodes[i];
+        }
+        double deviation = sum - initial_sum;
+
+        if (step % OUTPUT_INTERVAL == 0) {
+            printf("Schritt %d:\n", step);
+            for (int i = 0; i < 10; i++) {
+                printf("  I[%d] = %.10f\n", i, h->nodes[i]);
+            }
+            printf("  Summe I: %.12f\n", sum);
+            printf("  Abweichung: %.12e\n", deviation);
+            printf("\n");
+        }
+    }
+}
+
+// ============================================================
+// Kraftspektrum (Host-seitig)
+// ============================================================
+
+void compute_force_spectrum(HostData *h, double D) {
+    double *spectrum = calloc(NUM_NODES, sizeof(double));
+    if (!spectrum) {
+        fprintf(stderr, "Fehler: Spektrum-Allokation fehlgeschlagen.\n");
+        return;
+    }
+
+    for (uint32_t i = 0; i < NUM_NODES; i++) {
+        double I_i = h->nodes[i];
+        uint32_t start = h->adjacency[i * 2];
+        uint32_t end = h->adjacency[i * 2 + 1];
+        for (uint32_t e = start; e < end; e++) {
+            uint32_t j = h->adjacency[e];
+            if (j == i) continue;
+            double I_j = h->nodes[j];
+            double dist = (double)(j - i);
+            if (dist < 0.0) dist = -dist;
+            if (dist < 1.0) dist = 1.0;
+            if (dist >= MAX_SPECTRUM_DIST) continue;
+
+            double r = pow(dist, D - 2.0);
+            double diff = I_i - I_j;
+            double F_wed = diff / pow(r, D - 1.0);
+            double F_wg  = -diff / pow(r, D - 2.0);
+            double F_q   = diff / pow(r, D - 2.0);
+            double F_total = F_wed + F_wg + F_q;
+
+            int idx = (int)dist;
+            spectrum[idx] += F_total;
+        }
+    }
+
+    printf("\nKraftspektrum (Distanz -> akkumulierte Kraft):\n");
+    for (int d = 1; d < MAX_SPECTRUM_DIST; d++) {
+        if (spectrum[d] != 0.0) {
+            printf("  dist %2d: %.6e\n", d, spectrum[d]);
+        }
+    }
+    free(spectrum);
+}
+
+// ============================================================
+// Schritt 3: WDBT+-Konstanten (korrigierte Neutrinomasse)
+// ============================================================
+
+void compute_wdbt_constants(double D)
+{
+    printf("\n=== Schritt 3: Korrekte Kalibrierung der IWT-Parameter ===\n");
+
+    double hbar_SI = 1.054571817e-34;
+    double c_SI = 2.99792458e8;
+    double G_SI = 6.67430e-11;
+    double alpha_SI = 7.29735256e-3;
+    double k_B_SI = 1.380649e-23;
+    double m_e_SI = 9.1093837015e-31;
+
+    double l0_SI = 1.8e-15;                // Protonen-Compton (für Gravitation)
+    double T_SI = l0_SI / c_SI;
     double I_mean = 1.0;
-    params.gamma = k_B * params.alpha * params.T / l0 * I_mean;
-    params.D = D;
-    params.l0 = l0;
 
-    return params;
+    // IWT-Parameter (Gravitation)
+    double beta_IWT = G_SI * T_SI * T_SI / pow(l0_SI, 3.0 - D);
+    double alpha_IWT = alpha_SI * beta_IWT;
+    double gamma_IWT = alpha_IWT * k_B_SI * T_SI / l0_SI * I_mean;
+    double Delta_I_min = hbar_SI / (alpha_IWT * l0_SI * l0_SI);
+
+    // ---------- NEUTRINOMASSE (nach Anhang J) ----------
+    // 1. Reduzierte Compton-Wellenlänge des Elektrons
+    double lambda_e = hbar_SI / (m_e_SI * c_SI);   // 3.8615926764e-13 m
+
+    // 2. Geometrischer Faktor (Dodekaeder / Kugel)
+    double geom_factor = 1.36;   // ≈ (V_Dodekaeder / V_Kugel)^(1/3)
+
+    // 3. Fundamentale Länge für Neutrinos
+    double l0_nu = geom_factor * lambda_e;         // ≈ 5.25e-13 m
+
+    // 4. Neutrinomasse
+    double m_nu_kg = hbar_SI / (l0_nu * c_SI);
+    double m_nu_eV = m_nu_kg * 5.609588e35;
+
+    // Ausgabe
+    printf("IWT-Parameter (dimensionslos):\n");
+    printf("  α_IWT   = %.6e\n", alpha_IWT);
+    printf("  β_IWT   = %.6e\n", beta_IWT);
+    printf("  γ_IWT   = %.6e\n", gamma_IWT);
+    printf("  ΔI_min  = %.6e\n", Delta_I_min);
+    printf("  λ₀      = %.6e m (Protonen-Compton)\n", l0_SI);
+    printf("  T       = %.6e s\n", T_SI);
+    printf("  ⟨I⟩     = %.6f\n", I_mean);
+
+    printf("\nRückgerechnete SI-Konstanten:\n");
+    printf("  c  = %.6e m/s\n", l0_SI / T_SI);
+    printf("  ℏ  = %.6e J·s (CODATA: %.6e)\n", alpha_IWT * Delta_I_min * l0_SI * l0_SI, hbar_SI);
+    printf("  G  = %.6e m³/(kg·s²) (CODATA: %.6e)\n", beta_IWT * pow(l0_SI, 3.0 - D) / (T_SI * T_SI), G_SI);
+    printf("  α  = %.6e (CODATA: %.6e)\n", alpha_IWT / beta_IWT, alpha_SI);
+    printf("  k_B= %.6e J/K (CODATA: %.6e)\n", (gamma_IWT / alpha_IWT) * (l0_SI / T_SI) * (1.0 / I_mean), k_B_SI);
+
+    printf("\nNeutrinomasse (nach Anhang J):\n");
+    printf("  λ_e       = %.6e m (reduzierte Compton-Wellenlänge des Elektrons)\n", lambda_e);
+    printf("  geom      = %.6f (Dodekaeder/Kugel-Faktor)\n", geom_factor);
+    printf("  l_ν       = %.6e m (fundamentale Länge für Neutrinos)\n", l0_nu);
+    printf("  m_ν       = %.6e kg\n", m_nu_kg);
+    printf("  m_ν       = %.6f eV/c²\n", m_nu_eV);
+    printf("  (Beobachtete obere Grenze: < 0.5 eV/c²)\n");
 }
 
 // ============================================================
@@ -85,152 +308,113 @@ static inline IWTParameters iwt_calculate_parameters(double D, double l0)
 int main(int argc, char *argv[])
 {
     struct ocl_core ocl = {0};
-    if (!ocl_initialize(&ocl))
-    {
+    if (!ocl_initialize(&ocl)) {
         fprintf(stderr, "Fehler: OpenCL-Initialisierung fehlgeschlagen.\n");
         return 1;
     }
 
-    if (!ocl_compile(&ocl))
-    {
+    if (!ocl_compile(&ocl)) {
         fprintf(stderr, "Fehler: OpenCL-Kompilierung fehlgeschlagen.\n");
         ocl_deinitialize(&ocl);
         return 1;
     }
 
-    if (!ocl_load_kernels(&ocl))
-    {
+    if (!ocl_load_kernels(&ocl)) {
         fprintf(stderr, "Fehler: Kernel konnten nicht geladen werden.\n");
         ocl_deinitialize(&ocl);
         return 1;
     }
 
-    // 1. IWT-Konstanten berechnen (fundamental)
-    double D = iwt_calculate_D();
-    double hbar = 1.054571817e-34;
-    double m_p = 1.67262192369e-27;
-    double c = 2.99792458e8;
-    double l0 = iwt_calculate_l0(hbar, m_p, c);
+    // Parameter
+    IWTParams p = iwt_params_init();
+    printf("IWT-Parameter (dimensionslos):\n");
+    printf("  D  = %.6f\n", p.D);
+    printf("  dt = %.6f\n", p.dt);
+    printf("\n");
 
-    // 2. Auf atomare Skala skalieren
-    double l0_atom = l0 * SCALE_FACTOR;
-    double T_atom = (l0 / c) * SCALE_FACTOR;
-
-    printf("IWT-Konstanten (fundamental):\n");
-    printf("  D  = %.16f\n", D);
-    printf("  l0 = %.4e m\n", l0);
-    printf("  T  = %.4e s\n", T_atom / SCALE_FACTOR);
-
-    printf("\nIWT-Konstanten (atomar):\n");
-    printf("  l0 = %.4e m\n", l0_atom);
-    printf("  T  = %.4e s\n", T_atom);
-
-    // 3. IWT-Parameter berechnen
-    IWTParameters params = iwt_calculate_parameters(D, l0);
-
-    printf("\nIWT-Parameter:\n");
-    printf("  alpha_IWT = %.4e\n", params.alpha);
-    printf("  beta_IWT  = %.4e\n", params.beta);
-    printf("  gamma_IWT = %.4e\n", params.gamma);
-
-    // 4. Host-Daten initialisieren
-    double *host_nodes = malloc(NUM_NODES * sizeof(double));
-    uint32_t *host_adjacency = malloc(NUM_EDGES * sizeof(uint32_t));
-    double *host_flows = malloc(NUM_EDGES * sizeof(double));
-
-    // Knoten initialisieren (Massen in u)
-    for (uint32_t i = 0; i < NUM_NODES; i++)
-    {
-        host_nodes[i] = 1.0 + 0.1 * (double)(i % 10);   // 1.0 u, 1.1 u, 1.2 u, ...
+    // Host-Daten
+    HostData *h = host_data_alloc();
+    if (!h) {
+        fprintf(stderr, "Fehler: Host-Speicher fehlgeschlagen.\n");
+        return 1;
     }
+    host_data_init(h);
 
-    // Adjazenzliste (Ring mit 12 Nachbarn)
-    for (uint32_t i = 0; i < NUM_NODES; i++)
-    {
-        host_adjacency[i * 2] = i * 12;
-        host_adjacency[i * 2 + 1] = i * 12 + 12;
-        for (uint32_t j = 0; j < 12; j++)
-        {
-            host_adjacency[i * 12 + j] = (i + j + 1) % NUM_NODES;
-        }
-    }
-
-    // 5. GPU-Buffer erstellen
-    cl_mem d_nodes = ocl_create_buffer(&ocl, OCL_BUF_READ_WRITE,
-                                       NUM_NODES * sizeof(double), host_nodes);
-    cl_mem d_adjacency = ocl_create_buffer(&ocl, OCL_BUF_READ_ONLY,
-                                           NUM_EDGES * sizeof(uint32_t), host_adjacency);
-    cl_mem d_flows = ocl_create_buffer(&ocl, OCL_BUF_WRITE_ONLY,
-                                       NUM_EDGES * sizeof(double), NULL);
-
-    cl_kernel kernel = ocl_get_kernel(&ocl, OCL_KERNEL_IWT_UPDATE);
-    if (!kernel)
-    {
-        fprintf(stderr, "Fehler: Kernel 'iwt_update' nicht gefunden.\n");
-        ocl_deinitialize(&ocl);
+    // GPU-Buffer
+    GPUBuffers buf = gpu_buffers_create(&ocl, h);
+    if (!buf.nodes || !buf.adjacency || !buf.flows) {
+        fprintf(stderr, "Fehler: GPU-Buffer fehlgeschlagen.\n");
         return 1;
     }
 
-    // 6. Parameter setzen (Kopplungen unverändert)
-    double G_sim = params.beta;
-    double k_sim = params.alpha;
-    double Q_sim = params.gamma;
-    double dt = T_atom;
-
-    printf("\nSimulations-Parameter (atomar, Massen in u):\n");
-    printf("  G_sim  = %.4e\n", G_sim);
-    printf("  k_sim  = %.4e\n", k_sim);
-    printf("  Q_sim  = %.4e\n", Q_sim);
-    printf("  dt     = %.4e s\n", dt);
-
-    ocl_set_parameter_iwt_update(kernel, d_nodes, d_adjacency, d_flows,
-                                 D, l0_atom,
-                                 G_sim, k_sim, Q_sim,
-                                 NUM_NODES, dt);
-
-    // 7. Simulation
-    printf("\nSimulation läuft...\n");
-
-    for (int step = 0; step < NUM_STEPS; step++)
-    {
-        if (!ocl_enqueue_kernel(&ocl, kernel, NUM_NODES, 256))
-        {
-            fprintf(stderr, "Fehler: Kernel-Ausführung bei Schritt %d fehlgeschlagen.\n", step);
-            ocl_deinitialize(&ocl);
-            return 1;
-        }
-
-        if (step % OUTPUT_INTERVAL == 0)
-        {
-            clEnqueueReadBuffer(ocl.queue, d_nodes, CL_TRUE, 0,
-                                NUM_NODES * sizeof(double), host_nodes, 0, NULL, NULL);
-
-            printf("Schritt %d:\n", step);
-            for (int i = 0; i < 10; i++)
-            {
-                printf("  nodes[%d] = %.20f\n", i, host_nodes[i]);
-            }
-            printf("\n");
-        }
+    cl_kernel kernel = ocl_get_kernel(&ocl, OCL_KERNEL_IWT_UPDATE);
+    if (!kernel) {
+        fprintf(stderr, "Fehler: Kernel 'iwt_update' nicht gefunden.\n");
+        return 1;
     }
 
-    // 8. Flüsse auslesen
-    clEnqueueReadBuffer(ocl.queue, d_flows, CL_TRUE, 0,
-                        NUM_EDGES * sizeof(double), host_flows, 0, NULL, NULL);
+    ocl_set_parameter_iwt_update(kernel, buf.nodes, buf.adjacency, buf.flows,
+                                 p.D, p.l0, p.G, p.k, p.Q, NUM_NODES, p.dt);
 
+    // Initiale Summe
+    double initial_sum = 0.0;
+    for (uint32_t i = 0; i < NUM_NODES; i++) {
+        initial_sum += h->nodes[i];
+    }
+    printf("Initiale Summe I: %.12f\n", initial_sum);
+    printf("\n");
+
+    // Simulation
+    run_simulation(&ocl, kernel, &buf, h, &p, initial_sum);
+
+    // Endsumme
+    double final_sum = 0.0;
+    for (uint32_t i = 0; i < NUM_NODES; i++) {
+        final_sum += h->nodes[i];
+    }
+    printf("Endgültige Summe I: %.12f\n", final_sum);
+    printf("Endgültige Abweichung: %.12e\n", final_sum - initial_sum);
+    printf("Relative Abweichung: %.12e\n", (final_sum - initial_sum) / initial_sum);
+
+    // Kraftspektrum
+    compute_force_spectrum(h, p.D);
+
+    // Flüsse
+    clEnqueueReadBuffer(ocl.queue, buf.flows, CL_TRUE, 0,
+                        NUM_EDGES * sizeof(double), h->flows, 0, NULL, NULL);
     printf("\nKräfte für Knoten 0 (erste 4 Flüsse):\n");
-    for (int i = 0; i < 4; i++)
-    {
-        printf("  flows[%d] = %.4e\n", i, host_flows[i]);
+    for (int i = 0; i < 4; i++) {
+        printf("  flows[%d] = %.6e\n", i, h->flows[i]);
     }
 
-    // 9. Aufräumen
-    free(host_nodes);
-    free(host_adjacency);
-    free(host_flows);
-    clReleaseMemObject(d_nodes);
-    clReleaseMemObject(d_adjacency);
-    clReleaseMemObject(d_flows);
+    // WDBT+-Konstanten (korrigiert)
+    compute_wdbt_constants(p.D);
+
+    // Umrechnung in SI-Einheiten
+    printf("\n=== Umrechnung in SI-Einheiten ===\n");
+
+    double I0 = 1.0;
+    double I_IWT = h->nodes[0];
+    PhysicalQuantities pq = convert_iwt_to_si(I_IWT, p.D, p.dt, NUM_STEPS, I0);
+
+    printf("Knoten 0 nach %d Schritten:\n", NUM_STEPS);
+    printf("  I_IWT    = %.10f (dimensionslos)\n", I_IWT);
+    printf("  I_phys   = %.6e (Normierung I0 = %.3e)\n", pq.I_phys, I0);
+    printf("  Zeit     = %.6e s\n", pq.T_phys);
+    printf("  Länge    = %.6e m (fundamental)\n", pq.L_phys);
+    printf("  Masse    = %.6e kg\n", pq.M_phys);
+    printf("  Energie  = %.6e J\n", pq.E_phys);
+    printf("  Dichte   = %.6e kg/m³\n", pq.rho_phys);
+
+    printf("\nAlle Knoten (I_phys in Normierung I0=%.3e):\n", I0);
+    for (int i = 0; i < 10; i++) {
+        PhysicalQuantities pq_i = convert_iwt_to_si(h->nodes[i], p.D, p.dt, NUM_STEPS, I0);
+        printf("  nodes[%d] = %.6e\n", i, pq_i.I_phys);
+    }
+
+    // Aufräumen
+    gpu_buffers_free(&buf);
+    host_data_free(h);
     ocl_deinitialize(&ocl);
 
     return 0;
