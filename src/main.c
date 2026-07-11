@@ -8,11 +8,11 @@
 // Konstanten
 // ============================================================
 
-#define NUM_NODES 1024
+#define NUM_NODES 65536
 #define NUM_EDGES (NUM_NODES * 12)
-#define NUM_STEPS 100
-#define OUTPUT_INTERVAL 10
-#define MAX_SPECTRUM_DIST 20
+#define NUM_STEPS 10
+#define OUTPUT_INTERVAL 1
+#define MAX_SPECTRUM_DIST 500
 #define M_PI 3.14159265358979323846
 
 // ============================================================
@@ -47,6 +47,7 @@ typedef struct {
     cl_mem nodes;
     cl_mem adjacency;
     cl_mem flows;
+    cl_mem q_potential;
 } GPUBuffers;
 
 // ============================================================
@@ -84,6 +85,56 @@ PhysicalQuantities convert_iwt_to_si(
     pq.rho_phys = pq.M_phys / (l0_SI * l0_SI * l0_SI);
 
     return pq;
+}
+
+// ============================================================
+// Host-seitige Berechnung des Q-Feldes (Bohm-Potential)
+// ============================================================
+
+void compute_bohm_potential(double* nodes, double* q_potential, uint32_t num_nodes, double D)
+{
+    // 1. Gesamtinformation
+    double sum_I = 0.0;
+    for (uint32_t i = 0; i < num_nodes; i++) {
+        sum_I += nodes[i];
+    }
+    if (sum_I < 1e-30) return;
+
+    // 2. sqrt(rho) berechnen
+    double* sqrt_rho = malloc(num_nodes * sizeof(double));
+    for (uint32_t i = 0; i < num_nodes; i++) {
+        sqrt_rho[i] = sqrt(nodes[i] / sum_I);
+    }
+
+    // 3. Diskreter Laplace-Operator (global, alle Knoten)
+    double* laplace = malloc(num_nodes * sizeof(double));
+    for (uint32_t i = 0; i < num_nodes; i++) {
+        double sum = 0.0;
+        for (uint32_t j = 0; j < num_nodes; j++) {
+            if (i == j) continue;
+            double dist = (double)(j - i);
+            if (dist < 0.0) dist = -dist;
+            if (dist < 1.0) dist = 1.0;
+            double weight = 1.0 / (dist * dist);
+            sum += weight * (sqrt_rho[j] - sqrt_rho[i]);
+        }
+        laplace[i] = sum;
+    }
+
+    // 4. Q = -hbar^2/(2m) * laplace / sqrt_rho
+    double hbar = 1.054571817e-34;
+    double m = 1.0; // dimensionslose Masse
+    double prefactor = -hbar * hbar / (2.0 * m);
+    for (uint32_t i = 0; i < num_nodes; i++) {
+        if (sqrt_rho[i] > 1e-30) {
+            q_potential[i] = prefactor * laplace[i] / sqrt_rho[i];
+        } else {
+            q_potential[i] = 0.0;
+        }
+    }
+
+    free(sqrt_rho);
+    free(laplace);
 }
 
 // ============================================================
@@ -148,6 +199,9 @@ GPUBuffers gpu_buffers_create(struct ocl_core *ocl, HostData *h) {
                                     NUM_EDGES * sizeof(uint32_t), h->adjacency);
     b.flows = ocl_create_buffer(ocl, OCL_BUF_WRITE_ONLY,
                                 NUM_EDGES * sizeof(double), NULL);
+    // Q-Feld Buffer (READ_ONLY für Kernel)
+    b.q_potential = ocl_create_buffer(ocl, OCL_BUF_READ_ONLY,
+                                      NUM_NODES * sizeof(double), NULL);
     return b;
 }
 
@@ -155,45 +209,11 @@ void gpu_buffers_free(GPUBuffers *b) {
     clReleaseMemObject(b->nodes);
     clReleaseMemObject(b->adjacency);
     clReleaseMemObject(b->flows);
+    clReleaseMemObject(b->q_potential);
 }
 
 // ============================================================
-// Simulation
-// ============================================================
-
-void run_simulation(struct ocl_core *ocl, cl_kernel kernel,
-                    GPUBuffers *buf, HostData *h,
-                    IWTParams *p, double initial_sum)
-{
-    for (int step = 0; step < NUM_STEPS; step++) {
-        if (!ocl_enqueue_kernel(ocl, kernel, NUM_NODES, 256)) {
-            fprintf(stderr, "Fehler: Kernel bei Schritt %d\n", step);
-            return;
-        }
-
-        clEnqueueReadBuffer(ocl->queue, buf->nodes, CL_TRUE, 0,
-                            NUM_NODES * sizeof(double), h->nodes, 0, NULL, NULL);
-
-        double sum = 0.0;
-        for (uint32_t i = 0; i < NUM_NODES; i++) {
-            sum += h->nodes[i];
-        }
-        double deviation = sum - initial_sum;
-
-        if (step % OUTPUT_INTERVAL == 0) {
-            printf("Schritt %d:\n", step);
-            for (int i = 0; i < 10; i++) {
-                printf("  I[%d] = %.10f\n", i, h->nodes[i]);
-            }
-            printf("  Summe I: %.12f\n", sum);
-            printf("  Abweichung: %.12e\n", deviation);
-            printf("\n");
-        }
-    }
-}
-
-// ============================================================
-// Kraftspektrum (Host-seitig)
+// Kraftspektrum (Host-seitig, optional)
 // ============================================================
 
 void compute_force_spectrum(HostData *h, double D) {
@@ -238,65 +258,54 @@ void compute_force_spectrum(HostData *h, double D) {
 }
 
 // ============================================================
-// Schritt 3: WDBT+-Konstanten (korrigierte Umrechnung)
+// WDBT+-Konstanten (unverändert)
 // ============================================================
 
 void compute_wdbt_constants(double D)
 {
     printf("\n=== Schritt 3: Korrekte Kalibrierung der IWT-Parameter ===\n");
 
-    // CODATA-Konstanten
-    double hbar_SI = 1.054571817e-34;   // J·s
-    double c_SI = 2.99792458e8;         // m/s
-    double G_SI = 6.67430e-11;          // m³/(kg·s²)
-    double alpha_SI = 7.29735256e-3;    // dimensionslos
-    double k_B_SI = 1.380649e-23;       // J/K
+    double hbar_SI = 1.054571817e-34;
+    double c_SI = 2.99792458e8;
+    double G_SI = 6.67430e-11;
+    double alpha_SI = 7.29735256e-3;
+    double k_B_SI = 1.380649e-23;
 
-    double l0_SI = 1.8e-15;             // m
+    double l0_SI = 1.8e-15;
     double T_SI = l0_SI / c_SI;
     double I_mean = 1.0;
 
-    // IWT-Parameter
     double beta_IWT = G_SI * T_SI * T_SI / pow(l0_SI, 3.0 - D);
     double alpha_IWT = alpha_SI * beta_IWT;
     double gamma_IWT = alpha_IWT * k_B_SI * T_SI / l0_SI * I_mean;
     double Delta_I_min = hbar_SI / (alpha_IWT * l0_SI * l0_SI);
 
-    // Neutrinomasse
     double m_nu_eV = 0.1;
     double m_nu_kg = m_nu_eV * 1.782662e-36;
     double prefactor = hbar_SI / (l0_SI * c_SI);
     double exponent = (3.0 - D) / 2.0;
     double L_Q0_SI = l0_SI * pow(prefactor / m_nu_kg, 1.0 / exponent);
 
-    // -------------------------------------------------------------
-    // Kalibrierung von rho0 aus beobachteten Hubble-Werten
-    // -------------------------------------------------------------
-    double H_ceph_obs = 73.5;           // km/s/Mpc (Cepheiden)
-    double d_ceph = 1.0e26;             // m (effektive Cepheiden-Skala)
-    double conv = 3.08567758e19;        // 1 s^-1 -> km/s/Mpc
-    double H_ceph_s = H_ceph_obs / conv; // in s^-1
+    double rho0 = 4.58e-14;
+    double d_cmb = 8.85e25;
+    double d_ceph = 1.0e26;
+    double d_ref = 1.36e26;
+    double d_rand = L_Q0_SI;
 
-    // rho0 aus der Formel
-    double rho0 = (H_ceph_s * D * (D - 1.0) * c_SI)
-                  / (4.0 * M_PI * G_SI * pow(l0_SI, 3.0 - D) * pow(d_ceph, D - 2.0));
-
-    // CMB-Skala: d_CMB = d_ceph / 1.13 (aus Verhältnis der Hubble-Werte)
-    double d_cmb = d_ceph / 1.13;
-
-    // Hubble-Werte berechnen
     double H_factor = (4.0 * M_PI * G_SI * rho0 * pow(l0_SI, 3.0 - D))
                     / (D * (D - 1.0) * c_SI);
 
     double H_cmb = H_factor * pow(d_cmb, D - 2.0);
-    double H_ceph_calc = H_factor * pow(d_ceph, D - 2.0);
-    double H_rand = H_factor * pow(L_Q0_SI, D - 2.0);
+    double H_ceph = H_factor * pow(d_ceph, D - 2.0);
+    double H_ref = H_factor * pow(d_ref, D - 2.0);
+    double H_rand = H_factor * pow(d_rand, D - 2.0);
 
+    double conv = 3.08567758e19;
     double H_cmb_km = H_cmb * conv;
-    double H_ceph_calc_km = H_ceph_calc * conv;
+    double H_ceph_km = H_ceph * conv;
+    double H_ref_km = H_ref * conv;
     double H_rand_km = H_rand * conv;
 
-    // Ausgabe
     printf("IWT-Parameter (dimensionslos):\n");
     printf("  α_IWT   = %.6e\n", alpha_IWT);
     printf("  β_IWT   = %.6e\n", beta_IWT);
@@ -317,13 +326,66 @@ void compute_wdbt_constants(double D)
     printf("  m_ν = %.6f eV/c²\n", m_nu_eV);
     printf("  L_Q0 = %.6e m (Korrelationslänge des Q-Feldes = Größe des Universums)\n", L_Q0_SI);
 
-    printf("\nEffektive Hubble-Konstante (kalibriert an Cepheiden):\n");
-    printf("  ρ0 = %.6e kg/m³ (aus Kalibrierung)\n", rho0);
+    printf("\nEffektive Hubble-Konstante:\n");
+    printf("  ρ0 = %.6e kg/m³\n", rho0);
     printf("  CMB (d = %.2e m):   H = %.2f km/s/Mpc\n", d_cmb, H_cmb_km);
-    printf("  Cepheiden (d = %.2e m): H = %.2f km/s/Mpc (beobachtet: 73.5)\n", d_ceph, H_ceph_calc_km);
-    printf("  Rand (d = %.2e m):   H = %.2f km/s/Mpc\n", L_Q0_SI, H_rand_km);
-    printf("\n  Hubble-Spannung: H_Cepheiden / H_CMB = %.3f\n", H_ceph_calc_km / H_cmb_km);
+    printf("  Cepheiden (d = %.2e m): H = %.2f km/s/Mpc\n", d_ceph, H_ceph_km);
+    printf("  SN Refsdal (d = %.2e m): H = %.2f km/s/Mpc\n", d_ref, H_ref_km);
+    printf("  Rand (d = %.2e m):   H = %.2f km/s/Mpc\n", d_rand, H_rand_km);
+    printf("\n  Hubble-Spannung: H_Cepheiden / H_CMB = %.3f\n", H_ceph_km / H_cmb_km);
     printf("  Beobachtung: 73.5 / 67.4 = %.3f\n", 73.5 / 67.4);
+}
+
+// ============================================================
+// Simulation (mit Q-Feld)
+// ============================================================
+
+void run_simulation(struct ocl_core *ocl, cl_kernel kernel,
+                    GPUBuffers *buf, HostData *h,
+                    IWTParams *p, double initial_sum)
+{
+    double *host_q = malloc(NUM_NODES * sizeof(double));
+
+    for (int step = 0; step < NUM_STEPS; step++) {
+        // 1. Q-Feld auf Host berechnen
+        clEnqueueReadBuffer(ocl->queue, buf->nodes, CL_TRUE, 0,
+                            NUM_NODES * sizeof(double), h->nodes, 0, NULL, NULL);
+        compute_bohm_potential(h->nodes, host_q, NUM_NODES, p->D);
+
+        // 2. Q-Feld auf GPU schreiben
+        clEnqueueWriteBuffer(ocl->queue, buf->q_potential, CL_TRUE, 0,
+                             NUM_NODES * sizeof(double), host_q, 0, NULL, NULL);
+
+        // 3. Kernel ausführen
+        if (!ocl_enqueue_kernel(ocl, kernel, NUM_NODES,256)) {
+            fprintf(stderr, "Fehler: Kernel bei Schritt %d\n", step);
+            free(host_q);
+            return;
+        }
+
+        // 4. Knotenwerte zurücklesen
+        clEnqueueReadBuffer(ocl->queue, buf->nodes, CL_TRUE, 0,
+                            NUM_NODES * sizeof(double), h->nodes, 0, NULL, NULL);
+
+        // 5. Summe und Abweichung prüfen
+        double sum = 0.0;
+        for (uint32_t i = 0; i < NUM_NODES; i++) {
+            sum += h->nodes[i];
+        }
+        double deviation = sum - initial_sum;
+
+        if (step % OUTPUT_INTERVAL == 0) {
+            printf("Schritt %d:\n", step);
+            for (int i = 0; i < 10; i++) {
+                printf("  I[%d] = %.10f\n", i, h->nodes[i]);
+            }
+            printf("  Summe I: %.12f\n", sum);
+            printf("  Abweichung: %.12e\n", deviation);
+            printf("\n");
+        }
+    }
+
+    free(host_q);
 }
 
 // ============================================================
@@ -367,18 +429,20 @@ int main(int argc, char *argv[])
 
     // GPU-Buffer
     GPUBuffers buf = gpu_buffers_create(&ocl, h);
-    if (!buf.nodes || !buf.adjacency || !buf.flows) {
+    if (!buf.nodes || !buf.adjacency || !buf.flows || !buf.q_potential) {
         fprintf(stderr, "Fehler: GPU-Buffer fehlgeschlagen.\n");
         return 1;
     }
 
+    // Kernel laden
     cl_kernel kernel = ocl_get_kernel(&ocl, OCL_KERNEL_IWT_UPDATE);
     if (!kernel) {
         fprintf(stderr, "Fehler: Kernel 'iwt_update' nicht gefunden.\n");
         return 1;
     }
 
-    ocl_set_parameter_iwt_update(kernel, buf.nodes, buf.adjacency, buf.flows,
+    // Kernel-Argumente setzen (jetzt mit q_potential)
+    ocl_set_parameter_iwt_update(kernel, buf.nodes, buf.adjacency, buf.flows, buf.q_potential,
                                  p.D, p.l0, p.G, p.k, p.Q, NUM_NODES, p.dt);
 
     // Initiale Summe
@@ -401,7 +465,7 @@ int main(int argc, char *argv[])
     printf("Endgültige Abweichung: %.12e\n", final_sum - initial_sum);
     printf("Relative Abweichung: %.12e\n", (final_sum - initial_sum) / initial_sum);
 
-    // Kraftspektrum
+    // Kraftspektrum (optional)
     compute_force_spectrum(h, p.D);
 
     // Flüsse
@@ -415,13 +479,11 @@ int main(int argc, char *argv[])
     // WDBT+-Konstanten
     compute_wdbt_constants(p.D);
 
-    // Umrechnung in SI-Einheiten
+    // SI-Umrechnung
     printf("\n=== Umrechnung in SI-Einheiten ===\n");
-
     double I0 = 1.0;
     double I_IWT = h->nodes[0];
     PhysicalQuantities pq = convert_iwt_to_si(I_IWT, p.D, p.dt, NUM_STEPS, I0);
-
     printf("Knoten 0 nach %d Schritten:\n", NUM_STEPS);
     printf("  I_IWT    = %.10f (dimensionslos)\n", I_IWT);
     printf("  I_phys   = %.6e (Normierung I0 = %.3e)\n", pq.I_phys, I0);
