@@ -8,8 +8,8 @@
 // Konstanten
 // ============================================================
 
-#define NUM_NODES 65536
 #define BATCH_SIZE 32768
+#define NUM_NODES (BATCH_SIZE * 2)
 #define NUM_EDGES (NUM_NODES * 12)
 #define NUM_STEPS 10
 #define OUTPUT_INTERVAL 1
@@ -497,6 +497,23 @@ void run_simulation(
     free(sqrt_rho_host);
 }
 
+// Nach der Simulation: Exportiere die Drift als CSV
+void export_drift_csv(HostData *h, int num_steps)
+{
+    FILE *f = fopen("drift.csv", "w");
+    fprintf(f, "index,start,end,drift_per_step\n");
+    
+    for (uint32_t i = 0; i < 100; i++) // erste 100 Knoten
+    {
+        double start_val = 1.0 + 0.001 * (double)(i % 10);
+        double end_val = h->nodes[i];
+        double drift = (end_val - start_val) / (double)num_steps;
+        fprintf(f, "%u,%.10f,%.10f,%.6e\n", i, start_val, end_val, drift);
+    }
+    fclose(f);
+    printf("Drift-Daten gespeichert: drift.csv\n");
+}
+
 // ============================================================
 // main
 // ============================================================
@@ -581,6 +598,7 @@ int main(int argc, char *argv[])
 
     // Simulation
     run_simulation(&ocl, kernel_iwt, kernel_q, &buf, h, &p, initial_sum);
+	export_drift_csv(h, NUM_STEPS);
 
     // Endsumme
     double final_sum = 0.0;
