@@ -8,11 +8,11 @@
 // Konstanten
 // ============================================================
 
-#define NUM_NODES 65536
+#define NUM_NODES 32768
 #define NUM_EDGES (NUM_NODES * 12)
 #define NUM_STEPS 10
 #define OUTPUT_INTERVAL 1
-#define MAX_SPECTRUM_DIST 500
+#define MAX_SPECTRUM_DIST 250
 #define M_PI 3.14159265358979323846
 
 // ============================================================
