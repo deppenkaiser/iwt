@@ -8,7 +8,8 @@
 // Konstanten
 // ============================================================
 
-#define NUM_NODES 32768
+#define NUM_NODES 65536
+#define BATCH_SIZE 32768
 #define NUM_EDGES (NUM_NODES * 12)
 #define NUM_STEPS 10
 #define OUTPUT_INTERVAL 1
@@ -19,7 +20,8 @@
 // Hilfsfunktionen
 // ============================================================
 
-static inline double iwt_D(void) {
+static inline double iwt_D(void)
+{
     double phi = (1.0 + sqrt(5.0)) / 2.0;
     return log(20.0 * phi) / log(2.0 + phi);
 }
@@ -28,7 +30,8 @@ static inline double iwt_D(void) {
 // Parameter-Strukturen
 // ============================================================
 
-typedef struct {
+typedef struct
+{
     double D;
     double l0;
     double G;
@@ -37,13 +40,15 @@ typedef struct {
     double dt;
 } IWTParams;
 
-typedef struct {
+typedef struct
+{
     double *nodes;
     uint32_t *adjacency;
     double *flows;
 } HostData;
 
-typedef struct {
+typedef struct
+{
     cl_mem nodes;
     cl_mem adjacency;
     cl_mem flows;
@@ -54,7 +59,8 @@ typedef struct {
 // Umrechnung von IWT-Einheiten in SI-Einheiten
 // ============================================================
 
-typedef struct {
+typedef struct
+{
     double I_phys;
     double M_phys;
     double E_phys;
@@ -63,12 +69,7 @@ typedef struct {
     double rho_phys;
 } PhysicalQuantities;
 
-PhysicalQuantities convert_iwt_to_si(
-    double I_IWT,
-    double D,
-    double dt_IWT,
-    int step,
-    double I0)
+PhysicalQuantities convert_iwt_to_si(double I_IWT, double D, double dt_IWT, int step, double I0)
 {
     PhysicalQuantities pq = {0};
 
@@ -95,22 +96,27 @@ void compute_bohm_potential(double* nodes, double* q_potential, uint32_t num_nod
 {
     // 1. Gesamtinformation
     double sum_I = 0.0;
-    for (uint32_t i = 0; i < num_nodes; i++) {
+    for (uint32_t i = 0; i < num_nodes; i++)
+	{
         sum_I += nodes[i];
-    }
+	}
+
     if (sum_I < 1e-30) return;
 
     // 2. sqrt(rho) berechnen
     double* sqrt_rho = malloc(num_nodes * sizeof(double));
-    for (uint32_t i = 0; i < num_nodes; i++) {
+    for (uint32_t i = 0; i < num_nodes; i++)
+	{
         sqrt_rho[i] = sqrt(nodes[i] / sum_I);
     }
 
     // 3. Diskreter Laplace-Operator (global, alle Knoten)
     double* laplace = malloc(num_nodes * sizeof(double));
-    for (uint32_t i = 0; i < num_nodes; i++) {
+    for (uint32_t i = 0; i < num_nodes; i++)
+	{
         double sum = 0.0;
-        for (uint32_t j = 0; j < num_nodes; j++) {
+        for (uint32_t j = 0; j < num_nodes; j++)
+		{
             if (i == j) continue;
             double dist = (double)(j - i);
             if (dist < 0.0) dist = -dist;
@@ -125,12 +131,16 @@ void compute_bohm_potential(double* nodes, double* q_potential, uint32_t num_nod
     double hbar = 1.054571817e-34;
     double m = 1.0; // dimensionslose Masse
     double prefactor = -hbar * hbar / (2.0 * m);
-    for (uint32_t i = 0; i < num_nodes; i++) {
-        if (sqrt_rho[i] > 1e-30) {
-            q_potential[i] = prefactor * laplace[i] / sqrt_rho[i];
-        } else {
-            q_potential[i] = 0.0;
-        }
+    for (uint32_t i = 0; i < num_nodes; i++)
+	{
+        if (sqrt_rho[i] > 1e-30)
+		{
+			q_potential[i] = prefactor * laplace[i] / sqrt_rho[i];
+		}
+		else
+		{
+			q_potential[i] = 0.0;
+		}
     }
 
     free(sqrt_rho);
@@ -141,8 +151,10 @@ void compute_bohm_potential(double* nodes, double* q_potential, uint32_t num_nod
 // Initialisierungen
 // ============================================================
 
-IWTParams iwt_params_init(void) {
-    IWTParams p = {
+IWTParams iwt_params_init(void)
+{
+    IWTParams p =
+	{
         .D = iwt_D(),
         .l0 = 1.0,
         .G = 1.0,
@@ -153,33 +165,43 @@ IWTParams iwt_params_init(void) {
     return p;
 }
 
-HostData* host_data_alloc(void) {
+HostData* host_data_alloc(void)
+{
     HostData *h = malloc(sizeof(HostData));
     if (!h) return NULL;
     h->nodes = malloc(NUM_NODES * sizeof(double));
     h->adjacency = malloc(NUM_EDGES * sizeof(uint32_t));
     h->flows = malloc(NUM_EDGES * sizeof(double));
-    if (!h->nodes || !h->adjacency || !h->flows) {
+    if (!h->nodes || !h->adjacency || !h->flows)
+	{
         free(h->nodes); free(h->adjacency); free(h->flows); free(h);
         return NULL;
     }
     return h;
 }
 
-void host_data_init(HostData *h) {
-    for (uint32_t i = 0; i < NUM_NODES; i++) {
+void host_data_init(HostData *h)
+{
+    // Knotenwerte (unverändert)
+    for (uint32_t i = 0; i < NUM_NODES; i++)
+    {
         h->nodes[i] = 1.0 + 0.001 * (double)(i % 10);
     }
-    for (uint32_t i = 0; i < NUM_NODES; i++) {
-        h->adjacency[i * 2] = i * 12;
-        h->adjacency[i * 2 + 1] = i * 12 + 12;
-        for (uint32_t j = 0; j < 12; j++) {
+
+    // Adjazenzliste: Jeder Knoten hat 12 Nachbarn
+    // Format: adjacency[i * 12 + j] = Nachbar-Knotenindex
+    for (uint32_t i = 0; i < NUM_NODES; i++)
+    {
+        for (uint32_t j = 0; j < 12; j++)
+        {
+            // zyklische Nachbarschaft: Knoten i hat Nachbarn i+1, i+2, ..., i+12
             h->adjacency[i * 12 + j] = (i + j + 1) % NUM_NODES;
         }
     }
 }
 
-void host_data_free(HostData *h) {
+void host_data_free(HostData *h)
+{
     if (!h) return;
     free(h->nodes);
     free(h->adjacency);
@@ -191,21 +213,19 @@ void host_data_free(HostData *h) {
 // GPU-Buffer
 // ============================================================
 
-GPUBuffers gpu_buffers_create(struct ocl_core *ocl, HostData *h) {
+GPUBuffers gpu_buffers_create(struct ocl_core *ocl, HostData *h)
+{
     GPUBuffers b = {0};
-    b.nodes = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE,
-                                NUM_NODES * sizeof(double), h->nodes);
-    b.adjacency = ocl_create_buffer(ocl, OCL_BUF_READ_ONLY,
-                                    NUM_EDGES * sizeof(uint32_t), h->adjacency);
-    b.flows = ocl_create_buffer(ocl, OCL_BUF_WRITE_ONLY,
-                                NUM_EDGES * sizeof(double), NULL);
+    b.nodes = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), h->nodes);
+    b.adjacency = ocl_create_buffer(ocl, OCL_BUF_READ_ONLY, NUM_EDGES * sizeof(uint32_t), h->adjacency);
+    b.flows = ocl_create_buffer(ocl, OCL_BUF_WRITE_ONLY, NUM_EDGES * sizeof(double), NULL);
     // Q-Feld Buffer (READ_ONLY für Kernel)
-    b.q_potential = ocl_create_buffer(ocl, OCL_BUF_READ_ONLY,
-                                      NUM_NODES * sizeof(double), NULL);
+    b.q_potential = ocl_create_buffer(ocl, OCL_BUF_READ_ONLY, NUM_NODES * sizeof(double), NULL);
     return b;
 }
 
-void gpu_buffers_free(GPUBuffers *b) {
+void gpu_buffers_free(GPUBuffers *b)
+{
     clReleaseMemObject(b->nodes);
     clReleaseMemObject(b->adjacency);
     clReleaseMemObject(b->flows);
@@ -216,18 +236,22 @@ void gpu_buffers_free(GPUBuffers *b) {
 // Kraftspektrum (Host-seitig, optional)
 // ============================================================
 
-void compute_force_spectrum(HostData *h, double D) {
+void compute_force_spectrum(HostData *h, double D)
+{
     double *spectrum = calloc(NUM_NODES, sizeof(double));
-    if (!spectrum) {
+    if (!spectrum)
+	{
         fprintf(stderr, "Fehler: Spektrum-Allokation fehlgeschlagen.\n");
         return;
     }
 
-    for (uint32_t i = 0; i < NUM_NODES; i++) {
+    for (uint32_t i = 0; i < NUM_NODES; i++)
+	{
         double I_i = h->nodes[i];
         uint32_t start = h->adjacency[i * 2];
         uint32_t end = h->adjacency[i * 2 + 1];
-        for (uint32_t e = start; e < end; e++) {
+        for (uint32_t e = start; e < end; e++)
+		{
             uint32_t j = h->adjacency[e];
             if (j == i) continue;
             double I_j = h->nodes[j];
@@ -249,8 +273,10 @@ void compute_force_spectrum(HostData *h, double D) {
     }
 
     printf("\nKraftspektrum (Distanz -> akkumulierte Kraft):\n");
-    for (int d = 1; d < MAX_SPECTRUM_DIST; d++) {
-        if (spectrum[d] != 0.0) {
+    for (int d = 1; d < MAX_SPECTRUM_DIST; d++)
+	{
+        if (spectrum[d] != 0.0)
+		{
             printf("  dist %2d: %.6e\n", d, spectrum[d]);
         }
     }
@@ -340,43 +366,110 @@ void compute_wdbt_constants(double D)
 // Simulation (mit Q-Feld)
 // ============================================================
 
-void run_simulation(struct ocl_core *ocl, cl_kernel kernel,
-                    GPUBuffers *buf, HostData *h,
-                    IWTParams *p, double initial_sum)
+void run_simulation(struct ocl_core *ocl, cl_kernel kernel, GPUBuffers *buf, HostData *h, IWTParams *p, double initial_sum)
 {
     double *host_q = malloc(NUM_NODES * sizeof(double));
+    if (!host_q)
+    {
+        fprintf(stderr, "Fehler: host_q konnte nicht allokiert werden.\n");
+        return;
+    }
 
-    for (int step = 0; step < NUM_STEPS; step++) {
-        // 1. Q-Feld auf Host berechnen
-        clEnqueueReadBuffer(ocl->queue, buf->nodes, CL_TRUE, 0,
-                            NUM_NODES * sizeof(double), h->nodes, 0, NULL, NULL);
+    for (int step = 0; step < NUM_STEPS; step++)
+    {
+        // ----- 1. CPU: Bohm-Potential für ALLE Knoten berechnen -----
+        clEnqueueReadBuffer(
+            ocl->queue,
+            buf->nodes,
+            CL_TRUE,
+            0,
+            NUM_NODES * sizeof(double),
+            h->nodes,
+            0,
+            NULL,
+            NULL
+        );
+
         compute_bohm_potential(h->nodes, host_q, NUM_NODES, p->D);
 
-        // 2. Q-Feld auf GPU schreiben
-        clEnqueueWriteBuffer(ocl->queue, buf->q_potential, CL_TRUE, 0,
-                             NUM_NODES * sizeof(double), host_q, 0, NULL, NULL);
+        clEnqueueWriteBuffer(
+            ocl->queue,
+            buf->q_potential,
+            CL_TRUE,
+            0,
+            NUM_NODES * sizeof(double),
+            host_q,
+            0,
+            NULL,
+            NULL
+        );
 
-        // 3. Kernel ausführen
-        if (!ocl_enqueue_kernel(ocl, kernel, NUM_NODES,256)) {
-            fprintf(stderr, "Fehler: Kernel bei Schritt %d\n", step);
-            free(host_q);
-            return;
+        // ----- 2. GPU: Batches von je BATCH_SIZE Knoten verarbeiten -----
+        for (uint32_t offset = 0; offset < NUM_NODES; offset += BATCH_SIZE)
+        {
+            uint32_t current_batch_size = BATCH_SIZE;
+            if (offset + current_batch_size > NUM_NODES)
+            {
+                current_batch_size = NUM_NODES - offset;
+            }
+
+            // Kernel-Argumente setzen (inklusive neuem offset-Parameter)
+            ocl_set_parameter_iwt_update(
+                kernel,
+                buf->nodes,
+                buf->adjacency,
+                buf->flows,
+                buf->q_potential,
+                p->D,
+                p->l0,
+                p->G,
+                p->k,
+                p->Q,
+                NUM_NODES,
+                p->dt,
+                offset
+            );
+
+            // Kernel mit der aktuellen Batch-Größe ausführen
+            if (!ocl_enqueue_kernel(ocl, kernel, current_batch_size, 256))
+            {
+                fprintf(
+                    stderr,
+                    "Fehler: Kernel-Batch bei Offset %u, Schritt %d\n",
+                    offset,
+                    step
+                );
+                free(host_q);
+                return;
+            }
         }
 
-        // 4. Knotenwerte zurücklesen
-        clEnqueueReadBuffer(ocl->queue, buf->nodes, CL_TRUE, 0,
-                            NUM_NODES * sizeof(double), h->nodes, 0, NULL, NULL);
+        // ----- 3. Ergebnisse zurücklesen und Informationserhaltung prüfen -----
+        clEnqueueReadBuffer(
+            ocl->queue,
+            buf->nodes,
+            CL_TRUE,
+            0,
+            NUM_NODES * sizeof(double),
+            h->nodes,
+            0,
+            NULL,
+            NULL
+        );
 
-        // 5. Summe und Abweichung prüfen
         double sum = 0.0;
-        for (uint32_t i = 0; i < NUM_NODES; i++) {
+        for (uint32_t i = 0; i < NUM_NODES; i++)
+        {
             sum += h->nodes[i];
         }
         double deviation = sum - initial_sum;
 
-        if (step % OUTPUT_INTERVAL == 0) {
+        // Ausgabe (wie im Original)
+        if (step % OUTPUT_INTERVAL == 0)
+        {
             printf("Schritt %d:\n", step);
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < 10; i++)
+            {
                 printf("  I[%d] = %.10f\n", i, h->nodes[i]);
             }
             printf("  Summe I: %.12f\n", sum);
@@ -395,18 +488,21 @@ void run_simulation(struct ocl_core *ocl, cl_kernel kernel,
 int main(int argc, char *argv[])
 {
     struct ocl_core ocl = {0};
-    if (!ocl_initialize(&ocl)) {
+    if (!ocl_initialize(&ocl))
+	{
         fprintf(stderr, "Fehler: OpenCL-Initialisierung fehlgeschlagen.\n");
         return 1;
     }
 
-    if (!ocl_compile(&ocl)) {
+    if (!ocl_compile(&ocl))
+	{
         fprintf(stderr, "Fehler: OpenCL-Kompilierung fehlgeschlagen.\n");
         ocl_deinitialize(&ocl);
         return 1;
     }
 
-    if (!ocl_load_kernels(&ocl)) {
+    if (!ocl_load_kernels(&ocl))
+	{
         fprintf(stderr, "Fehler: Kernel konnten nicht geladen werden.\n");
         ocl_deinitialize(&ocl);
         return 1;
@@ -421,7 +517,8 @@ int main(int argc, char *argv[])
 
     // Host-Daten
     HostData *h = host_data_alloc();
-    if (!h) {
+    if (!h)
+	{
         fprintf(stderr, "Fehler: Host-Speicher fehlgeschlagen.\n");
         return 1;
     }
@@ -429,25 +526,28 @@ int main(int argc, char *argv[])
 
     // GPU-Buffer
     GPUBuffers buf = gpu_buffers_create(&ocl, h);
-    if (!buf.nodes || !buf.adjacency || !buf.flows || !buf.q_potential) {
+    if (!buf.nodes || !buf.adjacency || !buf.flows || !buf.q_potential)
+	{
         fprintf(stderr, "Fehler: GPU-Buffer fehlgeschlagen.\n");
         return 1;
     }
 
     // Kernel laden
     cl_kernel kernel = ocl_get_kernel(&ocl, OCL_KERNEL_IWT_UPDATE);
-    if (!kernel) {
+    if (!kernel)
+	{
         fprintf(stderr, "Fehler: Kernel 'iwt_update' nicht gefunden.\n");
         return 1;
     }
 
     // Kernel-Argumente setzen (jetzt mit q_potential)
     ocl_set_parameter_iwt_update(kernel, buf.nodes, buf.adjacency, buf.flows, buf.q_potential,
-                                 p.D, p.l0, p.G, p.k, p.Q, NUM_NODES, p.dt);
+        p.D, p.l0, p.G, p.k, p.Q, NUM_NODES, p.dt, 0);
 
     // Initiale Summe
     double initial_sum = 0.0;
-    for (uint32_t i = 0; i < NUM_NODES; i++) {
+    for (uint32_t i = 0; i < NUM_NODES; i++)
+	{
         initial_sum += h->nodes[i];
     }
     printf("Initiale Summe I: %.12f\n", initial_sum);
@@ -458,7 +558,8 @@ int main(int argc, char *argv[])
 
     // Endsumme
     double final_sum = 0.0;
-    for (uint32_t i = 0; i < NUM_NODES; i++) {
+    for (uint32_t i = 0; i < NUM_NODES; i++)
+	{
         final_sum += h->nodes[i];
     }
     printf("Endgültige Summe I: %.12f\n", final_sum);
@@ -470,9 +571,10 @@ int main(int argc, char *argv[])
 
     // Flüsse
     clEnqueueReadBuffer(ocl.queue, buf.flows, CL_TRUE, 0,
-                        NUM_EDGES * sizeof(double), h->flows, 0, NULL, NULL);
+		NUM_EDGES * sizeof(double), h->flows, 0, NULL, NULL);
     printf("\nKräfte für Knoten 0 (erste 4 Flüsse):\n");
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++)
+	{
         printf("  flows[%d] = %.6e\n", i, h->flows[i]);
     }
 
@@ -494,7 +596,8 @@ int main(int argc, char *argv[])
     printf("  Dichte   = %.6e kg/m³\n", pq.rho_phys);
 
     printf("\nAlle Knoten (I_phys in Normierung I0=%.3e):\n", I0);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 10; i++)
+	{
         PhysicalQuantities pq_i = convert_iwt_to_si(h->nodes[i], p.D, p.dt, NUM_STEPS, I0);
         printf("  nodes[%d] = %.6e\n", i, pq_i.I_phys);
     }
