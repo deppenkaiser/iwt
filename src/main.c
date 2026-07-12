@@ -9,8 +9,8 @@
 // Konstanten
 // ============================================================
 
-#define NUM_NODES 65536
-#define BATCH_SIZE 32768
+#define NUM_NODES 32768
+#define BATCH_SIZE 16384
 #define NUM_EDGES (NUM_NODES * 12)
 #define NUM_STEPS 100
 #define OUTPUT_INTERVAL 10
@@ -113,7 +113,7 @@ IWTParams iwt_params_init(void)
         .G = 1.0,
         .k = 1.0,
         .Q = 1.0,
-        .dt = 0.0001
+        .dt = 1.0 // T!
     };
     return p;
 }
@@ -152,7 +152,7 @@ void host_data_init(HostData *h)
     // Knoten-Information (wie gehabt)
     for (uint32_t i = 0; i < NUM_NODES; i++)
     {
-        h->nodes[i] = 1.0 + 0.001 * (double)(i % 10);
+        h->nodes[i] = 1.0 + 0.1 * (double)(i % 10); // 0.1 = (3-D)/3
     }
 
     // Positionen: Zufällig in einer Kugel vom Radius 10
@@ -409,12 +409,14 @@ void export_positions(HostData *h, int step)
     if (!f) return;
 
     fprintf(f, "index,x,y,z\n");
-    for (uint32_t i = 0; i < 100; i++) // erste 100 Knoten
+    
+    // ALLE Knoten exportieren (nicht nur die ersten 100)
+    for (uint32_t i = 0; i < NUM_NODES; i++)
     {
         fprintf(f, "%u,%.6f,%.6f,%.6f\n", i, h->x[i], h->y[i], h->z[i]);
     }
     fclose(f);
-    printf("Positionen exportiert: %s\n", filename);
+    printf("Positionen exportiert: %s (%u Knoten)\n", filename, NUM_NODES);
 }
 
 // ============================================================
