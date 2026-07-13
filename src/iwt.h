@@ -17,10 +17,12 @@ typedef struct iwt_runtime
     double *I;
     double *K;
     double *sumJ;
+    double *Q;
 
     cl_mem I_gpu;
     cl_mem K_gpu;
     cl_mem sumJ_gpu;
+    cl_mem Q_gpu;
 
     struct ocl_core ocl;
 } *iwt_runtime_t;
