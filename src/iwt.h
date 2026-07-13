@@ -1,0 +1,27 @@
+#ifndef IWT_H
+#define IWT_H
+
+#include <stddef.h>
+#include <stdbool.h>
+#include <ocl/ocl.h>
+
+typedef struct iwt_config
+{
+    size_t N;
+    double DT;
+} *iwt_config_t;
+
+typedef struct iwt_runtime
+{
+    double *I;
+    double *K;
+    double *sumJ;
+
+    cl_mem I_gpu;
+    cl_mem K_gpu;
+    cl_mem sumJ_gpu;
+
+    struct ocl_core ocl;
+} *iwt_runtime_t;
+
+#endif

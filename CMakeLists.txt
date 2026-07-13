@@ -17,6 +17,7 @@ add_subdirectory(../../libraries/ocl ${CMAKE_BINARY_DIR}/ocl)
 
 target_sources(iwt PRIVATE
 	src/main.c
+	src/iwt_kernel.c
 )
 
 target_include_directories(iwt PRIVATE
