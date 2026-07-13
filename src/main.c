@@ -55,6 +55,25 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	free(rt->I);
 	free(rt->K);
 	free(rt->sumJ);
+	rt->I = rt->K = rt->sumJ = NULL;
+}
+
+bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	// GPU-Speicher allozieren
+	rt->I_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
+	rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
+
+	return (rt->I_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL);
+}
+
+void deinitialize_gpu_data(const iwt_runtime_t rt)
+{
+	clReleaseMemObject(rt->I_gpu);
+	clReleaseMemObject(rt->K_gpu);
+	clReleaseMemObject(rt->sumJ_gpu);
+	rt->I_gpu = rt->K_gpu = rt->sumJ_gpu = NULL;
 }
 
 bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -95,7 +114,7 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
             {
                 printf("  sumJ[%ld] = %f\n", i, rt->sumJ[i]);
             }
-			
+
             retval = true;
         }
     }
@@ -119,24 +138,18 @@ int main(void)
 			{
 				if (initialize_host_data(&rt, &cfg))
 				{
-					// GPU-Speicher allozieren
-					rt.I_gpu = ocl_create_buffer(&rt.ocl, OCL_BUF_READ_WRITE, cfg.N * sizeof(double), NULL);
-					rt.K_gpu = ocl_create_buffer(&rt.ocl, OCL_BUF_READ_WRITE, cfg.N * cfg.N * sizeof(double), NULL);
-					rt.sumJ_gpu = ocl_create_buffer(&rt.ocl, OCL_BUF_WRITE_ONLY, cfg.N * sizeof(double), NULL);
-
-					if ((rt.I_gpu != NULL) && (rt.K_gpu != NULL) && (rt.sumJ_gpu != NULL))
+					if (initialize_gpu_data(&rt, &cfg))
 					{
 						if (run_flux_calculation(&rt, &cfg))
 						{
 							printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
 							retval = 0;
 						}
-					}
 
-					// Aufräumen
-					clReleaseMemObject(rt.I_gpu);
-					clReleaseMemObject(rt.K_gpu);
-					clReleaseMemObject(rt.sumJ_gpu);
+
+
+
+					}
 				}
 
 				deinitialize_host_data(&rt);
