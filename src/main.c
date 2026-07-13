@@ -60,77 +60,82 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
 	rt->I_gpu = rt->K_gpu = rt->sumJ_gpu = NULL;
 }
 
-bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-	bool retval = false;
-
-	// Nach run_flux_calculation_batched:
-	cl_kernel kernel_q = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_Q);
-	if (kernel_q != NULL)
-	{
-		clSetKernelArg(kernel_q, 0, sizeof(cl_mem), &rt->sumJ_gpu);
-		clSetKernelArg(kernel_q, 1, sizeof(cl_mem), &rt->Q_gpu);
-		int N = (int)cfg->N;
-		clSetKernelArg(kernel_q, 2, sizeof(int), &N);
-
-		size_t global = cfg->N;
-		size_t local = 64;
-		if (local > global) local = global;
-
-		if (ocl_enqueue_kernel(&rt->ocl, kernel_q, global, local))
-		{
-			clEnqueueReadBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE,
-				0, cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
-
-			printf("Q[0..9]:\n");
-			for (size_t i = 0; i < 10 && i < cfg->N; i++)
-			{
-				printf("  Q[%ld] = %f\n", i, rt->Q[i]);
-			}
-
-			retval = true;
-		}
-	}
-
-	return retval;
-}
-
-bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
+bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
-    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_UPDATE_INFO);
-    
+    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_UPDATE_COUPLING);
+
     if (kernel != NULL)
     {
-        int N = (int)cfg->N;
+        bool all_ok = true;
+        size_t num_batches = cfg->N / cfg->BATCH_SIZE;
+        if (cfg->N % cfg->BATCH_SIZE != 0) num_batches++;
+
         double DT = cfg->DT;
+        double ETA = 0.001;   // später als Parameter
+        double LAMBDA = 0.1;
 
-        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->sumJ_gpu);
-        clSetKernelArg(kernel, 2, sizeof(double), &DT);
-        clSetKernelArg(kernel, 3, sizeof(int), &N);
-
-        size_t global = cfg->N;
-        size_t local = 64;
-        if (local > global) local = global;
-
-        if (ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
+        for (size_t batch = 0; (batch < num_batches) && all_ok; ++batch)
         {
-            // I zurücklesen
-            clEnqueueReadBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE,
-                0, cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
+            size_t batch_start = batch * cfg->BATCH_SIZE;
+            size_t batch_end = batch_start + cfg->BATCH_SIZE;
+            if (batch_end > cfg->N) batch_end = cfg->N;
 
-            printf("I[0..9] nach Update:\n");
-            for (size_t i = 0; i < 10 && i < cfg->N; i++)
+            int N = (int)cfg->N;
+            int start = (int)batch_start;
+            int end = (int)batch_end;
+
+            clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
+            clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->K_gpu);
+            clSetKernelArg(kernel, 2, sizeof(double), &DT);
+            clSetKernelArg(kernel, 3, sizeof(double), &ETA);
+            clSetKernelArg(kernel, 4, sizeof(double), &LAMBDA);
+            clSetKernelArg(kernel, 5, sizeof(int), &N);
+            clSetKernelArg(kernel, 6, sizeof(int), &start);
+            clSetKernelArg(kernel, 7, sizeof(int), &end);
+
+            size_t global = batch_end - batch_start;
+            size_t local = 64;
+            if (local > global) local = global;
+
+            all_ok = ocl_enqueue_kernel(&rt->ocl, kernel, global, local);
+        }
+
+        if (all_ok)
+        {
+            // K zurücklesen (optional, zur Prüfung)
+            clEnqueueReadBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE,
+                0, cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
+
+            printf("K[0][0..4] nach Update:\n");
+            for (size_t i = 0; i < 5 && i < cfg->N; i++)
             {
-                printf("  I[%ld] = %f\n", i, rt->I[i]);
+                printf("  K[0][%ld] = %f\n", i, rt->K[i]);
             }
 
             retval = true;
         }
     }
-    
+
     return retval;
+}
+
+bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	bool retval = false;
+
+	if (run_flux_calculation_batched(rt, cfg))
+	{
+		if (run_q_calculation(rt, cfg))
+		{
+			if (run_update_info(rt, cfg))
+			{
+				retval = run_update_coupling(rt, cfg);
+			}
+		}
+	}
+
+	return retval;
 }
 
 int main(void)
@@ -153,16 +158,10 @@ int main(void)
 				{
 					if (initialize_gpu_data(&rt, &cfg))
 					{
-						if (run_flux_calculation_batched(&rt, &cfg))
+						if (run_simulation(&rt, &cfg))
 						{
-							if (run_q_calculation(&rt, &cfg))
-							{
-								if (run_update_info(&rt, &cfg))
-								{
-									printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
-									retval = 0;
-								}
-							}
+							printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
+							retval = 0;
 						}
 
 						deinitialize_gpu_data(&rt);
