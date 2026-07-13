@@ -1,55 +1,64 @@
-#include "iwt.h"
-#include "iwt_io.h"
-#include "iwt_batch.h"   // <-- HIER FEHLTE DAS!
-#include "iwt_init.h"
 #include <stdio.h>
-#include <stdlib.h>
+#include <ocl/ocl.h>
 
-int main(int argc, char **argv) {
-    iwt_system_t sys = {0};
+struct iwt_config
+{
+    int N;
+    double DT;
+};
 
-    // 1. Konfiguration laden
-    sys.cfg = iwt_config_default();
+struct iwt_runtime
+{
+    double *I;
+    double *K;
+    double *sumJ;
 
-    // 2. System initialisieren (Speicher + Daten)
-    if (!iwt_init(&sys)) {
-        fprintf(stderr, "Fehler: System-Initialisierung fehlgeschlagen.\n");
-        return 1;
-    }
+    cl_mem I_gpu;
+    cl_mem K_gpu;
+    cl_mem sumJ_gpu;
 
-    // 3. Konfiguration ausgeben
-    iwt_print_config(&sys.cfg);
+    struct ocl_core ocl;
+};
 
-    // 4. Initiale Summe speichern
-    double sum_i_initial = iwt_sum_i(&sys);
+int main(void)
+{
+    struct iwt_config cfg = {0};
+    struct iwt_runtime rt = {0};
 
-    // 5. Hauptschleife
-    int iter;
-    for (iter = 0; iter < sys.cfg.MAX_ITER; iter++) {
-        double max_q = 0.0;
+    cfg.N = 4096;
+    cfg.DT = 0.01;
 
-        // Alle Batches verarbeiten
-        for (size_t batch = 0; batch < sys.cfg.NUM_BATCHES; batch++) {
-            double batch_max_q = iwt_process_batch(&sys, batch);
-            if (batch_max_q > max_q) max_q = batch_max_q;
-        }
+    if (ocl_initialize(&rt.ocl))
+	{
+		// Host-Speicher allozieren
+		rt.I = malloc(cfg.N * sizeof(double));
+		rt.K = malloc(cfg.N * cfg.N * sizeof(double));
+		rt.sumJ = malloc(cfg.N * sizeof(double));
 
-        // Fortschritt ausgeben
-        double sum_i = iwt_sum_i(&sys);
-        iwt_print_progress(iter, max_q, sum_i, sum_i_initial);
+		if ((rt.I != NULL) && (rt.K != NULL) && (rt.sumJ != NULL))
+		{
+			// GPU-Speicher allozieren
+			rt.I_gpu = ocl_create_buffer(&rt.ocl, OCL_BUF_READ_WRITE, cfg.N * sizeof(double), NULL);
+			rt.K_gpu = ocl_create_buffer(&rt.ocl, OCL_BUF_READ_WRITE, cfg.N * cfg.N * sizeof(double), NULL);
+			rt.sumJ_gpu = ocl_create_buffer(&rt.ocl, OCL_BUF_WRITE_ONLY, cfg.N * sizeof(double), NULL);
 
-        // Konvergenzprüfung
-        if (max_q < sys.cfg.THRESHOLD) {
-            printf("\nKonvergenz erreicht nach %d Iterationen.\n", iter + 1);
-            break;
-        }
-    }
+			if ((rt.I_gpu != NULL) && (rt.K_gpu != NULL) && (rt.sumJ_gpu != NULL))
+			{
+    			printf("N = %d, DT = %f\n", cfg.N, cfg.DT);
+			}
 
-    // 6. Endergebnisse ausgeben
-    iwt_print_results(&sys);
+			// Aufräumen
+			clReleaseMemObject(rt.I_gpu);
+			clReleaseMemObject(rt.K_gpu);
+			clReleaseMemObject(rt.sumJ_gpu);
+		}
 
-    // 7. Aufräumen
-    iwt_cleanup(&sys);
+		free(rt.I);
+		free(rt.K);
+		free(rt.sumJ);
+
+		ocl_deinitialize(&rt.ocl);
+	}
 
     return 0;
 }
