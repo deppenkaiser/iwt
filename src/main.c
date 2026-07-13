@@ -59,6 +59,7 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 
 bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
+	bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_FLUX);
 
     if (kernel != NULL)
@@ -87,17 +88,18 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
         {
             clEnqueueReadBuffer(rt->ocl.queue, rt->sumJ_gpu, CL_TRUE,
-                                0, cfg->N * sizeof(double), rt->sumJ, 0, NULL, NULL);
+                0, cfg->N * sizeof(double), rt->sumJ, 0, NULL, NULL);
 
             printf("sumJ[0..9]:\n");
             for (size_t i = 0; i < 10 && i < cfg->N; i++)
             {
                 printf("  sumJ[%ld] = %f\n", i, rt->sumJ[i]);
             }
-            return true;
+			
+            retval = true;
         }
     }
-    return false;
+    return retval;
 }
 
 int main(void)
