@@ -10,11 +10,10 @@
 // ============================================================
 
 #define NUM_NODES 32768
-#define BATCH_SIZE 16384
-#define NUM_EDGES (NUM_NODES * 12)
-#define NUM_STEPS 100
-#define OUTPUT_INTERVAL 10
-#define MAX_SPECTRUM_DIST 250
+#define NUM_STEPS 10000
+#define OUTPUT_INTERVAL 100
+#define CONVERGENCE_THRESHOLD 1e-12
+#define BATCH_SIZE 128
 #define M_PI 3.14159265358979323846
 
 // ============================================================
@@ -27,6 +26,11 @@ static inline double iwt_D(void)
     return log(20.0 * phi) / log(2.0 + phi);
 }
 
+static inline double rand_double(void)
+{
+    return (double)rand() / (double)RAND_MAX;
+}
+
 // ============================================================
 // Parameter-Strukturen
 // ============================================================
@@ -34,30 +38,28 @@ static inline double iwt_D(void)
 typedef struct
 {
     double D;
-    double l0;
-    double G;
-    double k;
-    double Q;
+    double I_min;
+    double I_ges;
+    double lambda;
+    double eta;
     double dt;
+    double K_init;
 } IWTParams;
 
 typedef struct
 {
-    double *nodes;
-    double *x, *y, *z;
-    double *vx, *vy, *vz;
-    uint32_t *adjacency;
-    double *flows;
+    double *I;
+    double *K;
+    double *J;
+    double *Q;
 } HostData;
 
 typedef struct
 {
-    cl_mem nodes;
-    cl_mem x, y, z;
-    cl_mem vx, vy, vz;
-    cl_mem adjacency;
-    cl_mem flows;
-    cl_mem q_potential;
+    cl_mem I;
+    cl_mem K;
+    cl_mem J;
+    cl_mem Q;
 } GPUBuffers;
 
 // ============================================================
@@ -92,28 +94,20 @@ PhysicalQuantities convert_iwt_to_si(double I_IWT, double D, double dt_IWT, int 
 }
 
 // ============================================================
-// Zufallszahlen
-// ============================================================
-
-static inline double rand_double(void)
-{
-    return (double)rand() / (double)RAND_MAX;
-}
-
-// ============================================================
-// Initialisierungen
+// Initialisierung
 // ============================================================
 
 IWTParams iwt_params_init(void)
 {
-    IWTParams p =
-    {
-        .D = iwt_D(),
-        .l0 = 1.0,
-        .G = 1.0,
-        .k = 1.0,
-        .Q = 1.0,
-        .dt = 1.0 // T!
+    double D = iwt_D();
+    IWTParams p = {
+        .D = D,
+        .I_min = 1e-6,
+        .I_ges = 1.0,
+        .lambda = 0.01,
+        .eta = 0.001,
+        .dt = 0.01,
+        .K_init = 0.001
     };
     return p;
 }
@@ -123,382 +117,252 @@ HostData* host_data_alloc(void)
     HostData *h = malloc(sizeof(HostData));
     if (!h) return NULL;
 
-    h->nodes    = malloc(NUM_NODES * sizeof(double));
-    h->x        = malloc(NUM_NODES * sizeof(double));
-    h->y        = malloc(NUM_NODES * sizeof(double));
-    h->z        = malloc(NUM_NODES * sizeof(double));
-    h->vx       = malloc(NUM_NODES * sizeof(double));
-    h->vy       = malloc(NUM_NODES * sizeof(double));
-    h->vz       = malloc(NUM_NODES * sizeof(double));
-    h->adjacency = malloc(NUM_EDGES * sizeof(uint32_t));
-    h->flows    = malloc(NUM_EDGES * sizeof(double));
+    size_t N = NUM_NODES;
+    h->I = malloc(N * sizeof(double));
+    h->K = malloc(N * N * sizeof(double));
+    h->J = malloc(N * N * sizeof(double));
+    h->Q = malloc(N * sizeof(double));
 
-    if (!h->nodes || !h->x || !h->y || !h->z ||
-        !h->vx || !h->vy || !h->vz ||
-        !h->adjacency || !h->flows)
+    if (!h->I || !h->K || !h->J || !h->Q)
     {
-        free(h->nodes); free(h->x); free(h->y); free(h->z);
-        free(h->vx); free(h->vy); free(h->vz);
-        free(h->adjacency); free(h->flows); free(h);
+        free(h->I); free(h->K); free(h->J); free(h->Q);
+        free(h);
         return NULL;
     }
     return h;
 }
 
-void host_data_init(HostData *h)
+void host_data_init(HostData *h, IWTParams *p)
 {
-    srand(42); // Reproduzierbar
+    size_t N = NUM_NODES;
+    srand(42);
 
-    // Knoten-Information (wie gehabt)
-    for (uint32_t i = 0; i < NUM_NODES; i++)
+    for (uint32_t i = 0; i < N; i++)
     {
-        h->nodes[i] = 1.0 + 0.1 * (double)(i % 10); // 0.1 = (3-D)/3
+        double fluctuation = 0.001 * (rand_double() - 0.5);
+        h->I[i] = p->I_min + fluctuation;
     }
 
-    // Positionen: Zufällig in einer Kugel vom Radius 10
-    for (uint32_t i = 0; i < NUM_NODES; i++)
+    double sum_I = 0.0;
+    for (uint32_t i = 0; i < N; i++) sum_I += h->I[i];
+    double scale = p->I_ges / sum_I;
+    for (uint32_t i = 0; i < N; i++) h->I[i] *= scale;
+
+    for (uint32_t i = 0; i < N; i++)
     {
-        // Gleichverteilung in einer Kugel
-        double theta = 2.0 * M_PI * rand_double();
-        double phi = acos(2.0 * rand_double() - 1.0);
-        double r = 10.0 * cbrt(rand_double()); // Volumen gleichverteilt
-
-        h->x[i] = r * sin(phi) * cos(theta);
-        h->y[i] = r * sin(phi) * sin(theta);
-        h->z[i] = r * cos(phi);
-
-        h->vx[i] = 0.0;
-        h->vy[i] = 0.0;
-        h->vz[i] = 0.0;
-    }
-
-    // Adjazenzliste (12 Nachbarn pro Knoten)
-    for (uint32_t i = 0; i < NUM_NODES; i++)
-    {
-        for (uint32_t j = 0; j < 12; j++)
+        for (uint32_t j = 0; j < N; j++)
         {
-            h->adjacency[i * 12 + j] = (i + j + 1) % NUM_NODES;
+            h->K[i * N + j] = (i == j) ? 1.0 : p->K_init;
         }
     }
+
+    for (uint32_t i = 0; i < N * N; i++) h->J[i] = 0.0;
+    for (uint32_t i = 0; i < N; i++) h->Q[i] = 0.0;
 }
 
 void host_data_free(HostData *h)
 {
     if (!h) return;
-    free(h->nodes);
-    free(h->x); free(h->y); free(h->z);
-    free(h->vx); free(h->vy); free(h->vz);
-    free(h->adjacency);
-    free(h->flows);
+    free(h->I); free(h->K); free(h->J); free(h->Q);
     free(h);
 }
 
 // ============================================================
-// GPU-Buffer (erweitert)
+// GPU-Buffer
 // ============================================================
 
 GPUBuffers gpu_buffers_create(struct ocl_core *ocl, HostData *h)
 {
+    size_t N = NUM_NODES;
     GPUBuffers b = {0};
 
-    b.nodes      = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), h->nodes);
-    b.x          = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), h->x);
-    b.y          = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), h->y);
-    b.z          = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), h->z);
-    b.vx         = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), h->vx);
-    b.vy         = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), h->vy);
-    b.vz         = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), h->vz);
-    b.adjacency  = ocl_create_buffer(ocl, OCL_BUF_READ_ONLY,  NUM_EDGES * sizeof(uint32_t), h->adjacency);
-    b.flows      = ocl_create_buffer(ocl, OCL_BUF_WRITE_ONLY, NUM_EDGES * sizeof(double), NULL);
-    b.q_potential = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, NUM_NODES * sizeof(double), NULL);
+    b.I = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, N * sizeof(double), h->I);
+    b.K = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, N * N * sizeof(double), h->K);
+    b.J = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, N * N * sizeof(double), h->J);
+    b.Q = ocl_create_buffer(ocl, OCL_BUF_READ_WRITE, N * sizeof(double), h->Q);
 
     return b;
 }
 
 void gpu_buffers_free(GPUBuffers *b)
 {
-    clReleaseMemObject(b->nodes);
-    clReleaseMemObject(b->x); clReleaseMemObject(b->y); clReleaseMemObject(b->z);
-    clReleaseMemObject(b->vx); clReleaseMemObject(b->vy); clReleaseMemObject(b->vz);
-    clReleaseMemObject(b->adjacency);
-    clReleaseMemObject(b->flows);
-    clReleaseMemObject(b->q_potential);
+    clReleaseMemObject(b->I);
+    clReleaseMemObject(b->K);
+    clReleaseMemObject(b->J);
+    clReleaseMemObject(b->Q);
 }
 
 // ============================================================
-// Q-Feld (Bohm-Potential) – CPU-Version (wie gehabt)
+// Export-Funktionen
 // ============================================================
 
-void compute_bohm_potential(double* nodes, double* q_potential, uint32_t num_nodes, double D)
+void export_metadata(IWTParams *p)
 {
-    double sum_I = 0.0;
-    for (uint32_t i = 0; i < num_nodes; i++) sum_I += nodes[i];
-    if (sum_I < 1e-30) return;
-
-    double* sqrt_rho = malloc(num_nodes * sizeof(double));
-    for (uint32_t i = 0; i < num_nodes; i++) sqrt_rho[i] = sqrt(nodes[i] / sum_I);
-
-    double* laplace = malloc(num_nodes * sizeof(double));
-    for (uint32_t i = 0; i < num_nodes; i++)
-    {
-        double sum = 0.0;
-        for (uint32_t j = 0; j < num_nodes; j++)
-        {
-            if (i == j) continue;
-            double dist = (double)(j - i);
-            if (dist < 0.0) dist = -dist;
-            if (dist < 1.0) dist = 1.0;
-            sum += (sqrt_rho[j] - sqrt_rho[i]) / (dist * dist);
-        }
-        laplace[i] = sum;
-    }
-
-    double hbar = 1.054571817e-34;
-    double mass = 1.0;
-    double prefactor = -hbar * hbar / (2.0 * mass);
-
-    for (uint32_t i = 0; i < num_nodes; i++)
-    {
-        q_potential[i] = (sqrt_rho[i] > 1e-30)
-            ? prefactor * laplace[i] / sqrt_rho[i]
-            : 0.0;
-    }
-
-    free(sqrt_rho);
-    free(laplace);
+    printf("\n=== IWT-Parameter ===\n");
+    printf("  D       = %.6f\n", p->D);
+    printf("  I_min   = %.6e\n", p->I_min);
+    printf("  I_ges   = %.6f\n", p->I_ges);
+    printf("  lambda  = %.6f\n", p->lambda);
+    printf("  eta     = %.6f\n", p->eta);
+    printf("  dt      = %.6f\n", p->dt);
+    printf("  K_init  = %.6f\n", p->K_init);
 }
 
-// ============================================================
-// Kraftspektrum (wie gehabt)
-// ============================================================
-
-void compute_force_spectrum(HostData *h, double D)
-{
-    double *spectrum = calloc(NUM_NODES, sizeof(double));
-    if (!spectrum) return;
-
-    for (uint32_t i = 0; i < NUM_NODES; i++)
-    {
-        double I_i = h->nodes[i];
-        uint32_t start = i * 12;
-        uint32_t end = i * 12 + 12;
-
-        for (uint32_t e = start; e < end; e++)
-        {
-            uint32_t j = h->adjacency[e];
-            if (j == i) continue;
-            double I_j = h->nodes[j];
-            double dx = h->x[j] - h->x[i];
-            double dy = h->y[j] - h->y[i];
-            double dz = h->z[j] - h->z[i];
-            double dist = sqrt(dx*dx + dy*dy + dz*dz);
-            if (dist < 1.0) dist = 1.0;
-            if (dist >= MAX_SPECTRUM_DIST) continue;
-
-            double diff = I_i - I_j;
-            double r = pow(dist, D - 2.0);
-            double F_wed = diff / pow(r, D - 1.0);
-            double F_wg  = -diff / pow(r, D - 2.0);
-            double F_q   = diff / pow(r, D - 2.0);
-            double F_total = F_wed + F_wg + F_q;
-
-            int idx = (int)dist;
-            spectrum[idx] += F_total;
-        }
-    }
-
-    printf("\nKraftspektrum (Distanz -> akkumulierte Kraft):\n");
-    for (int d = 1; d < MAX_SPECTRUM_DIST; d++)
-    {
-        if (spectrum[d] != 0.0)
-            printf("  dist %2d: %.6e\n", d, spectrum[d]);
-    }
-    free(spectrum);
-}
-
-// ============================================================
-// WDBT+-Konstanten (wie gehabt)
-// ============================================================
-
-void compute_wdbt_constants(double D)
-{
-    printf("\n=== Schritt 3: Korrekte Kalibrierung der IWT-Parameter ===\n");
-
-    double hbar_SI = 1.054571817e-34;
-    double c_SI = 2.99792458e8;
-    double G_SI = 6.67430e-11;
-    double alpha_SI = 7.29735256e-3;
-    double k_B_SI = 1.380649e-23;
-
-    double l0_SI = 1.8e-15;
-    double T_SI = l0_SI / c_SI;
-    double I_mean = 1.0;
-
-    double beta_IWT = G_SI * T_SI * T_SI / pow(l0_SI, 3.0 - D);
-    double alpha_IWT = alpha_SI * beta_IWT;
-    double gamma_IWT = alpha_IWT * k_B_SI * T_SI / l0_SI * I_mean;
-    double Delta_I_min = hbar_SI / (alpha_IWT * l0_SI * l0_SI);
-
-    double m_nu_eV = 0.1;
-    double m_nu_kg = m_nu_eV * 1.782662e-36;
-    double prefactor = hbar_SI / (l0_SI * c_SI);
-    double exponent = (3.0 - D) / 2.0;
-    double L_Q0_SI = l0_SI * pow(prefactor / m_nu_kg, 1.0 / exponent);
-
-    double rho0 = 4.58e-14;
-    double d_cmb = 8.85e25;
-    double d_ceph = 1.0e26;
-    double d_ref = 1.36e26;
-    double d_rand = L_Q0_SI;
-
-    double H_factor = (4.0 * M_PI * G_SI * rho0 * pow(l0_SI, 3.0 - D))
-                    / (D * (D - 1.0) * c_SI);
-
-    double H_cmb = H_factor * pow(d_cmb, D - 2.0);
-    double H_ceph = H_factor * pow(d_ceph, D - 2.0);
-    double H_ref = H_factor * pow(d_ref, D - 2.0);
-    double H_rand = H_factor * pow(d_rand, D - 2.0);
-
-    double conv = 3.08567758e19;
-    double H_cmb_km = H_cmb * conv;
-    double H_ceph_km = H_ceph * conv;
-    double H_ref_km = H_ref * conv;
-    double H_rand_km = H_rand * conv;
-
-    printf("IWT-Parameter (dimensionslos):\n");
-    printf("  α_IWT   = %.6e\n", alpha_IWT);
-    printf("  β_IWT   = %.6e\n", beta_IWT);
-    printf("  γ_IWT   = %.6e\n", gamma_IWT);
-    printf("  ΔI_min  = %.6e\n", Delta_I_min);
-    printf("  l0      = %.6e m\n", l0_SI);
-    printf("  T       = %.6e s\n", T_SI);
-    printf("  ⟨I⟩     = %.6f\n", I_mean);
-
-    printf("\nRückgerechnete SI-Konstanten:\n");
-    printf("  c  = %.6e m/s\n", l0_SI / T_SI);
-    printf("  ℏ  = %.6e J·s (CODATA: %.6e)\n",
-           alpha_IWT * Delta_I_min * l0_SI * l0_SI, hbar_SI);
-    printf("  G  = %.6e m³/(kg·s²) (CODATA: %.6e)\n",
-           beta_IWT * pow(l0_SI, 3.0 - D) / (T_SI * T_SI), G_SI);
-    printf("  α  = %.6e (CODATA: %.6e)\n", alpha_IWT / beta_IWT, alpha_SI);
-    printf("  k_B= %.6e J/K (CODATA: %.6e)\n",
-           (gamma_IWT / alpha_IWT) * (l0_SI / T_SI) * (1.0 / I_mean), k_B_SI);
-
-    printf("\nNeutrinomasse (nach Anhang J):\n");
-    printf("  m_ν = %.6f eV/c²\n", m_nu_eV);
-    printf("  L_Q0 = %.6e m\n", L_Q0_SI);
-
-    printf("\nEffektive Hubble-Konstante:\n");
-    printf("  CMB (d = %.2e m):   H = %.2f km/s/Mpc\n", d_cmb, H_cmb_km);
-    printf("  Cepheiden (d = %.2e m): H = %.2f km/s/Mpc\n", d_ceph, H_ceph_km);
-    printf("  SN Refsdal (d = %.2e m): H = %.2f km/s/Mpc\n", d_ref, H_ref_km);
-    printf("  Rand (d = %.2e m):   H = %.2f km/s/Mpc\n", d_rand, H_rand_km);
-    printf("\n  Hubble-Spannung: H_Cepheiden / H_CMB = %.3f\n", H_ceph_km / H_cmb_km);
-    printf("  Beobachtung: 73.5 / 67.4 = %.3f\n", 73.5 / 67.4);
-}
-
-// ============================================================
-// Export: Positionen
-// ============================================================
-
-void export_positions(HostData *h, int step)
+void export_q_distribution(HostData *h, int step)
 {
     char filename[64];
-    snprintf(filename, sizeof(filename), "positions_step_%d.csv", step);
+    snprintf(filename, sizeof(filename), "q_step_%d.csv", step);
     FILE *f = fopen(filename, "w");
     if (!f) return;
 
-    fprintf(f, "index,x,y,z\n");
-    
-    // ALLE Knoten exportieren (nicht nur die ersten 100)
+    fprintf(f, "index,Q\n");
     for (uint32_t i = 0; i < NUM_NODES; i++)
     {
-        fprintf(f, "%u,%.6f,%.6f,%.6f\n", i, h->x[i], h->y[i], h->z[i]);
+        fprintf(f, "%u,%.12e\n", i, h->Q[i]);
     }
     fclose(f);
-    printf("Positionen exportiert: %s (%u Knoten)\n", filename, NUM_NODES);
+    printf("Q-Verteilung exportiert: %s\n", filename);
+}
+
+void export_metrix(HostData *h, int step)
+{
+    char filename[64];
+    snprintf(filename, sizeof(filename), "metrix_step_%d.csv", step);
+    FILE *f = fopen(filename, "w");
+    if (!f) return;
+
+    size_t N = NUM_NODES;
+    fprintf(f, "i,j,g_ij\n");
+    for (uint32_t i = 0; i < N; i++)
+    {
+        for (uint32_t j = 0; j < N; j++)
+        {
+            if (i == j) continue;
+            double g_ij = h->K[i * N + j] / sqrt(h->K[i * N + i] * h->K[j * N + j]);
+            if (g_ij > 1e-6)
+                fprintf(f, "%u,%u,%.12e\n", i, j, g_ij);
+        }
+    }
+    fclose(f);
+    printf("Metrik exportiert: %s\n", filename);
+}
+
+void export_information(HostData *h, int step)
+{
+    char filename[64];
+    snprintf(filename, sizeof(filename), "info_step_%d.csv", step);
+    FILE *f = fopen(filename, "w");
+    if (!f) return;
+
+    fprintf(f, "index,I\n");
+    for (uint32_t i = 0; i < NUM_NODES; i++)
+    {
+        fprintf(f, "%u,%.12e\n", i, h->I[i]);
+    }
+    fclose(f);
+    printf("Information exportiert: %s\n", filename);
 }
 
 // ============================================================
-// Simulation (Motion-Kernel)
+// Hauptsimulation
 // ============================================================
 
-void run_simulation_motion(
+void run_simulation(
     struct ocl_core *ocl,
-    cl_kernel kernel_motion,
+    cl_kernel kernel_flux,
     cl_kernel kernel_q,
+    cl_kernel kernel_update_I,
+    cl_kernel kernel_update_K,
     GPUBuffers *buf,
     HostData *h,
-    IWTParams *p,
-    double initial_sum
+    IWTParams *p
 )
 {
-    double *host_q = malloc(NUM_NODES * sizeof(double));
-    if (!host_q) return;
+    size_t N = NUM_NODES;
+
+    double *host_I = malloc(N * sizeof(double));
+    double *host_Q = malloc(N * sizeof(double));
+
+    if (!host_I || !host_Q) return;
 
     for (int step = 0; step < NUM_STEPS; step++)
     {
-        // ----- 1. Q-Feld berechnen (CPU) -----
-        clEnqueueReadBuffer(ocl->queue, buf->nodes, CL_TRUE, 0,
-                            NUM_NODES * sizeof(double), h->nodes, 0, NULL, NULL);
-        compute_bohm_potential(h->nodes, host_q, NUM_NODES, p->D);
-        clEnqueueWriteBuffer(ocl->queue, buf->q_potential, CL_TRUE, 0,
-                             NUM_NODES * sizeof(double), host_q, 0, NULL, NULL);
+        // 1. Flux berechnen
+        ocl_set_parameter_compute_flux(kernel_flux, buf->I, buf->K, buf->J, (uint32_t)N);
+        if (!ocl_enqueue_kernel(ocl, kernel_flux, N, 256)) break;
 
-        // ----- 2. Motion-Kernel in Batches -----
-        for (uint32_t offset = 0; offset < NUM_NODES; offset += BATCH_SIZE)
+        // 2. Q berechnen
+        ocl_set_parameter_compute_q(kernel_q, buf->J, buf->Q, (uint32_t)N);
+        if (!ocl_enqueue_kernel(ocl, kernel_q, N, 256)) break;
+
+        // 3. Information aktualisieren
+        ocl_set_parameter_update_I(kernel_update_I, buf->I, buf->J, p->dt, (uint32_t)N);
+        if (!ocl_enqueue_kernel(ocl, kernel_update_I, N, 256)) break;
+
+        // 4. Kopplungen aktualisieren (Batches)
+        for (uint32_t oi = 0; oi < N; oi += BATCH_SIZE)
         {
-            uint32_t current_batch_size = BATCH_SIZE;
-            if (offset + current_batch_size > NUM_NODES)
-                current_batch_size = NUM_NODES - offset;
-
-            ocl_set_parameter_iwt_update_motion(
-                kernel_motion,
-                buf->nodes,
-                buf->x, buf->y, buf->z,
-                buf->vx, buf->vy, buf->vz,
-                buf->adjacency,
-                buf->q_potential,
-                p->D, p->l0, p->G, p->k, p->Q,
-                NUM_NODES, p->dt, offset
-            );
-
-            if (!ocl_enqueue_kernel(ocl, kernel_motion, current_batch_size, 256))
+            uint32_t bi = (oi + BATCH_SIZE > N) ? N - oi : BATCH_SIZE;
+            for (uint32_t oj = 0; oj < N; oj += BATCH_SIZE)
             {
-                fprintf(stderr, "Fehler: Motion-Batch bei Offset %u, Schritt %d\n", offset, step);
-                free(host_q);
-                return;
+                uint32_t bj = (oj + BATCH_SIZE > N) ? N - oj : BATCH_SIZE;
+
+                ocl_set_parameter_update_K(
+                    kernel_update_K,
+                    buf->K,
+                    buf->I,
+                    p->eta,
+                    p->lambda,
+                    p->dt,
+                    (uint32_t)N,
+                    oi,
+                    oj,
+                    bi,
+                    bj
+                );
+
+                if (!ocl_enqueue_kernel(ocl, kernel_update_K, bi * bj, 256))
+                {
+                    fprintf(stderr, "Fehler: update_K Batch bei Schritt %d, oi=%u, oj=%u\n", step, oi, oj);
+                    free(host_I);
+                    free(host_Q);
+                    return;
+                }
             }
         }
 
-        // ----- 3. Ergebnisse zurücklesen -----
-        clEnqueueReadBuffer(ocl->queue, buf->nodes, CL_TRUE, 0,
-                            NUM_NODES * sizeof(double), h->nodes, 0, NULL, NULL);
-        clEnqueueReadBuffer(ocl->queue, buf->x, CL_TRUE, 0,
-                            NUM_NODES * sizeof(double), h->x, 0, NULL, NULL);
-        clEnqueueReadBuffer(ocl->queue, buf->y, CL_TRUE, 0,
-                            NUM_NODES * sizeof(double), h->y, 0, NULL, NULL);
-        clEnqueueReadBuffer(ocl->queue, buf->z, CL_TRUE, 0,
-                            NUM_NODES * sizeof(double), h->z, 0, NULL, NULL);
-
-        // ----- 4. Informationserhaltung prüfen -----
-        double sum = 0.0;
-        for (uint32_t i = 0; i < NUM_NODES; i++) sum += h->nodes[i];
-        double deviation = sum - initial_sum;
-
+        // 5. Ausgabe und Konvergenzprüfung
         if (step % OUTPUT_INTERVAL == 0)
         {
-            printf("Schritt %d:\n", step);
-            for (int i = 0; i < 10; i++)
-                printf("  I[%d] = %.10f\n", i, h->nodes[i]);
-            printf("  Summe I: %.12f\n", sum);
-            printf("  Abweichung: %.12e\n", deviation);
-            printf("\n");
-            export_positions(h, step);
+            clEnqueueReadBuffer(ocl->queue, buf->I, CL_TRUE, 0, N * sizeof(double), host_I, 0, NULL, NULL);
+            clEnqueueReadBuffer(ocl->queue, buf->Q, CL_TRUE, 0, N * sizeof(double), host_Q, 0, NULL, NULL);
+
+            double sum_I = 0.0;
+            double max_Q = 0.0;
+            for (uint32_t i = 0; i < N; i++)
+            {
+                sum_I += host_I[i];
+                if (fabs(host_Q[i]) > max_Q) max_Q = fabs(host_Q[i]);
+            }
+
+            printf("Schritt %d: sum_I = %.12f, max_Q = %.12e\n", step, sum_I, max_Q);
+
+            if (max_Q < CONVERGENCE_THRESHOLD)
+            {
+                printf("Konvergenz erreicht bei Schritt %d\n", step);
+                clEnqueueReadBuffer(ocl->queue, buf->I, CL_TRUE, 0, N * sizeof(double), h->I, 0, NULL, NULL);
+                clEnqueueReadBuffer(ocl->queue, buf->Q, CL_TRUE, 0, N * sizeof(double), h->Q, 0, NULL, NULL);
+                clEnqueueReadBuffer(ocl->queue, buf->K, CL_TRUE, 0, N * N * sizeof(double), h->K, 0, NULL, NULL);
+                export_q_distribution(h, step);
+                export_metrix(h, step);
+                export_information(h, step);
+                break;
+            }
         }
     }
 
-    free(host_q);
+    free(host_I);
+    free(host_Q);
 }
 
 // ============================================================
@@ -529,28 +393,20 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    cl_kernel kernel_motion = ocl_get_kernel(&ocl, OCL_KERNEL_IWT_UPDATE_MOTION);
-    cl_kernel kernel_q = ocl_get_kernel(&ocl, OCL_KERNEL_Q_FIELD);
+    cl_kernel kernel_flux      = ocl_get_kernel(&ocl, OCL_KERNEL_COMPUTE_FLUX);
+    cl_kernel kernel_q         = ocl_get_kernel(&ocl, OCL_KERNEL_COMPUTE_Q);
+    cl_kernel kernel_update_I  = ocl_get_kernel(&ocl, OCL_KERNEL_UPDATE_I);
+    cl_kernel kernel_update_K  = ocl_get_kernel(&ocl, OCL_KERNEL_UPDATE_K);
 
-    if (!kernel_motion)
+    if (!kernel_flux || !kernel_q || !kernel_update_I || !kernel_update_K)
     {
-        fprintf(stderr, "Fehler: Kernel 'iwt_update_motion' nicht gefunden.\n");
-        ocl_deinitialize(&ocl);
-        return 1;
-    }
-
-    if (!kernel_q)
-    {
-        fprintf(stderr, "Fehler: Kernel 'compute_q_field' nicht gefunden.\n");
+        fprintf(stderr, "Fehler: Mindestens ein Kernel nicht gefunden.\n");
         ocl_deinitialize(&ocl);
         return 1;
     }
 
     IWTParams p = iwt_params_init();
-    printf("IWT-Parameter (dimensionslos):\n");
-    printf("  D  = %.6f\n", p.D);
-    printf("  dt = %.6f\n", p.dt);
-    printf("\n");
+    export_metadata(&p);
 
     HostData *h = host_data_alloc();
     if (!h)
@@ -559,12 +415,10 @@ int main(int argc, char *argv[])
         ocl_deinitialize(&ocl);
         return 1;
     }
-    host_data_init(h);
+    host_data_init(h, &p);
 
     GPUBuffers buf = gpu_buffers_create(&ocl, h);
-    if (!buf.nodes || !buf.x || !buf.y || !buf.z ||
-        !buf.vx || !buf.vy || !buf.vz ||
-        !buf.adjacency || !buf.flows || !buf.q_potential)
+    if (!buf.I || !buf.K || !buf.J || !buf.Q)
     {
         fprintf(stderr, "Fehler: GPU-Buffer fehlgeschlagen.\n");
         host_data_free(h);
@@ -572,24 +426,17 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    double initial_sum = 0.0;
-    for (uint32_t i = 0; i < NUM_NODES; i++) initial_sum += h->nodes[i];
-    printf("Initiale Summe I: %.12f\n", initial_sum);
-    printf("\n");
+    run_simulation(&ocl, kernel_flux, kernel_q, kernel_update_I, kernel_update_K,
+                   &buf, h, &p);
 
-    run_simulation_motion(&ocl, kernel_motion, kernel_q, &buf, h, &p, initial_sum);
-
-    double final_sum = 0.0;
-    for (uint32_t i = 0; i < NUM_NODES; i++) final_sum += h->nodes[i];
-    printf("Endgültige Summe I: %.12f\n", final_sum);
-    printf("Endgültige Abweichung: %.12e\n", final_sum - initial_sum);
-    printf("Relative Abweichung: %.12e\n", (final_sum - initial_sum) / initial_sum);
-
-    compute_force_spectrum(h, p.D);
-    compute_wdbt_constants(p.D);
-
-    // Letzte Positionen exportieren
-    export_positions(h, NUM_STEPS);
+    printf("\n=== Umrechnung in SI-Einheiten ===\n");
+    double I0 = 1.0;
+    for (int i = 0; i < 10; i++)
+    {
+        PhysicalQuantities pq = convert_iwt_to_si(h->I[i], p.D, p.dt, NUM_STEPS, I0);
+        printf("  Knoten %d: I_phys = %.6e, M_phys = %.6e kg\n",
+               i, pq.I_phys, pq.M_phys);
+    }
 
     gpu_buffers_free(&buf);
     host_data_free(h);
