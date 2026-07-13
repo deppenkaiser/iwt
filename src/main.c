@@ -20,6 +20,43 @@ typedef struct iwt_runtime
     struct ocl_core ocl;
 } *iwt_runtime_t;
 
+bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	bool retval = false;
+
+	// Host-Speicher allozieren
+	rt->I = malloc(cfg->N * sizeof(double));
+	rt->K = malloc(cfg->N * cfg->N * sizeof(double));
+	rt->sumJ = malloc(cfg->N * sizeof(double));
+
+	if ((rt->I != NULL) && (rt->K != NULL) && (rt->sumJ != NULL))
+	{
+		for (size_t i = 0; i < cfg->N; i++)
+		{
+			rt->I[i] = (double)(i + 1);  // 1, 2, 3, ...
+		}
+
+		for (size_t i = 0; i < cfg->N; i++)
+		{
+			for (size_t j = 0; j < cfg->N; j++)
+			{
+				rt->K[i * cfg->N + j] = 1.0;  // Einsermatrix
+			}
+		}
+
+		retval = true;
+	}
+
+	return retval;	
+}
+
+void deinitialize_host_data(const iwt_runtime_t rt)
+{
+	free(rt->I);
+	free(rt->K);
+	free(rt->sumJ);
+}
+
 bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_FLUX);
@@ -65,7 +102,7 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 int main(void)
 {
-	int ret_val = 1;
+	int retval = 1;
     struct iwt_config cfg = {0};
     struct iwt_runtime rt = {0};
 
@@ -78,27 +115,7 @@ int main(void)
 		{
 			if (ocl_load_kernels(&rt.ocl))
 			{
-				// Host-Speicher allozieren
-				rt.I = malloc(cfg.N * sizeof(double));
-				rt.K = malloc(cfg.N * cfg.N * sizeof(double));
-				rt.sumJ = malloc(cfg.N * sizeof(double));
-
-				// Nach der Host-Speicherallokation, vor dem GPU-Transfer:
-
-				for (size_t i = 0; i < cfg.N; i++)
-				{
-					rt.I[i] = (double)(i + 1);  // 1, 2, 3, ...
-				}
-
-				for (size_t i = 0; i < cfg.N; i++)
-				{
-					for (size_t j = 0; j < cfg.N; j++)
-					{
-						rt.K[i * cfg.N + j] = 1.0;  // Einsermatrix
-					}
-				}
-
-				if ((rt.I != NULL) && (rt.K != NULL) && (rt.sumJ != NULL))
+				if (initialize_host_data(&rt, &cfg))
 				{
 					// GPU-Speicher allozieren
 					rt.I_gpu = ocl_create_buffer(&rt.ocl, OCL_BUF_READ_WRITE, cfg.N * sizeof(double), NULL);
@@ -110,7 +127,7 @@ int main(void)
 						if (run_flux_calculation(&rt, &cfg))
 						{
 							printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
-							ret_val = 0;
+							retval = 0;
 						}
 					}
 
@@ -120,14 +137,12 @@ int main(void)
 					clReleaseMemObject(rt.sumJ_gpu);
 				}
 
-				free(rt.I);
-				free(rt.K);
-				free(rt.sumJ);
+				deinitialize_host_data(&rt);
 			}
 		}
 	
 		ocl_deinitialize(&rt.ocl);
 	}
 
-    return ret_val;
+    return retval;
 }
