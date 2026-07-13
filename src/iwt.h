@@ -8,6 +8,7 @@
 typedef struct iwt_config
 {
     size_t N;
+	size_t BATCH_SIZE;
     double DT;
 } *iwt_config_t;
 

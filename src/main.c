@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <ocl/ocl.h>
 #include "iwt_kernel.h"
 
 bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -63,6 +64,7 @@ int main(void)
     struct iwt_runtime rt = {0};
 
     cfg.N = 4096;
+	cfg.BATCH_SIZE = 512;
     cfg.DT = 0.01;
 
     if (ocl_initialize(&rt.ocl))
@@ -75,7 +77,7 @@ int main(void)
 				{
 					if (initialize_gpu_data(&rt, &cfg))
 					{
-						if (run_flux_calculation(&rt, &cfg))
+						if (run_flux_calculation_batched(&rt, &cfg))
 						{
 							printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
 							retval = 0;
