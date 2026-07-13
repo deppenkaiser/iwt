@@ -8,8 +8,12 @@
 typedef struct iwt_config
 {
     size_t N;
-	size_t BATCH_SIZE;
+    size_t BATCH_SIZE;
     double DT;
+    double ETA;
+    double LAMBDA;
+    double THRESHOLD;
+    int MAX_ITER;
 } *iwt_config_t;
 
 typedef struct iwt_runtime

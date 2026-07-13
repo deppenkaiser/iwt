@@ -122,20 +122,41 @@ bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-	bool retval = false;
+    bool retval = false;
 
-	if (run_flux_calculation_batched(rt, cfg))
-	{
-		if (run_q_calculation(rt, cfg))
-		{
-			if (run_update_info(rt, cfg))
-			{
-				retval = run_update_coupling(rt, cfg);
-			}
-		}
-	}
+    for (int iter = 0; iter < cfg->MAX_ITER; iter++)
+    {
+        if (!run_flux_calculation_batched(rt, cfg)) break;
+        if (!run_q_calculation(rt, cfg)) break;
+        if (!run_update_info(rt, cfg)) break;
+        if (!run_update_coupling(rt, cfg)) break;
 
-	return retval;
+        // max|Q| berechnen (auf CPU)
+        double max_q = 0.0;
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            double abs_q = rt->Q[i] > 0 ? rt->Q[i] : -rt->Q[i];
+            if (abs_q > max_q) max_q = abs_q;
+        }
+
+        printf("Iter %2d: max|Q| = %e\n", iter, max_q);
+
+        if (max_q < cfg->THRESHOLD)
+        {
+            printf("Konvergenz erreicht nach %d Iterationen.\n", iter + 1);
+            retval = true;
+            break;
+        }
+
+        // I und K für nächste Iteration auf GPU neu schreiben
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
+
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
+            cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
+    }
+
+    return retval;
 }
 
 int main(void)
@@ -146,7 +167,12 @@ int main(void)
 
     cfg.N = 4096;
 	cfg.BATCH_SIZE = 512;
-    cfg.DT = 0.01;
+	cfg.THRESHOLD = 1e-6;
+	cfg.MAX_ITER = 100;
+
+	cfg.DT = 1e-5;
+	cfg.ETA = 1e-6;
+	cfg.LAMBDA = 1.0;
 
     if (ocl_initialize(&rt.ocl))
 	{
