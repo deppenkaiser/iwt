@@ -22,6 +22,7 @@ struct iwt_runtime
 
 int main(void)
 {
+	int ret_val = 1;
     struct iwt_config cfg = {0};
     struct iwt_runtime rt = {0};
 
@@ -45,6 +46,7 @@ int main(void)
 			if ((rt.I_gpu != NULL) && (rt.K_gpu != NULL) && (rt.sumJ_gpu != NULL))
 			{
     			printf("N = %d, DT = %f\n", cfg.N, cfg.DT);
+				ret_val = 0;
 			}
 
 			// Aufräumen
@@ -60,5 +62,5 @@ int main(void)
 		ocl_deinitialize(&rt.ocl);
 	}
 
-    return 0;
+    return ret_val;
 }
