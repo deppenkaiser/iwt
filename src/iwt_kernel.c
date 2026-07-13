@@ -14,7 +14,13 @@ bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg
 
 		if (cfg->N % cfg->BATCH_SIZE != 0) num_batches++;
 
-        for (size_t batch = 0; (batch < num_batches) && all_ok; ++batch)
+		clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
+			cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
+
+		clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
+			cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
+
+		for (size_t batch = 0; (batch < num_batches) && all_ok; ++batch)
         {
             size_t batch_start = batch * cfg->BATCH_SIZE;
             size_t batch_end = batch_start + cfg->BATCH_SIZE;
