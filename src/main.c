@@ -287,19 +287,78 @@ void run_simulation(
 
     for (int step = 0; step < NUM_STEPS; step++)
     {
-        // 1. Flux berechnen
-        ocl_set_parameter_compute_flux(kernel_flux, buf->I, buf->K, buf->J, (uint32_t)N);
-        if (!ocl_enqueue_kernel(ocl, kernel_flux, N, 256)) break;
+        // 1. Flux: Batch über i und j
+        for (uint32_t oi = 0; oi < N; oi += BATCH_SIZE)
+        {
+            uint32_t bi = (oi + BATCH_SIZE > N) ? N - oi : BATCH_SIZE;
+            for (uint32_t oj = 0; oj < N; oj += BATCH_SIZE)
+            {
+                uint32_t bj = (oj + BATCH_SIZE > N) ? N - oj : BATCH_SIZE;
 
-        // 2. Q berechnen
-        ocl_set_parameter_compute_q(kernel_q, buf->J, buf->Q, (uint32_t)N);
-        if (!ocl_enqueue_kernel(ocl, kernel_q, N, 256)) break;
+                ocl_set_parameter_compute_flux(
+                    kernel_flux,
+                    buf->I,
+                    buf->K,
+                    buf->J,
+                    (uint32_t)N,
+                    oi, oj, bi, bj
+                );
 
-        // 3. Information aktualisieren
-        ocl_set_parameter_update_I(kernel_update_I, buf->I, buf->J, p->dt, (uint32_t)N);
-        if (!ocl_enqueue_kernel(ocl, kernel_update_I, N, 256)) break;
+                if (!ocl_enqueue_kernel(ocl, kernel_flux, bi * bj, 256))
+                {
+                    fprintf(stderr, "Fehler: Flux Batch bei Schritt %d\n", step);
+                    free(host_I); free(host_Q);
+                    return;
+                }
+            }
+        }
 
-        // 4. Kopplungen aktualisieren (Batches)
+        // 2. Q: Batch über i
+        for (uint32_t offset = 0; offset < N; offset += BATCH_SIZE)
+        {
+            uint32_t batch = (offset + BATCH_SIZE > N) ? N - offset : BATCH_SIZE;
+
+            ocl_set_parameter_compute_q(
+                kernel_q,
+                buf->J,
+                buf->Q,
+                (uint32_t)N,
+                offset,
+                batch
+            );
+
+            if (!ocl_enqueue_kernel(ocl, kernel_q, batch, 256))
+            {
+                fprintf(stderr, "Fehler: Q Batch bei Schritt %d\n", step);
+                free(host_I); free(host_Q);
+                return;
+            }
+        }
+
+        // 3. Update I: Batch über i
+        for (uint32_t offset = 0; offset < N; offset += BATCH_SIZE)
+        {
+            uint32_t batch = (offset + BATCH_SIZE > N) ? N - offset : BATCH_SIZE;
+
+            ocl_set_parameter_update_I(
+                kernel_update_I,
+                buf->I,
+                buf->J,
+                p->dt,
+                (uint32_t)N,
+                offset,
+                batch
+            );
+
+            if (!ocl_enqueue_kernel(ocl, kernel_update_I, batch, 256))
+            {
+                fprintf(stderr, "Fehler: Update I Batch bei Schritt %d\n", step);
+                free(host_I); free(host_Q);
+                return;
+            }
+        }
+
+        // 4. Update K: Batch über i und j
         for (uint32_t oi = 0; oi < N; oi += BATCH_SIZE)
         {
             uint32_t bi = (oi + BATCH_SIZE > N) ? N - oi : BATCH_SIZE;
@@ -315,30 +374,25 @@ void run_simulation(
                     p->lambda,
                     p->dt,
                     (uint32_t)N,
-                    oi,
-                    oj,
-                    bi,
-                    bj
+                    oi, oj, bi, bj
                 );
 
                 if (!ocl_enqueue_kernel(ocl, kernel_update_K, bi * bj, 256))
                 {
-                    fprintf(stderr, "Fehler: update_K Batch bei Schritt %d, oi=%u, oj=%u\n", step, oi, oj);
-                    free(host_I);
-                    free(host_Q);
+                    fprintf(stderr, "Fehler: Update K Batch bei Schritt %d\n", step);
+                    free(host_I); free(host_Q);
                     return;
                 }
             }
         }
 
-        // 5. Ausgabe und Konvergenzprüfung
+        // 5. Ausgabe
         if (step % OUTPUT_INTERVAL == 0)
         {
             clEnqueueReadBuffer(ocl->queue, buf->I, CL_TRUE, 0, N * sizeof(double), host_I, 0, NULL, NULL);
             clEnqueueReadBuffer(ocl->queue, buf->Q, CL_TRUE, 0, N * sizeof(double), host_Q, 0, NULL, NULL);
 
-            double sum_I = 0.0;
-            double max_Q = 0.0;
+            double sum_I = 0.0, max_Q = 0.0;
             for (uint32_t i = 0; i < N; i++)
             {
                 sum_I += host_I[i];
@@ -349,7 +403,7 @@ void run_simulation(
 
             if (max_Q < CONVERGENCE_THRESHOLD)
             {
-                printf("Konvergenz erreicht bei Schritt %d\n", step);
+                printf("Konvergenz bei Schritt %d\n", step);
                 clEnqueueReadBuffer(ocl->queue, buf->I, CL_TRUE, 0, N * sizeof(double), h->I, 0, NULL, NULL);
                 clEnqueueReadBuffer(ocl->queue, buf->Q, CL_TRUE, 0, N * sizeof(double), h->Q, 0, NULL, NULL);
                 clEnqueueReadBuffer(ocl->queue, buf->K, CL_TRUE, 0, N * N * sizeof(double), h->K, 0, NULL, NULL);
