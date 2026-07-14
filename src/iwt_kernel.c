@@ -154,7 +154,7 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
                 0, cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
 			// Nach dem I-Update (run_update_info), vor der Quantisierung
-			const double amplitude = 1e-1;
+			const double amplitude = 0.9;
 			for (size_t i = 0; i < cfg->N; i++)
 			{
 				double noise = amplitude * ((double)rand() / RAND_MAX - 0.5);
