@@ -9,19 +9,22 @@ typedef struct iwt_config
 {
     size_t N;
     size_t BATCH_SIZE;
-    double D;                // fraktale Dimension (2.704)
-    double l0;               // fundamentale Länge (in IWT-Einheiten = 1.0)
-    double T;                // fundamentale Zeit (in IWT-Einheiten = 1.0)
-    double alpha_IWT;        // lokale Kopplung (aus Feinstrukturkonstante)
-    double beta_IWT;         // globale Kopplung (aus Gravitationskonstante)
-    double delta_t;          // Schrittweite (in IWT-Einheiten)
+    double D;
+    double l0;
+    double T;
+    double alpha_IWT;
+    double beta_IWT;
+    double delta_t;
 
-    double DT;               // = delta_t / T
-    double ETA;              // = alpha_IWT * DT
-    double LAMBDA;           // = beta_IWT * l0^(3-D) / T^2 * DT^2
-    double GAMMA;            // = (alpha_IWT / beta_IWT) * DT
+    double DT;
+    double ETA;
+    double LAMBDA;
 
-    double THRESHOLD;        // = (3.0 - D) / 3.0
+    double ETA_Q;
+    double LAMBDA_Q;
+    double GAMMA_Q;
+
+    double THRESHOLD;
     int MAX_ITER;
 } *iwt_config_t;
 
@@ -45,7 +48,8 @@ double iwt_fundamental_length(void);
 double iwt_fundamental_time();
 double iwt_alpha_IWT();
 double iwt_fractal_dimension(void);
-double iwt_delta_I_min();
+double iwt_I_min();
+double iwt_I_max(void);
 double iwt_alpha_IWT();
 double iwt_beta_IWT();
 

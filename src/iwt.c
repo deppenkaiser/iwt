@@ -48,20 +48,27 @@ double iwt_fractal_dimension(void)
     return log(N) / log(s);
 }
 
-double iwt_delta_I_min()
+double iwt_I_min()
 {
     return (3.0 - iwt_fractal_dimension()) / 3.0;
+}
+
+double iwt_I_max(void)
+{
+    double I_min = iwt_I_min();
+    double I_max = I_min + 1.0;
+    return I_max;
 }
 
 double iwt_alpha_IWT()
 {
     const double h = 6.62607015e-34;        // J*s
     const double D = iwt_fractal_dimension();
-    const double Delta_I_min = iwt_delta_I_min();
+    const double I_min = iwt_I_min();
 	const double l0 = iwt_fundamental_length();
 
-    // alpha_IWT = h / (Delta_I_min * l0^2)
-    return h / (Delta_I_min * l0 * l0);
+    // alpha_IWT = h / (I_min * l0^2)
+    return h / (I_min * l0 * l0);
 }
 
 double iwt_beta_IWT()
