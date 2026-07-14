@@ -146,6 +146,9 @@ int main(void)
 	cfg.beta_IWT = 1.0;
 	cfg.delta_t = 0.01;
 	cfg.MAX_ITER = 100;
+	cfg.I_min = iwt_I_min();
+	cfg.I_max = iwt_I_max();
+	cfg.Delta_I = (3.0 - cfg.D) / 3.0;
 
 	// 2. Abgeleitete Parameter berechnen
 	cfg.THRESHOLD = iwt_I_min();

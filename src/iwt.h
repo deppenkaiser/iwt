@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <ocl/ocl.h>
 
+// iwt.h – I_min und I_max hinzufügen
+
 typedef struct iwt_config
 {
     size_t N;
@@ -23,6 +25,10 @@ typedef struct iwt_config
     double ETA_Q;
     double LAMBDA_Q;
     double GAMMA_Q;
+
+    double I_min;
+    double I_max;
+    double Delta_I;
 
     double THRESHOLD;
     int MAX_ITER;
