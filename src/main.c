@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ocl/ocl.h>
+#include <math.h>
 #include "iwt.h"
 #include "iwt_kernel.h"
 
@@ -14,18 +15,34 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     if ((rt->I != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
     {
-        double I_min = 0.1;
+        // Initialisierung von I
         for (size_t i = 0; i < cfg->N; i++)
         {
-            rt->I[i] = I_min + 0.01 * (double)(i % 100);
+            if (i < cfg->N / 2)
+                rt->I[i] = 1.0;
+            else
+                rt->I[i] = 0.1;
         }
 
-        // Q aus I ableiten (DBT-ähnlich)
+        // Anfangsquantisierung
+        double I_min = iwt_I_min();      // 0.0
+        double I_max = iwt_I_max();      // 1.0
+        double Delta_I = iwt_delta_I();  // 2.3283064365e-10
+
         for (size_t i = 0; i < cfg->N; i++)
         {
-            rt->Q[i] = -(rt->I[i] - I_min);   // oder: I_min - rt->I[i]
+            if (rt->I[i] < I_min) rt->I[i] = I_min;
+            if (rt->I[i] > I_max) rt->I[i] = I_max;
+            rt->I[i] = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
         }
 
+        // Q aus I ableiten
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            rt->Q[i] = -(rt->I[i] - I_min);
+        }
+
+        // K initialisieren
         for (size_t i = 0; i < cfg->N; i++)
         {
             for (size_t j = 0; j < cfg->N; j++)
@@ -145,16 +162,17 @@ int main(void)
 	cfg.alpha_IWT = 1.0;
 	cfg.beta_IWT = 1.0;
 	cfg.delta_t = 0.01;
-	cfg.MAX_ITER = 100;
+	cfg.MAX_ITER = 10;
 	cfg.I_min = iwt_I_min();
 	cfg.I_max = iwt_I_max();
-	cfg.Delta_I = (3.0 - cfg.D) / 3.0;
+	cfg.Delta_I = iwt_delta_I();
 
 	// 2. Abgeleitete Parameter berechnen
 	cfg.THRESHOLD = iwt_I_min();
 	cfg.DT = 0.001;
 	cfg.ETA = 0.001;
-	cfg.LAMBDA = 10.0;
+	cfg.LAMBDA = 0.0;
+	cfg.MU = 0.001;
 	cfg.ETA_Q = 0.001;
 	cfg.LAMBDA_Q = 0.01;
 	cfg.GAMMA_Q = 0.001;

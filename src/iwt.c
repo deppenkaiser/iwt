@@ -50,7 +50,7 @@ double iwt_fractal_dimension(void)
 
 double iwt_I_min()
 {
-    return (3.0 - iwt_fractal_dimension()) / 3.0;
+    return 0.0;
 }
 
 double iwt_I_max(void)
@@ -58,6 +58,14 @@ double iwt_I_max(void)
     double I_min = iwt_I_min();
     double I_max = I_min + 1.0;
     return I_max;
+}
+
+double iwt_delta_I(void)
+{
+    double I_min = iwt_I_min();
+    double I_max = iwt_I_max();
+    double steps = pow(2.0, 32.0) - 1.0;
+    return (I_max - I_min) / steps;
 }
 
 double iwt_alpha_IWT()

@@ -63,8 +63,6 @@ bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg
     return retval;
 }
 
-// iwt_kernel.c – run_q_calculation mit NaN/Inf-Schutz
-
 bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
@@ -223,7 +221,7 @@ bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_UPDATE_COUPLING);
-
+    
     if (kernel != NULL)
     {
         bool all_ok = true;
@@ -233,8 +231,9 @@ bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
         double DT = cfg->DT;
         double ETA = cfg->ETA;
         double LAMBDA = cfg->LAMBDA;
-        double I_min = iwt_I_min();        // NEU
-        double I_max = iwt_I_max();        // NEU
+        double MU = cfg->MU;
+        double I_min = cfg->I_min;
+        double I_max = cfg->I_max;
 
         for (size_t batch = 0; (batch < num_batches) && all_ok; ++batch)
         {
@@ -247,15 +246,17 @@ bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
             int end = (int)batch_end;
 
             clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-            clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->K_gpu);
-            clSetKernelArg(kernel, 2, sizeof(double), &DT);
-            clSetKernelArg(kernel, 3, sizeof(double), &ETA);
-            clSetKernelArg(kernel, 4, sizeof(double), &LAMBDA);
-            clSetKernelArg(kernel, 5, sizeof(double), &I_min);
-            clSetKernelArg(kernel, 6, sizeof(double), &I_max);
-            clSetKernelArg(kernel, 7, sizeof(int), &N);
-            clSetKernelArg(kernel, 8, sizeof(int), &start);
-            clSetKernelArg(kernel, 9, sizeof(int), &end);
+            clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->Q_gpu);     // NEU
+            clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->K_gpu);
+            clSetKernelArg(kernel, 3, sizeof(double), &DT);
+            clSetKernelArg(kernel, 4, sizeof(double), &ETA);
+            clSetKernelArg(kernel, 5, sizeof(double), &LAMBDA);
+            clSetKernelArg(kernel, 6, sizeof(double), &MU);            // NEU
+            clSetKernelArg(kernel, 7, sizeof(double), &I_min);
+            clSetKernelArg(kernel, 8, sizeof(double), &I_max);
+            clSetKernelArg(kernel, 9, sizeof(int), &N);
+            clSetKernelArg(kernel, 10, sizeof(int), &start);
+            clSetKernelArg(kernel, 11, sizeof(int), &end);
 
             size_t global = batch_end - batch_start;
             size_t local = 64;
@@ -268,12 +269,6 @@ bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
         {
             clEnqueueReadBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE,
                 0, cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
-
-            printf("K[0][0..4] nach Update:\n");
-            for (size_t i = 0; i < 5 && i < cfg->N; i++)
-            {
-                printf("  K[0][%ld] = %f\n", i, rt->K[i]);
-            }
 
             retval = true;
         }

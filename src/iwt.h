@@ -21,6 +21,7 @@ typedef struct iwt_config
     double DT;
     double ETA;
     double LAMBDA;
+    double MU;
 
     double ETA_Q;
     double LAMBDA_Q;
@@ -56,6 +57,7 @@ double iwt_alpha_IWT();
 double iwt_fractal_dimension(void);
 double iwt_I_min();
 double iwt_I_max(void);
+double iwt_delta_I(void);
 double iwt_alpha_IWT();
 double iwt_beta_IWT();
 
