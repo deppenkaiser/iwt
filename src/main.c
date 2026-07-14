@@ -36,6 +36,12 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I[i] = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
         }
 
+		printf("Initial I[0..9]:\n");
+		for (size_t i = 0; i < 10 && i < cfg->N; i++)
+		{
+			printf("  I[%ld] = %f\n", i, rt->I[i]);
+		}
+
         // Q aus I ableiten
         for (size_t i = 0; i < cfg->N; i++)
         {
@@ -103,6 +109,13 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (!run_q_calculation(rt, cfg)) break;
         if (!run_q_dynamics(rt, cfg)) break;
         if (!run_update_info(rt, cfg)) break;  // Endquantisierung
+
+		printf("I[0..9] nach Iteration %d:\n", iter);
+		for (size_t i = 0; i < 10 && i < cfg->N; i++)
+		{
+			printf("  I[%ld] = %f\n", i, rt->I[i]);
+		}		
+
         if (!run_update_coupling(rt, cfg)) break;
 
         // Ausgabe
@@ -175,12 +188,12 @@ int main(void)
 	// 2. Abgeleitete Parameter berechnen
 	cfg.THRESHOLD = iwt_I_min();
 	cfg.DT = 0.001;
-	cfg.ETA = 0.001;
+	cfg.ETA = 100.0;
 	cfg.LAMBDA = 0.0;
-	cfg.MU = 0.001;
-	cfg.ETA_Q = 0.001;
-	cfg.LAMBDA_Q = 0.01;
-	cfg.GAMMA_Q = 0.001;
+	cfg.MU = 0.1;
+	cfg.ETA_Q = 0.1;
+	cfg.LAMBDA_Q = 0.1;
+	cfg.GAMMA_Q = 0.1;
 
 	printf("=== IWT Parameter (aus Theorie) ===\n");
 	printf("D               = %.12f\n", cfg.D);
