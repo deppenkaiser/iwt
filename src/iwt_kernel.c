@@ -127,6 +127,14 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     
     if (kernel != NULL)
     {
+        // 1. sum_I_before berechnen
+        double sum_I_before = 0.0;
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            sum_I_before += rt->I[i];
+        }
+
+        // 2. I aktualisieren (sumJ)
         int N = (int)cfg->N;
         double DT = cfg->DT;
 
@@ -144,30 +152,37 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             clEnqueueReadBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
-            // Quantisierung der Information mit Begrenzung
-            double I_min = cfg->I_min;      // aus Konfiguration!
+            // 3. Quantisierung + sum_I_after
+            double I_min = cfg->I_min;
             double I_max = cfg->I_max;
             double Delta_I = cfg->Delta_I;
+            double sum_I_after = 0.0;
 
             for (size_t i = 0; i < cfg->N; i++)
             {
                 if (rt->I[i] < I_min) rt->I[i] = I_min;
+                if (rt->I[i] > I_max) rt->I[i] = I_max;
+                rt->I[i] = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
+                sum_I_after += rt->I[i];
+            }
 
-                double I_quantized = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
+            // 4. Informationsveränderung
+            double delta_I = sum_I_after - sum_I_before;
 
-                if (I_quantized > I_max) I_quantized = I_max;
-
-                rt->I[i] = I_quantized;
+            // 5. Rückführung in Q (gleichmäßige Verteilung)
+            double delta_I_per_node = delta_I / cfg->N;
+            for (size_t i = 0; i < cfg->N; i++)
+            {
+                rt->Q[i] -= delta_I_per_node;
             }
 
             clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
                 cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
-            printf("I[0..9] nach Update und Quantisierung:\n");
-            for (size_t i = 0; i < 10 && i < cfg->N; i++)
-            {
-                printf("  I[%ld] = %f\n", i, rt->I[i]);
-            }
+            clEnqueueWriteBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE, 0,
+                cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
+
+            printf("Informationsveränderung: %e\n", delta_I);
 
             retval = true;
         }

@@ -18,10 +18,10 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         // Initialisierung von I
         for (size_t i = 0; i < cfg->N; i++)
         {
-            if (i < cfg->N / 2)
-                rt->I[i] = 1.0;
+            if (i < cfg->N / 4)
+                rt->I[i] = iwt_I_max();
             else
-                rt->I[i] = 0.1;
+                rt->I[i] = iwt_I_min();
         }
 
         // Anfangsquantisierung
@@ -87,14 +87,25 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
 
-	for (int iter = 0; iter < cfg->MAX_ITER; iter++)
-	{
-		if (!run_flux_calculation_batched(rt, cfg)) break;
-		if (!run_q_calculation(rt, cfg)) break;        // optional: Q aus sumJ
-		if (!run_q_dynamics(rt, cfg)) break;           // NEU: Q-Dynamik
-		if (!run_update_info(rt, cfg)) break;
-		if (!run_update_coupling(rt, cfg)) break;
+    for (int iter = 0; iter < cfg->MAX_ITER; iter++)
+    {
+        // Anfangsquantisierung (zu Beginn jedes Zeitschritts)
+        double I_min = cfg->I_min;
+        double Delta_I = cfg->Delta_I;
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            rt->I[i] = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
+        }
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
+        if (!run_flux_calculation_batched(rt, cfg)) break;
+        if (!run_q_calculation(rt, cfg)) break;
+        if (!run_q_dynamics(rt, cfg)) break;
+        if (!run_update_info(rt, cfg)) break;  // Endquantisierung
+        if (!run_update_coupling(rt, cfg)) break;
+
+        // Ausgabe
         double max_q = 0.0;
         for (size_t i = 0; i < cfg->N; i++)
         {
@@ -136,12 +147,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             retval = true;
             break;
         }
-
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
-            cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
-
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
-            cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
     }
 
     return retval;

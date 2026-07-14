@@ -55,9 +55,18 @@ double iwt_I_min()
 
 double iwt_I_max(void)
 {
-    double I_min = iwt_I_min();
-    double I_max = I_min + 1.0;
-    return I_max;
+    // I_max = 1.0
+    // 
+    // Herleitung:
+    // Masse: m_p = δ * I_max²
+    // Mit δ = m_p (Protonenmasse als elementare Masse)
+    // m_p = m_p * I_max²
+    // I_max² = 1
+    // I_max = 1
+    //
+    // Der Wertebereich von I ist: 0 <= I <= 1
+
+    return 1.0;
 }
 
 double iwt_delta_I(void)
@@ -70,22 +79,15 @@ double iwt_delta_I(void)
 
 double iwt_alpha_IWT()
 {
-    const double h = 6.62607015e-34;        // J*s
-    const double D = iwt_fractal_dimension();
-    const double I_min = iwt_I_min();
-	const double l0 = iwt_fundamental_length();
-
-    // alpha_IWT = h / (I_min * l0^2)
-    return h / (I_min * l0 * l0);
+    return 1;
 }
 
 double iwt_beta_IWT()
 {
-    const double G = 6.67430e-11;           // m^3/(kg*s^2)
-	const double T = iwt_fundamental_time();
-	const double l0 = iwt_fundamental_length();
-	const double D = iwt_fractal_dimension();
+    return 1;
+}
 
-    // beta_IWT = G * T^2 / l0^(3-D)
-    return G * T * T / pow(l0, 3.0 - D);
+double iwt_gamma_IWT(void)
+{
+    return 1.0;
 }

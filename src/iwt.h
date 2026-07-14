@@ -60,5 +60,6 @@ double iwt_I_max(void);
 double iwt_delta_I(void);
 double iwt_alpha_IWT();
 double iwt_beta_IWT();
+double iwt_gamma_IWT(void);
 
 #endif
