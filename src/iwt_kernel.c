@@ -83,11 +83,12 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
         double m = 1.0;
         double prefactor = -(hbar * hbar) / (2.0 * m);
 
-        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->Q_gpu);
-        clSetKernelArg(kernel, 2, sizeof(int), &N);
-        clSetKernelArg(kernel, 3, sizeof(double), &sum_I);
-        clSetKernelArg(kernel, 4, sizeof(double), &prefactor);
+		clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
+		clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->K_gpu);  // NEU
+		clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->Q_gpu);
+		clSetKernelArg(kernel, 3, sizeof(int), &N);
+		clSetKernelArg(kernel, 4, sizeof(double), &sum_I);
+		clSetKernelArg(kernel, 5, sizeof(double), &prefactor);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -152,7 +153,15 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             clEnqueueReadBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
-            // 3. Quantisierung + sum_I_after
+			// Nach dem I-Update (run_update_info), vor der Quantisierung
+			const double amplitude = 1e-1;
+			for (size_t i = 0; i < cfg->N; i++)
+			{
+				double noise = amplitude * ((double)rand() / RAND_MAX - 0.5);
+				rt->I[i] += noise;
+			}
+
+			// 3. Quantisierung + sum_I_after
             double I_min = cfg->I_min;
             double I_max = cfg->I_max;
             double Delta_I = cfg->Delta_I;
