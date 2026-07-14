@@ -16,13 +16,20 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     if ((rt->I != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
     {
         // Initialisierung von I
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            if (i < cfg->N / 4)
-                rt->I[i] = iwt_I_min();
-            else
-                rt->I[i] = iwt_I_max();
-        }
+		for (size_t i = 0; i < cfg->N; i++)
+		{
+			double r = (double)rand() / RAND_MAX;
+			// 95% Vakuum, 5% höhere Werte
+			if (r < 0.95)
+			{
+				rt->I[i] = 0.01 + 0.005 * ((double)rand() / RAND_MAX - 0.5);
+			}
+			else
+			{
+				// 5% der Knoten haben Werte zwischen 0.05 und 1.0
+				rt->I[i] = 0.05 + 0.95 * ((double)rand() / RAND_MAX);
+			}
+		}
 
         // Anfangsquantisierung
         double I_min = iwt_I_min();      // 0.0
@@ -37,9 +44,10 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         }
 
 		printf("Initial I[0..9]:\n");
-		for (size_t i = 0; i < 10 && i < cfg->N; i++)
+		for (size_t i = 0; i < cfg->N; i++)
 		{
-			printf("  I[%ld] = %f\n", i, rt->I[i]);
+			double r = (double)rand() / RAND_MAX;
+			rt->I[i] = 0.01 + 0.001 * (r - 0.5);
 		}
 
         // Q aus I ableiten
@@ -49,13 +57,15 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         }
 
         // K initialisieren
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            for (size_t j = 0; j < cfg->N; j++)
-            {
-                rt->K[i * cfg->N + j] = 1.0;
-            }
-        }
+		for (size_t i = 0; i < cfg->N; i++)
+		{
+			double gi = iwt_g(rt->I[i]);
+			for (size_t j = 0; j < cfg->N; j++)
+			{
+				double gj = iwt_g(rt->I[j]);
+				rt->K[i * cfg->N + j] = gi * gj;
+			}
+		}
 
         retval = true;
     }
@@ -154,12 +164,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         printf("Iter %2d: max|Q| = %e, mean_I = %f, mean_Q = %f, mean_K = %f, max_K = %f, min_K = %f\n",
             iter, max_q, mean_I, mean_Q, mean_K, max_K, min_K);
 
-        if (max_q < cfg->THRESHOLD)
-        {
-            printf("Konvergenz erreicht nach %d Iterationen.\n", iter + 1);
-            retval = true;
-            break;
-        }
+		retval = true;
     }
 
     return retval;
@@ -179,16 +184,14 @@ int main(void)
 	cfg.T = 1.0;
 	cfg.alpha_IWT = 1.0;
 	cfg.beta_IWT = 1.0;
-	cfg.delta_t = 0.01;
-	cfg.MAX_ITER = 10;
+	cfg.MAX_ITER = 100;
 	cfg.I_min = iwt_I_min();
 	cfg.I_max = iwt_I_max();
 	cfg.Delta_I = iwt_delta_I();
 
 	// 2. Abgeleitete Parameter berechnen
-	cfg.THRESHOLD = iwt_I_min();
-	cfg.DT = 0.001;
-	cfg.ETA = 0.001;
+	cfg.DT = 1e-6;
+	cfg.ETA = 1e-1;
 	cfg.LAMBDA = 0.0;
 	cfg.MU = 0.001;
 	cfg.ETA_Q = 0.001;
@@ -201,10 +204,8 @@ int main(void)
 	printf("T               = %.12e s\n", cfg.T);
 	printf("alpha_IWT       = %.12e\n", cfg.alpha_IWT);
 	printf("beta_IWT        = %.12e\n", cfg.beta_IWT);
-	printf("delta_t         = %.12f\n", cfg.delta_t);
 	printf("I_min           = %.12f\n", iwt_I_min());
 	printf("I_max           = %.12f\n", iwt_I_max());
-	printf("THRESHOLD       = %.12f\n", cfg.THRESHOLD);
 	printf("\n=== Abgeleitete Simulationsparameter ===\n");
 	printf("DT              = %.12e\n", cfg.DT);
 	printf("ETA             = %.12e\n", cfg.ETA);
@@ -227,6 +228,9 @@ int main(void)
                     {
                         if (run_simulation(&rt, &cfg))
                         {
+							struct iwt_spectrum spec = {0};
+							iwt_compute_spectrum(rt.I, cfg.N, &spec);
+							iwt_print_spectrum(&spec);
                             printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
                             retval = 0;
                         }

@@ -1,7 +1,6 @@
 #include "iwt.h"
 #include <math.h>
-
-#include <math.h>
+#include <stdio.h>
 
 double iwt_pi(void)
 {
@@ -90,4 +89,64 @@ double iwt_beta_IWT()
 double iwt_gamma_IWT(void)
 {
     return 1.0;
+}
+
+double iwt_g(double I)
+{
+	const double S = 1e6;
+    // Nullstellen bei Fixpunkten: 0.01, 0.25, 1.0
+    // Minima bei instabilen Teilchen: 0.05, 0.06
+    double term1 = (I - 0.25) * (I - 0.25);
+    double term2 = (I - 1.0) * (I - 1.0);
+    double term3 = (I - 0.05) * (I - 0.05) + 0.01;
+    double term4 = (I - 0.06) * (I - 0.06) + 0.01;
+    return S * term1 * term2 * term3 * term4;
+}
+
+int iwt_classify(double I)
+{
+    if (fabs(I - 0.01) < 0.001) return 0;   // Vakuum
+    if (fabs(I - 0.25) < 0.001) return 1;   // Elektron
+    if (fabs(I - 1.0)  < 0.001) return 2;   // Proton
+    if (fabs(I - 0.05) < 0.001) return 3;   // u-Quark
+    if (fabs(I - 0.06) < 0.001) return 4;   // d-Quark
+    return -1;                               // sonst
+}
+
+void iwt_compute_spectrum(const double* I, size_t N, struct iwt_spectrum* spec)
+{
+    spec->count_vacuum = 0;
+    spec->count_electron = 0;
+    spec->count_proton = 0;
+    spec->count_u_quark = 0;
+    spec->count_d_quark = 0;
+    spec->count_other = 0;
+
+    for (size_t i = 0; i < N; i++)
+    {
+        switch (iwt_classify(I[i]))
+        {
+            case 0: spec->count_vacuum++; break;
+            case 1: spec->count_electron++; break;
+            case 2: spec->count_proton++; break;
+            case 3: spec->count_u_quark++; break;
+            case 4: spec->count_d_quark++; break;
+            default: spec->count_other++; break;
+        }
+    }
+}
+
+void iwt_print_spectrum(const struct iwt_spectrum* spec)
+{
+    size_t total = spec->count_vacuum + spec->count_electron + spec->count_proton +
+                   spec->count_u_quark + spec->count_d_quark + spec->count_other;
+
+    printf("=== Teilchenspektrum ===\n");
+    printf("Vakuum   (0.01): %zu (%.2f%%)\n", spec->count_vacuum, 100.0 * spec->count_vacuum / total);
+    printf("Elektron (0.25): %zu (%.2f%%)\n", spec->count_electron, 100.0 * spec->count_electron / total);
+    printf("Proton   (1.0) : %zu (%.2f%%)\n", spec->count_proton, 100.0 * spec->count_proton / total);
+    printf("u-Quark  (0.05): %zu (%.2f%%)\n", spec->count_u_quark, 100.0 * spec->count_u_quark / total);
+    printf("d-Quark  (0.06): %zu (%.2f%%)\n", spec->count_d_quark, 100.0 * spec->count_d_quark / total);
+    printf("Sonstige       : %zu (%.2f%%)\n", spec->count_other, 100.0 * spec->count_other / total);
+    printf("Gesamt: %zu Knoten\n", total);
 }

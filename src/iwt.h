@@ -16,7 +16,6 @@ typedef struct iwt_config
     double T;
     double alpha_IWT;
     double beta_IWT;
-    double delta_t;
 
     double DT;
     double ETA;
@@ -31,7 +30,6 @@ typedef struct iwt_config
     double I_max;
     double Delta_I;
 
-    double THRESHOLD;
     int MAX_ITER;
 } *iwt_config_t;
 
@@ -50,6 +48,16 @@ typedef struct iwt_runtime
     struct ocl_core ocl;
 } *iwt_runtime_t;
 
+typedef struct iwt_spectrum
+{
+    size_t count_vacuum;      // I ≈ 0.01
+    size_t count_electron;    // I ≈ 0.25
+    size_t count_proton;      // I ≈ 1.0
+    size_t count_u_quark;     // I ≈ 0.05
+    size_t count_d_quark;     // I ≈ 0.06
+    size_t count_other;       // alles andere
+} *iwt_spectrum_t;
+
 double iwt_pi(void);
 double iwt_fundamental_length(void);
 double iwt_fundamental_time();
@@ -61,5 +69,8 @@ double iwt_delta_I(void);
 double iwt_alpha_IWT();
 double iwt_beta_IWT();
 double iwt_gamma_IWT(void);
+double iwt_g(double I);
+void iwt_compute_spectrum(const double* I, size_t N, struct iwt_spectrum* spec);
+void iwt_print_spectrum(const struct iwt_spectrum* spec);
 
 #endif
