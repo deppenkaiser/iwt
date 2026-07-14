@@ -19,9 +19,9 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         for (size_t i = 0; i < cfg->N; i++)
         {
             if (i < cfg->N / 4)
-                rt->I[i] = iwt_I_max();
-            else
                 rt->I[i] = iwt_I_min();
+            else
+                rt->I[i] = iwt_I_max();
         }
 
         // Anfangsquantisierung
@@ -188,12 +188,12 @@ int main(void)
 	// 2. Abgeleitete Parameter berechnen
 	cfg.THRESHOLD = iwt_I_min();
 	cfg.DT = 0.001;
-	cfg.ETA = 100.0;
+	cfg.ETA = 0.001;
 	cfg.LAMBDA = 0.0;
-	cfg.MU = 0.1;
-	cfg.ETA_Q = 0.1;
-	cfg.LAMBDA_Q = 0.1;
-	cfg.GAMMA_Q = 0.1;
+	cfg.MU = 0.001;
+	cfg.ETA_Q = 0.001;
+	cfg.LAMBDA_Q = 0.01;
+	cfg.GAMMA_Q = 0.001;
 
 	printf("=== IWT Parameter (aus Theorie) ===\n");
 	printf("D               = %.12f\n", cfg.D);
