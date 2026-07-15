@@ -119,12 +119,14 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     
     if (kernel != NULL)
     {
+        // 1. sum_I_before berechnen
         double sum_I_before = 0.0;
         for (size_t i = 0; i < cfg->N; i++)
         {
             sum_I_before += rt->I[i];
         }
 
+        // 2. I aktualisieren (sumJ)
         int N = (int)cfg->N;
         double DT = cfg->DT;
 
@@ -142,39 +144,49 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             clEnqueueReadBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
-			const double amplitude = 0.9;
-			for (size_t i = 0; i < cfg->N; i++)
-			{
-				double gi = iwt_g(rt->I[i]);
-				// g(I) = 0 an Fixpunkten → keine Fluktuation
-				// g(I) > 0 sonst → Fluktuation (konstante Amplitude)
-				if (gi > 1e-12)
-				{
-					double noise = amplitude * ((double)rand() / RAND_MAX - 0.5);
-					rt->I[i] += noise;
-				}
-			}
+            // 3. Vakuumfluktuation (nur wo g(I) > 0)
+            const double amplitude = 0.9;
+            for (size_t i = 0; i < cfg->N; i++)
+            {
+                double gi = iwt_g(rt->I[i]);
+                if (gi > 1e-12)
+                {
+                    double noise = amplitude * ((double)rand() / RAND_MAX - 0.5);
+                    rt->I[i] += noise;
+                }
+            }
 
+            // 4. Begrenzung auf [I_min, I_max] (ohne Quantisierung)
             double I_min = cfg->I_min;
             double I_max = cfg->I_max;
-            double Delta_I = cfg->Delta_I;
             double sum_I_after = 0.0;
 
             for (size_t i = 0; i < cfg->N; i++)
             {
                 if (rt->I[i] < I_min) rt->I[i] = I_min;
                 if (rt->I[i] > I_max) rt->I[i] = I_max;
-                rt->I[i] = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
                 sum_I_after += rt->I[i];
             }
 
+            // 5. Informationsänderung nur auf Nicht-Fixpunkte verteilen
             double delta_I = sum_I_after - sum_I_before;
-            double delta_I_per_node = delta_I / cfg->N;
+
+            double sum_g = 0.0;
             for (size_t i = 0; i < cfg->N; i++)
             {
-                rt->Q[i] -= delta_I_per_node;
+                sum_g += iwt_g(rt->I[i]);
             }
 
+            if (sum_g > 1e-30)
+            {
+                for (size_t i = 0; i < cfg->N; i++)
+                {
+                    double gi = iwt_g(rt->I[i]);
+                    rt->Q[i] -= delta_I * gi / sum_g;
+                }
+            }
+
+            // 6. GPU synchronisieren
             clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
                 cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
@@ -295,13 +307,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
-        // Anfangsquantisierung (zu Beginn jedes Zeitschritts)
-        double I_min = cfg->I_min;
-        double Delta_I = cfg->Delta_I;
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            rt->I[i] = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
-        }
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
