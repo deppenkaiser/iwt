@@ -31,6 +31,8 @@ int main(void)
 	cfg.GAMMA_Q = 0.001;
 	cfg.GAMMA_ENTROPY = 0.01;
 	cfg.I0 = 0.01;
+	cfg.ETA_Q_POTENTIAL = 0.001;
+	cfg.ETA_SOURCE = 0.001;
 
 	printf("=== IWT Parameter (aus Theorie) ===\n");
 	printf("D               = %.12f\n", cfg.D);

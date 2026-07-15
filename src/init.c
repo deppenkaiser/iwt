@@ -14,12 +14,12 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     if ((rt->I != NULL) && (rt->I_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
     {
-        // Vakuumfluktuation (Steady-State-Universum)
+        // Initialer Impuls: ein Knoten auf I=1.0, alle anderen Vakuum
         for (size_t i = 0; i < cfg->N; i++)
         {
-            double r = (double)rand() / RAND_MAX;
-            rt->I[i] = 0.01 + 0.001 * (r - 0.5);
+            rt->I[i] = 0.01;
         }
+        rt->I[0] = 1.0;
 
         // I_prev = I (Anfangszustand)
         for (size_t i = 0; i < cfg->N; i++)

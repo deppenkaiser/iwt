@@ -5,8 +5,6 @@
 #include <stdbool.h>
 #include <ocl/ocl.h>
 
-// iwt.h – I_min und I_max hinzufügen
-
 typedef struct iwt_config
 {
     size_t N;
@@ -27,6 +25,8 @@ typedef struct iwt_config
     double GAMMA_Q;
 	double GAMMA_ENTROPY;  // Stärke des Entropie-Terms
 	double I0;             // Referenzwert für Entropie
+	double ETA_Q_POTENTIAL;
+	double ETA_SOURCE;
 
     double I_min;
     double I_max;

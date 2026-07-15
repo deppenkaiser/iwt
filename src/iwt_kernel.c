@@ -125,16 +125,21 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_prev_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
-		double GAMMA_ENTROPY = cfg->GAMMA_ENTROPY;
-		double I0 = cfg->I0;
+        double GAMMA_ENTROPY = cfg->GAMMA_ENTROPY;
+        double I0 = cfg->I0;
+        double ETA_Q_POTENTIAL = 0.001;   // Q als Potential
+        double ETA_SOURCE = 0.001;         // Materieentstehung durch Q
 
-		clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-		clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_prev_gpu);
-		clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->sumJ_gpu);
-		clSetKernelArg(kernel, 3, sizeof(double), &DT);
-		clSetKernelArg(kernel, 4, sizeof(double), &GAMMA_ENTROPY);
-		clSetKernelArg(kernel, 5, sizeof(double), &I0);
-		clSetKernelArg(kernel, 6, sizeof(int), &N);
+        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
+        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_prev_gpu);
+        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->sumJ_gpu);
+        clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->Q_gpu);   // NEU
+        clSetKernelArg(kernel, 4, sizeof(double), &DT);
+        clSetKernelArg(kernel, 5, sizeof(double), &GAMMA_ENTROPY);
+        clSetKernelArg(kernel, 6, sizeof(double), &I0);
+        clSetKernelArg(kernel, 7, sizeof(double), &ETA_Q_POTENTIAL);
+        clSetKernelArg(kernel, 8, sizeof(double), &ETA_SOURCE);
+        clSetKernelArg(kernel, 9, sizeof(int), &N);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -190,14 +195,6 @@ private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
         double I_min = cfg->I_min;
         double I_max = cfg->I_max;
 
-        // mittlere Dichte rho berechnen
-        double rho = 0.0;
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            rho += rt->I[i];
-        }
-        rho /= cfg->N;
-
         for (size_t batch = 0; (batch < num_batches) && all_ok; ++batch)
         {
             size_t batch_start = batch * cfg->BATCH_SIZE;
@@ -217,12 +214,11 @@ private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
             clSetKernelArg(kernel, 6, sizeof(double), &MU);
             clSetKernelArg(kernel, 7, sizeof(double), &GAMMA);
             clSetKernelArg(kernel, 8, sizeof(double), &L);
-            clSetKernelArg(kernel, 9, sizeof(double), &rho);
-            clSetKernelArg(kernel, 10, sizeof(double), &I_min);
-            clSetKernelArg(kernel, 11, sizeof(double), &I_max);
-            clSetKernelArg(kernel, 12, sizeof(int), &N);
-            clSetKernelArg(kernel, 13, sizeof(int), &start);
-            clSetKernelArg(kernel, 14, sizeof(int), &end);
+            clSetKernelArg(kernel, 9, sizeof(double), &I_min);
+            clSetKernelArg(kernel, 10, sizeof(double), &I_max);
+            clSetKernelArg(kernel, 11, sizeof(int), &N);
+            clSetKernelArg(kernel, 12, sizeof(int), &start);
+            clSetKernelArg(kernel, 13, sizeof(int), &end);
 
             size_t global = batch_end - batch_start;
             size_t local = 64;
