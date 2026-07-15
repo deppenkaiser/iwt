@@ -8,6 +8,7 @@ private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_conf
 private bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg);
 private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg);
 private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg);
+private double compute_energy(const iwt_runtime_t rt, const iwt_config_t cfg);
 
 private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
@@ -241,6 +242,35 @@ private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
     return retval;
 }
 
+double compute_energy(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+    double E = 0.0;
+    double DT = cfg->DT;
+
+    for (size_t k = 0; k < cfg->N; k++)
+    {
+        // 1. Kinetische Energie: 0.5 * ((I_k - I_prev_k) / DT)^2
+        double dI_dt = (rt->I[k] - rt->I_prev[k]) / DT;
+        double E_kin = 0.5 * dI_dt * dI_dt;
+
+        // 2. Potentielle Energie: 0.5 * sum_j K_kj * (I_j - I_k)^2
+        double E_pot = 0.0;
+        for (size_t j = 0; j < cfg->N; j++)
+        {
+            double diff = rt->I[j] - rt->I[k];
+            E_pot += 0.5 * rt->K[k * cfg->N + j] * diff * diff;
+        }
+
+        // 3. Entropie-Energie: gamma * I_k * ln(I_k / I0)
+        double I_k = rt->I[k];
+        double E_entropy = cfg->GAMMA_ENTROPY * I_k * log(I_k / cfg->I0 + 1e-30);
+
+        E += E_kin + E_pot + E_entropy;
+    }
+
+    return E;
+}
+
 bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
@@ -285,9 +315,9 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         double mean_I = sum_I / cfg->N;
         double mean_Q = sum_Q / cfg->N;
         double mean_K = sum_K / (cfg->N * cfg->N);
-
-        printf("Iter %2d: max|Q| = %e, mean_I = %f, mean_Q = %f, mean_K = %f, max_K = %f, min_K = %f\n",
-            iter, max_q, mean_I, mean_Q, mean_K, max_K, min_K);
+		double E = compute_energy(rt, cfg);
+		printf("Iter %2d: max|Q| = %e, mean_I = %f, mean_Q = %f, mean_K = %f, E = %f\n",
+			iter, max_q, mean_I, mean_Q, mean_K, E);
 
         retval = true;
     }
