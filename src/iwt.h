@@ -58,6 +58,18 @@ typedef struct iwt_spectrum
     size_t count_other;       // alles andere
 } *iwt_spectrum_t;
 
+typedef struct iwt_mds
+{
+    double* X;          // Koordinaten (N * 2)
+    double* Y;          // Koordinaten (N * 2)
+    double* eigenvalues;
+    size_t dim;         // 2 für Visualisierung
+} *iwt_mds_t;
+
+bool iwt_mds_compute(const iwt_runtime_t rt, const iwt_config_t cfg, iwt_mds_t mds);
+void iwt_mds_free(iwt_mds_t mds);
+void iwt_mds_print(const iwt_mds_t mds, size_t n);
+
 double iwt_pi(void);
 double iwt_fundamental_length(void);
 double iwt_fundamental_time();

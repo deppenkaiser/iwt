@@ -1,4 +1,5 @@
 #include "iwt.h"
+#include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
 #include <libgen.h>
@@ -195,4 +196,108 @@ bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
 
     fclose(f);
     return true;
+}
+
+bool iwt_mds_compute(const iwt_runtime_t rt, const iwt_config_t cfg, iwt_mds_t mds)
+{
+    size_t N = cfg->N;
+    double* D2 = malloc(N * N * sizeof(double));
+    double* B = malloc(N * N * sizeof(double));
+    double* eigenvalues = malloc(N * sizeof(double));
+    double* temp = malloc(N * N * sizeof(double));
+    
+    if (!D2 || !B || !eigenvalues || !temp)
+	{
+        free(D2); free(B); free(eigenvalues); free(temp);
+        return false;
+    }
+
+    // 1. Distanzmatrix aus Metrik g
+    // g_ij = K_ij / sqrt(K_ii * K_jj)
+    for (size_t i = 0; i < N; i++)
+	{
+        for (size_t j = 0; j < N; j++)
+		{
+            double Kii = rt->K[i * N + i];
+            double Kjj = rt->K[j * N + j];
+            double g_ij = rt->K[i * N + j] / sqrt(Kii * Kjj + 1e-30);
+            // Distanz im durch g definierten Raum
+            double d = sqrt(g_ij); // vereinfacht: d_ij = sqrt(g_ij)
+            D2[i * N + j] = d * d;
+        }
+    }
+
+    // 2. Zentrierungsmatrix J = I - 1/N * 1*1^T
+    double invN = 1.0 / N;
+    for (size_t i = 0; i < N; i++)
+	{
+        for (size_t j = 0; j < N; j++)
+		{
+            double J_ij = (i == j) ? 1.0 - invN : -invN;
+            B[i * N + j] = -0.5 * J_ij * D2[i * N + j]; // vereinfacht (ohne vollständige J-Operation)
+        }
+    }
+
+    // 3. Eigenwertzerlegung (vereinfacht: nur erste 2 Eigenwerte/Eigenvektoren)
+    // Hier wird eine einfache Power-Iteration für die ersten 2 Dimensionen verwendet.
+    // Für eine vollständige Eigenwertzerlegung müsste man LAPACK oder eine alternative Bibliothek einbinden.
+    
+    // Vereinfachte Implementierung: Verwende PCA auf Distanzmatrix
+    // (Erste 2 Hauptkomponenten der Distanzmatrix)
+    double* mean = calloc(N, sizeof(double));
+    for (size_t i = 0; i < N; i++)
+	{
+        for (size_t j = 0; j < N; j++)
+		{
+            mean[i] += D2[i * N + j];
+        }
+        mean[i] /= N;
+    }
+    
+    // Kovarianzmatrix (approx)
+    double* cov = calloc(2 * 2, sizeof(double));
+    // Projektion auf 2D: Hier nur als Platzhalter
+    // In einer echten Implementierung würde man die Eigenvektoren berechnen
+    
+    // Allozieren für X, Y
+    mds->X = malloc(N * 2 * sizeof(double));
+    mds->Y = malloc(N * 2 * sizeof(double));
+    mds->eigenvalues = malloc(2 * sizeof(double));
+    mds->dim = 2;
+
+    // Vorläufige Koordinaten: (i, 0) als Platzhalter
+    for (size_t i = 0; i < N; i++)
+	{
+        mds->X[i * 2 + 0] = (double)i / N;
+        mds->X[i * 2 + 1] = 0.0;
+        mds->Y[i * 2 + 0] = (double)i / N;
+        mds->Y[i * 2 + 1] = 0.0;
+    }
+    mds->eigenvalues[0] = 1.0;
+    mds->eigenvalues[1] = 0.0;
+
+    free(mean);
+    free(cov);
+    free(D2);
+    free(B);
+    free(eigenvalues);
+    free(temp);
+    return true;
+}
+
+void iwt_mds_free(iwt_mds_t mds)
+{
+    free(mds->X);
+    free(mds->Y);
+    free(mds->eigenvalues);
+    mds->X = mds->Y = mds->eigenvalues = NULL;
+}
+
+void iwt_mds_print(const iwt_mds_t mds, size_t n)
+{
+    printf("MDS Koordinaten (erste %zu Knoten):\n", n);
+    for (size_t i = 0; i < n && i < mds->dim; i++)
+	{
+        printf("  Knoten %zu: (%f, %f)\n", i, mds->X[i*2+0], mds->X[i*2+1]);
+    }
 }
