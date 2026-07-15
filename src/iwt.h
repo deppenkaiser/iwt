@@ -25,6 +25,8 @@ typedef struct iwt_config
     double ETA_Q;
     double LAMBDA_Q;
     double GAMMA_Q;
+	double GAMMA_ENTROPY;  // Stärke des Entropie-Terms
+	double I0;             // Referenzwert für Entropie
 
     double I_min;
     double I_max;
@@ -41,13 +43,13 @@ typedef struct iwt_runtime
     double *sumJ;
     double *Q;
 
-    cl_mem I_gpu;
+	cl_mem I_gpu;
     cl_mem I_prev_gpu;
     cl_mem K_gpu;
     cl_mem sumJ_gpu;
     cl_mem Q_gpu;
 
-    struct ocl_core ocl;
+	struct ocl_core ocl;
 } *iwt_runtime_t;
 
 typedef struct iwt_spectrum

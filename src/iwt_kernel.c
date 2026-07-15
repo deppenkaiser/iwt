@@ -125,11 +125,16 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_prev_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
-        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_prev_gpu);
-        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->sumJ_gpu);
-        clSetKernelArg(kernel, 3, sizeof(double), &DT);
-        clSetKernelArg(kernel, 4, sizeof(int), &N);
+		double GAMMA_ENTROPY = cfg->GAMMA_ENTROPY;
+		double I0 = cfg->I0;
+
+		clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
+		clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_prev_gpu);
+		clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->sumJ_gpu);
+		clSetKernelArg(kernel, 3, sizeof(double), &DT);
+		clSetKernelArg(kernel, 4, sizeof(double), &GAMMA_ENTROPY);
+		clSetKernelArg(kernel, 5, sizeof(double), &I0);
+		clSetKernelArg(kernel, 6, sizeof(int), &N);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -145,6 +150,18 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             {
                 rt->I_prev[i] = rt->I[i];
             }
+
+            // Begrenzung auf [I_min, I_max]
+            double I_min = cfg->I_min;
+            double I_max = cfg->I_max;
+            for (size_t i = 0; i < cfg->N; i++)
+            {
+                if (rt->I[i] < I_min) rt->I[i] = I_min;
+                if (rt->I[i] > I_max) rt->I[i] = I_max;
+            }
+
+            clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
+                cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
             retval = true;
         }
