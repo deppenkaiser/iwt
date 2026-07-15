@@ -81,12 +81,11 @@ private bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
         double m = 1.0;
         double prefactor = -(hbar * hbar) / (2.0 * m);
 
-        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->K_gpu);
-        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->Q_gpu);
-        clSetKernelArg(kernel, 3, sizeof(int), &N);
-        clSetKernelArg(kernel, 4, sizeof(double), &sum_I);
-        clSetKernelArg(kernel, 5, sizeof(double), &prefactor);
+		clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
+		clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->Q_gpu);
+		clSetKernelArg(kernel, 2, sizeof(int), &N);
+		clSetKernelArg(kernel, 3, sizeof(double), &sum_I);
+		clSetKernelArg(kernel, 4, sizeof(double), &prefactor);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -146,9 +145,6 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             {
                 rt->I_prev[i] = rt->I[i];
             }
-
-            // Fluktuation (wird später korrigiert)
-            // ...
 
             retval = true;
         }
@@ -213,8 +209,18 @@ private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
         double ETA = cfg->ETA;
         double LAMBDA = cfg->LAMBDA;
         double MU = cfg->MU;
+        double GAMMA = 1.0;
+        double L = 1.0;
         double I_min = cfg->I_min;
         double I_max = cfg->I_max;
+
+        // mittlere Dichte rho berechnen
+        double rho = 0.0;
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            rho += rt->I[i];
+        }
+        rho /= cfg->N;
 
         for (size_t batch = 0; (batch < num_batches) && all_ok; ++batch)
         {
@@ -227,17 +233,20 @@ private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
             int end = (int)batch_end;
 
             clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-            clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->Q_gpu);     // NEU
+            clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->Q_gpu);
             clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->K_gpu);
             clSetKernelArg(kernel, 3, sizeof(double), &DT);
             clSetKernelArg(kernel, 4, sizeof(double), &ETA);
             clSetKernelArg(kernel, 5, sizeof(double), &LAMBDA);
-            clSetKernelArg(kernel, 6, sizeof(double), &MU);            // NEU
-            clSetKernelArg(kernel, 7, sizeof(double), &I_min);
-            clSetKernelArg(kernel, 8, sizeof(double), &I_max);
-            clSetKernelArg(kernel, 9, sizeof(int), &N);
-            clSetKernelArg(kernel, 10, sizeof(int), &start);
-            clSetKernelArg(kernel, 11, sizeof(int), &end);
+            clSetKernelArg(kernel, 6, sizeof(double), &MU);
+            clSetKernelArg(kernel, 7, sizeof(double), &GAMMA);
+            clSetKernelArg(kernel, 8, sizeof(double), &L);
+            clSetKernelArg(kernel, 9, sizeof(double), &rho);
+            clSetKernelArg(kernel, 10, sizeof(double), &I_min);
+            clSetKernelArg(kernel, 11, sizeof(double), &I_max);
+            clSetKernelArg(kernel, 12, sizeof(int), &N);
+            clSetKernelArg(kernel, 13, sizeof(int), &start);
+            clSetKernelArg(kernel, 14, sizeof(int), &end);
 
             size_t global = batch_end - batch_start;
             size_t local = 64;
@@ -250,7 +259,6 @@ private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
         {
             clEnqueueReadBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE,
                 0, cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
-
             retval = true;
         }
     }
