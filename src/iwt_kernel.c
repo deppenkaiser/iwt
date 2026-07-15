@@ -7,7 +7,6 @@
 private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg);
 private bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg);
 private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg);
-private bool run_q_dynamics(const iwt_runtime_t rt, const iwt_config_t cfg);
 private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg);
 
 private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -170,47 +169,6 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     return retval;
 }
 
-private bool run_q_dynamics(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-    bool retval = false;
-    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_Q_DYNAMICS);
-
-    if (kernel != NULL)
-    {
-        double I_min = 0.1;
-        double DT = cfg->DT;
-        double ETA_Q = cfg->ETA_Q;
-        double LAMBDA_Q = cfg->LAMBDA_Q;
-        double GAMMA_Q = cfg->GAMMA_Q;
-        int N = (int)cfg->N;
-
-        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->Q_gpu);
-        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_gpu);
-        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->K_gpu);
-        clSetKernelArg(kernel, 3, sizeof(double), &I_min);
-        clSetKernelArg(kernel, 4, sizeof(double), &DT);
-        clSetKernelArg(kernel, 5, sizeof(double), &ETA_Q);
-        clSetKernelArg(kernel, 6, sizeof(double), &LAMBDA_Q);
-        clSetKernelArg(kernel, 7, sizeof(double), &GAMMA_Q);
-        clSetKernelArg(kernel, 8, sizeof(int), &N);
-
-        size_t global = cfg->N;
-        size_t local = 64;
-        if (local > global) local = global;
-
-        if (ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
-        {
-            // Q zurücklesen
-            clEnqueueReadBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE,
-                0, cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
-
-            retval = true;
-        }
-    }
-
-    return retval;
-}
-
 private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
@@ -294,7 +252,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
         if (!run_flux_calculation_batched(rt, cfg)) break;
         if (!run_q_calculation(rt, cfg)) break;
-        if (!run_q_dynamics(rt, cfg)) break;
         if (!run_update_info(rt, cfg)) break;
         if (!run_update_coupling(rt, cfg)) break;
 

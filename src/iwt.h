@@ -30,7 +30,6 @@ typedef struct iwt_config
 
     double I_min;
     double I_max;
-    double Delta_I;
 
     int MAX_ITER;
 } *iwt_config_t;
@@ -72,8 +71,6 @@ double iwt_I_max(void);
 double iwt_delta_I(void);
 double iwt_alpha_IWT();
 double iwt_beta_IWT();
-double iwt_gamma_IWT(void);
-double iwt_g(double I);
 void iwt_compute_spectrum(const double* I, size_t N, struct iwt_spectrum* spec);
 void iwt_print_spectrum(const struct iwt_spectrum* spec);
 bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);

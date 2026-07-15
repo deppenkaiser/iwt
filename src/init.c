@@ -7,12 +7,12 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     bool retval = false;
 
     rt->I = malloc(cfg->N * sizeof(double));
-	rt->I_prev = malloc(cfg->N * sizeof(double));
+    rt->I_prev = malloc(cfg->N * sizeof(double));
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
     rt->sumJ = malloc(cfg->N * sizeof(double));
     rt->Q = malloc(cfg->N * sizeof(double));
 
-    if ((rt->I != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
+    if ((rt->I != NULL) && (rt->I_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
     {
         // Vakuumfluktuation (Steady-State-Universum)
         for (size_t i = 0; i < cfg->N; i++)
@@ -21,13 +21,13 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I[i] = 0.01 + 0.001 * (r - 0.5);
         }
 
-		// I_prev = I (Anfangszustand)
-		for (size_t i = 0; i < cfg->N; i++)
-		{
-			rt->I_prev[i] = rt->I[i];
-		}
+        // I_prev = I (Anfangszustand)
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            rt->I_prev[i] = rt->I[i];
+        }
 
-		// Anfangsquantisierung
+        // Anfangsquantisierung
         double I_min = iwt_I_min();
         double I_max = iwt_I_max();
         double Delta_I = iwt_delta_I();
@@ -45,14 +45,12 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->Q[i] = -(rt->I[i] - I_min);
         }
 
-        // K initialisieren
+        // K initialisieren (flache Metrik)
         for (size_t i = 0; i < cfg->N; i++)
         {
-            double gi = iwt_g(rt->I[i]);
             for (size_t j = 0; j < cfg->N; j++)
             {
-                double gj = iwt_g(rt->I[j]);
-                rt->K[i * cfg->N + j] = gi * gj;
+                rt->K[i * cfg->N + j] = 1.0;
             }
         }
 

@@ -20,7 +20,6 @@ int main(void)
 	cfg.MAX_ITER = 100;
 	cfg.I_min = iwt_I_min();
 	cfg.I_max = iwt_I_max();
-	cfg.Delta_I = iwt_delta_I();
 
 	// 2. Abgeleitete Parameter berechnen
 	cfg.DT = 1e-6;

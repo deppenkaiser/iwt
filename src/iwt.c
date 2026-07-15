@@ -90,23 +90,6 @@ double iwt_beta_IWT()
     return 1;
 }
 
-double iwt_gamma_IWT(void)
-{
-    return 1.0;
-}
-
-double iwt_g(double I)
-{
-	const double S = 1e6;
-    // Nullstellen bei Fixpunkten: 0.01, 0.25, 1.0
-    // Minima bei instabilen Teilchen: 0.05, 0.06
-    double term1 = (I - 0.25) * (I - 0.25);
-    double term2 = (I - 1.0) * (I - 1.0);
-    double term3 = (I - 0.05) * (I - 0.05) + 0.01;
-    double term4 = (I - 0.06) * (I - 0.06) + 0.01;
-    return S * term1 * term2 * term3 * term4;
-}
-
 int iwt_classify(double I)
 {
     if (fabs(I - 0.01) < 0.001) return 0;   // Vakuum
