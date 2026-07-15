@@ -177,6 +177,7 @@ bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
 
     size_t nI = cfg->N * sizeof(double);
     if (fwrite(rt->I, 1, nI, f) != nI) { fclose(f); return false; }
+	if (fwrite(rt->I_prev, 1, nI, f) != nI) { fclose(f); return false; }
 
     size_t nK = cfg->N * cfg->N * sizeof(double);
     if (fwrite(rt->K, 1, nK, f) != nK) { fclose(f); return false; }
@@ -201,6 +202,7 @@ bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
 
     size_t nI = cfg->N * sizeof(double);
     if (fread(rt->I, 1, nI, f) != nI) { fclose(f); return false; }
+	if (fread(rt->I_prev, 1, nI, f) != nI) { fclose(f); return false; }
 
     size_t nK = cfg->N * cfg->N * sizeof(double);
     if (fread(rt->K, 1, nK, f) != nK) { fclose(f); return false; }

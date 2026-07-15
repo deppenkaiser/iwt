@@ -7,6 +7,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     bool retval = false;
 
     rt->I = malloc(cfg->N * sizeof(double));
+	rt->I_prev = malloc(cfg->N * sizeof(double));
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
     rt->sumJ = malloc(cfg->N * sizeof(double));
     rt->Q = malloc(cfg->N * sizeof(double));
@@ -20,7 +21,13 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I[i] = 0.01 + 0.001 * (r - 0.5);
         }
 
-        // Anfangsquantisierung
+		// I_prev = I (Anfangszustand)
+		for (size_t i = 0; i < cfg->N; i++)
+		{
+			rt->I_prev[i] = rt->I[i];
+		}
+
+		// Anfangsquantisierung
         double I_min = iwt_I_min();
         double I_max = iwt_I_max();
         double Delta_I = iwt_delta_I();
@@ -67,6 +74,7 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     rt->I_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->I_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL); 
     rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
     rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
     rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);

@@ -36,11 +36,13 @@ typedef struct iwt_config
 typedef struct iwt_runtime
 {
     double *I;
+    double *I_prev;
     double *K;
     double *sumJ;
     double *Q;
 
     cl_mem I_gpu;
+    cl_mem I_prev_gpu;
     cl_mem K_gpu;
     cl_mem sumJ_gpu;
     cl_mem Q_gpu;

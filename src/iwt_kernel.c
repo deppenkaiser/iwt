@@ -119,21 +119,18 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     
     if (kernel != NULL)
     {
-        // 1. sum_I_before berechnen
-        double sum_I_before = 0.0;
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            sum_I_before += rt->I[i];
-        }
-
-        // 2. I aktualisieren (sumJ)
         int N = (int)cfg->N;
         double DT = cfg->DT;
 
+        // I_prev auf GPU schreiben (vor dem Update)
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_prev_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
+
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->sumJ_gpu);
-        clSetKernelArg(kernel, 2, sizeof(double), &DT);
-        clSetKernelArg(kernel, 3, sizeof(int), &N);
+        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_prev_gpu);
+        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->sumJ_gpu);
+        clSetKernelArg(kernel, 3, sizeof(double), &DT);
+        clSetKernelArg(kernel, 4, sizeof(int), &N);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -144,54 +141,14 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             clEnqueueReadBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
-            // 3. Vakuumfluktuation (nur wo g(I) > 0)
-            const double amplitude = 0.9;
+            // I_prev updaten (für nächsten Schritt)
             for (size_t i = 0; i < cfg->N; i++)
             {
-                double gi = iwt_g(rt->I[i]);
-                if (gi > 1e-12)
-                {
-                    double noise = amplitude * ((double)rand() / RAND_MAX - 0.5);
-                    rt->I[i] += noise;
-                }
+                rt->I_prev[i] = rt->I[i];
             }
 
-            // 4. Begrenzung auf [I_min, I_max] (ohne Quantisierung)
-            double I_min = cfg->I_min;
-            double I_max = cfg->I_max;
-            double sum_I_after = 0.0;
-
-            for (size_t i = 0; i < cfg->N; i++)
-            {
-                if (rt->I[i] < I_min) rt->I[i] = I_min;
-                if (rt->I[i] > I_max) rt->I[i] = I_max;
-                sum_I_after += rt->I[i];
-            }
-
-            // 5. Informationsänderung nur auf Nicht-Fixpunkte verteilen
-            double delta_I = sum_I_after - sum_I_before;
-
-            double sum_g = 0.0;
-            for (size_t i = 0; i < cfg->N; i++)
-            {
-                sum_g += iwt_g(rt->I[i]);
-            }
-
-            if (sum_g > 1e-30)
-            {
-                for (size_t i = 0; i < cfg->N; i++)
-                {
-                    double gi = iwt_g(rt->I[i]);
-                    rt->Q[i] -= delta_I * gi / sum_g;
-                }
-            }
-
-            // 6. GPU synchronisieren
-            clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
-                cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
-
-            clEnqueueWriteBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE, 0,
-                cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
+            // Fluktuation (wird später korrigiert)
+            // ...
 
             retval = true;
         }
