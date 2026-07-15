@@ -24,7 +24,7 @@ int main(void)
 
 	// 2. Abgeleitete Parameter berechnen
 	cfg.DT = 1e-6;
-	cfg.ETA = 1e-1;
+	cfg.ETA = 1e0;
 	cfg.LAMBDA = 0.0;
 	cfg.MU = 0.001;
 	cfg.ETA_Q = 0.001;
