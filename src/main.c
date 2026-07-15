@@ -22,9 +22,9 @@ int main(void)
 	cfg.I_max = iwt_I_max();
 
 	// 2. Abgeleitete Parameter berechnen
-	cfg.DT = 1e-6;
-	cfg.ETA = 1e0;
-	cfg.LAMBDA = 0.0;
+	cfg.DT = 1e-3;
+	cfg.ETA = 1e2;
+	cfg.LAMBDA = 1e2;
 	cfg.MU = 0.001;
 	cfg.ETA_Q = 0.001;
 	cfg.LAMBDA_Q = 0.01;
@@ -32,7 +32,8 @@ int main(void)
 	cfg.GAMMA_ENTROPY = 0.01;
 	cfg.I0 = 0.01;
 	cfg.ETA_Q_POTENTIAL = 0.001;
-	cfg.ETA_SOURCE = 0.001;
+	cfg.ETA_SOURCE = 1.0e0;
+	cfg.PULSE_INTERVAL = 1;
 
 	printf("=== IWT Parameter (aus Theorie) ===\n");
 	printf("D               = %.12f\n", cfg.D);

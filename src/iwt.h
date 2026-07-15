@@ -27,6 +27,7 @@ typedef struct iwt_config
 	double I0;             // Referenzwert für Entropie
 	double ETA_Q_POTENTIAL;
 	double ETA_SOURCE;
+	int PULSE_INTERVAL;
 
     double I_min;
     double I_max;

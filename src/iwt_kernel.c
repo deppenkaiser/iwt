@@ -273,6 +273,17 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
+		// Knoten 0 als periodischer Impuls
+		if (iter == 1)
+		{
+			rt->I[0] = 1.0;
+		}
+		else
+		{
+			rt->I[0] = 0.01;
+		}
+		rt->I_prev[0] = rt->I[0];
+
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
 
