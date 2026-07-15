@@ -1,6 +1,10 @@
 #include "iwt.h"
 #include <math.h>
 #include <stdio.h>
+#include <libgen.h>
+#include <unistd.h>
+#include <limits.h>
+#include <api/api.h>
 
 double iwt_pi(void)
 {
@@ -149,4 +153,61 @@ void iwt_print_spectrum(const struct iwt_spectrum* spec)
     printf("d-Quark  (0.06): %zu (%.2f%%)\n", spec->count_d_quark, 100.0 * spec->count_d_quark / total);
     printf("Sonstige       : %zu (%.2f%%)\n", spec->count_other, 100.0 * spec->count_other / total);
     printf("Gesamt: %zu Knoten\n", total);
+}
+
+private char* iwt_get_exe_path(void)
+{
+    static char path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len == -1) return NULL;
+    path[len] = '\0';
+    return dirname(path);
+}
+
+bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename)
+{
+    char* exe_dir = iwt_get_exe_path();
+    if (!exe_dir) return false;
+
+    char fullpath[PATH_MAX];
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", exe_dir, filename);
+
+    FILE* f = fopen(fullpath, "wb");
+    if (!f) return false;
+
+    size_t nI = cfg->N * sizeof(double);
+    if (fwrite(rt->I, 1, nI, f) != nI) { fclose(f); return false; }
+
+    size_t nK = cfg->N * cfg->N * sizeof(double);
+    if (fwrite(rt->K, 1, nK, f) != nK) { fclose(f); return false; }
+
+    size_t nQ = cfg->N * sizeof(double);
+    if (fwrite(rt->Q, 1, nQ, f) != nQ) { fclose(f); return false; }
+
+    fclose(f);
+    return true;
+}
+
+bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename)
+{
+    char* exe_dir = iwt_get_exe_path();
+    if (!exe_dir) return false;
+
+    char fullpath[PATH_MAX];
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", exe_dir, filename);
+
+    FILE* f = fopen(fullpath, "rb");
+    if (!f) return false;
+
+    size_t nI = cfg->N * sizeof(double);
+    if (fread(rt->I, 1, nI, f) != nI) { fclose(f); return false; }
+
+    size_t nK = cfg->N * cfg->N * sizeof(double);
+    if (fread(rt->K, 1, nK, f) != nK) { fclose(f); return false; }
+
+    size_t nQ = cfg->N * sizeof(double);
+    if (fread(rt->Q, 1, nQ, f) != nQ) { fclose(f); return false; }
+
+    fclose(f);
+    return true;
 }

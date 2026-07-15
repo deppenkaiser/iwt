@@ -59,12 +59,19 @@ int main(void)
                 {
                     if (initialize_gpu_data(&rt, &cfg))
                     {
+						if (iwt_load_state(&rt, &cfg, "iwt_state.bin"))
+        					printf("State loaded from iwt_state.bin\n");
+
                         if (run_simulation(&rt, &cfg))
                         {
 							struct iwt_spectrum spec = {0};
 							iwt_compute_spectrum(rt.I, cfg.N, &spec);
 							iwt_print_spectrum(&spec);
-                            printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
+
+							if (iwt_save_state(&rt, &cfg, "iwt_state.bin"))
+								printf("State saved to iwt_state.bin\n");
+
+							printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
                             retval = 0;
                         }
                         deinitialize_gpu_data(&rt);

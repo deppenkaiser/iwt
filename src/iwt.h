@@ -72,5 +72,7 @@ double iwt_gamma_IWT(void);
 double iwt_g(double I);
 void iwt_compute_spectrum(const double* I, size_t N, struct iwt_spectrum* spec);
 void iwt_print_spectrum(const struct iwt_spectrum* spec);
+bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);
+bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);
 
 #endif
