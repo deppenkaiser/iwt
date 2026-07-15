@@ -1,9 +1,16 @@
 #include <ocl/ocl.h>
 #include <stdio.h>
 #include <math.h>
+#include <api/api.h>
 #include "iwt.h"
 
-bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg)
+private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg);
+private bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg);
+private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg);
+private bool run_q_dynamics(const iwt_runtime_t rt, const iwt_config_t cfg);
+private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg);
+
+private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_FLUX);
@@ -63,7 +70,7 @@ bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg
     return retval;
 }
 
-bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
+private bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_Q);
@@ -121,7 +128,7 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     return retval;
 }
 
-bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
+private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_UPDATE_INFO);
@@ -200,7 +207,7 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     return retval;
 }
 
-bool run_q_dynamics(const iwt_runtime_t rt, const iwt_config_t cfg)
+private bool run_q_dynamics(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_Q_DYNAMICS);
@@ -241,7 +248,7 @@ bool run_q_dynamics(const iwt_runtime_t rt, const iwt_config_t cfg)
     return retval;
 }
 
-bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
+private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_UPDATE_COUPLING);
@@ -296,6 +303,77 @@ bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
 
             retval = true;
         }
+    }
+
+    return retval;
+}
+
+bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+    bool retval = false;
+
+    for (int iter = 0; iter < cfg->MAX_ITER; iter++)
+    {
+        // Anfangsquantisierung (zu Beginn jedes Zeitschritts)
+        double I_min = cfg->I_min;
+        double Delta_I = cfg->Delta_I;
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            rt->I[i] = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
+        }
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
+
+        if (!run_flux_calculation_batched(rt, cfg)) break;
+        if (!run_q_calculation(rt, cfg)) break;
+        if (!run_q_dynamics(rt, cfg)) break;
+        if (!run_update_info(rt, cfg)) break;  // Endquantisierung
+
+		printf("I[0..9] nach Iteration %d:\n", iter);
+		for (size_t i = 0; i < 10 && i < cfg->N; i++)
+		{
+			printf("  I[%ld] = %f\n", i, rt->I[i]);
+		}		
+
+        if (!run_update_coupling(rt, cfg)) break;
+
+        // Ausgabe
+        double max_q = 0.0;
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            double abs_q = rt->Q[i] > 0 ? rt->Q[i] : -rt->Q[i];
+            if (abs_q > max_q) max_q = abs_q;
+        }
+
+        printf("Iter %2d: max|Q| = %e\n", iter, max_q);
+
+        double sum_I = 0.0;
+        double sum_Q = 0.0;
+        double sum_K = 0.0;
+        double max_K = 0.0;
+        double min_K = 0.0;
+
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            sum_I += rt->I[i];
+            sum_Q += rt->Q[i];
+            for (size_t j = 0; j < cfg->N; j++)
+            {
+                double Kij = rt->K[i * cfg->N + j];
+                sum_K += Kij;
+                if (Kij > max_K) max_K = Kij;
+                if (Kij < min_K) min_K = Kij;
+            }
+        }
+
+        double mean_I = sum_I / cfg->N;
+        double mean_Q = sum_Q / cfg->N;
+        double mean_K = sum_K / (cfg->N * cfg->N);
+
+        printf("Iter %2d: max|Q| = %e, mean_I = %f, mean_Q = %f, mean_K = %f, max_K = %f, min_K = %f\n",
+            iter, max_q, mean_I, mean_Q, mean_K, max_K, min_K);
+
+		retval = true;
     }
 
     return retval;

@@ -19,6 +19,7 @@ target_sources(iwt PRIVATE
 	src/main.c
 	src/iwt_kernel.c
 	src/iwt.c
+	src/init.c
 )
 
 target_include_directories(iwt PRIVATE
