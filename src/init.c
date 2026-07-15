@@ -14,12 +14,12 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     if ((rt->I != NULL) && (rt->I_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
     {
-        // Initialer Impuls: ein Knoten auf I=1.0, alle anderen Vakuum
+        // Vakuumfluktuation
         for (size_t i = 0; i < cfg->N; i++)
         {
-            rt->I[i] = 0.01;
+            double r = (double)rand() / RAND_MAX;
+            rt->I[i] = 0.01 + 0.001 * (r - 0.5);
         }
-        rt->I[0] = 1.0;
 
         // I_prev = I (Anfangszustand)
         for (size_t i = 0; i < cfg->N; i++)
@@ -27,30 +27,21 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I_prev[i] = rt->I[i];
         }
 
-        // Anfangsquantisierung
-        double I_min = iwt_I_min();
-        double I_max = iwt_I_max();
-        double Delta_I = iwt_delta_I();
-
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            if (rt->I[i] < I_min) rt->I[i] = I_min;
-            if (rt->I[i] > I_max) rt->I[i] = I_max;
-            rt->I[i] = I_min + round((rt->I[i] - I_min) / Delta_I) * Delta_I;
-        }
-
         // Q aus I ableiten
         for (size_t i = 0; i < cfg->N; i++)
         {
-            rt->Q[i] = -(rt->I[i] - I_min);
+            rt->Q[i] = -(rt->I[i] - iwt_I_min());
         }
 
-        // K initialisieren (flache Metrik)
+        // K initialisieren (fraktale Metrik, N × N)
         for (size_t i = 0; i < cfg->N; i++)
         {
             for (size_t j = 0; j < cfg->N; j++)
             {
-                rt->K[i * cfg->N + j] = 1.0;
+                double dist = (double)(i > j ? i - j : j - i);
+                if (dist == 0) dist = 1.0;
+                double alpha = 3.0 - cfg->D;
+                rt->K[i * cfg->N + j] = 1.0 / pow(dist, alpha);
             }
         }
 

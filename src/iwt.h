@@ -16,10 +16,6 @@ typedef struct iwt_config
     double beta_IWT;
 
     double DT;
-    double ETA;
-    double LAMBDA;
-    double MU;
-
     double ETA_Q;
     double LAMBDA_Q;
     double GAMMA_Q;

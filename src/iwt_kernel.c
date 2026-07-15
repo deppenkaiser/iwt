@@ -7,7 +7,6 @@
 private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg);
 private bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg);
 private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg);
-private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg);
 private double compute_energy(const iwt_runtime_t rt, const iwt_config_t cfg);
 
 private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -175,69 +174,6 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     return retval;
 }
 
-private bool run_update_coupling(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-    bool retval = false;
-    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_UPDATE_COUPLING);
-    
-    if (kernel != NULL)
-    {
-        bool all_ok = true;
-        size_t num_batches = cfg->N / cfg->BATCH_SIZE;
-        if (cfg->N % cfg->BATCH_SIZE != 0) num_batches++;
-
-        double DT = cfg->DT;
-        double ETA = cfg->ETA;
-        double LAMBDA = cfg->LAMBDA;
-        double MU = cfg->MU;
-        double GAMMA = 1.0;
-        double L = 1.0;
-        double I_min = cfg->I_min;
-        double I_max = cfg->I_max;
-
-        for (size_t batch = 0; (batch < num_batches) && all_ok; ++batch)
-        {
-            size_t batch_start = batch * cfg->BATCH_SIZE;
-            size_t batch_end = batch_start + cfg->BATCH_SIZE;
-            if (batch_end > cfg->N) batch_end = cfg->N;
-
-            int N = (int)cfg->N;
-            int start = (int)batch_start;
-            int end = (int)batch_end;
-
-            clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-            clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->Q_gpu);
-            clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->K_gpu);
-            clSetKernelArg(kernel, 3, sizeof(double), &DT);
-            clSetKernelArg(kernel, 4, sizeof(double), &ETA);
-            clSetKernelArg(kernel, 5, sizeof(double), &LAMBDA);
-            clSetKernelArg(kernel, 6, sizeof(double), &MU);
-            clSetKernelArg(kernel, 7, sizeof(double), &GAMMA);
-            clSetKernelArg(kernel, 8, sizeof(double), &L);
-            clSetKernelArg(kernel, 9, sizeof(double), &I_min);
-            clSetKernelArg(kernel, 10, sizeof(double), &I_max);
-            clSetKernelArg(kernel, 11, sizeof(int), &N);
-            clSetKernelArg(kernel, 12, sizeof(int), &start);
-            clSetKernelArg(kernel, 13, sizeof(int), &end);
-
-            size_t global = batch_end - batch_start;
-            size_t local = 64;
-            if (local > global) local = global;
-
-            all_ok = ocl_enqueue_kernel(&rt->ocl, kernel, global, local);
-        }
-
-        if (all_ok)
-        {
-            clEnqueueReadBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE,
-                0, cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
-            retval = true;
-        }
-    }
-
-    return retval;
-}
-
 double compute_energy(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     double E = 0.0;
@@ -290,7 +226,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (!run_flux_calculation_batched(rt, cfg)) break;
         if (!run_q_calculation(rt, cfg)) break;
         if (!run_update_info(rt, cfg)) break;
-        if (!run_update_coupling(rt, cfg)) break;
 
         // Ausgabe: Statistiken
         double max_q = 0.0;
@@ -321,12 +256,11 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
         double mean_I = sum_I / cfg->N;
         double mean_Q = sum_Q / cfg->N;
-        double mean_K = sum_K / (cfg->N * cfg->N);
 		double E = compute_energy(rt, cfg);
-		printf("Iter %2d: max|Q| = %e, mean_I = %f, mean_Q = %f, mean_K = %f, E = %f\n",
-			iter, max_q, mean_I, mean_Q, mean_K, E);
+		printf("Iter %2d: max|Q| = %e, mean_I = %f, mean_Q = %f, E = %f\n",
+    		iter, max_q, mean_I, mean_Q, E);			
 
-        retval = true;
+		retval = true;
     }
 
     return retval;

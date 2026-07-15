@@ -22,10 +22,7 @@ int main(void)
 	cfg.I_max = iwt_I_max();
 
 	// 2. Abgeleitete Parameter berechnen
-	cfg.DT = 1e-3;
-	cfg.ETA = 1e2;
-	cfg.LAMBDA = 1e2;
-	cfg.MU = 0.001;
+	cfg.DT = 1e-4;
 	cfg.ETA_Q = 0.001;
 	cfg.LAMBDA_Q = 0.01;
 	cfg.GAMMA_Q = 0.001;
@@ -45,8 +42,6 @@ int main(void)
 	printf("I_max           = %.12f\n", iwt_I_max());
 	printf("\n=== Abgeleitete Simulationsparameter ===\n");
 	printf("DT              = %.12e\n", cfg.DT);
-	printf("ETA             = %.12e\n", cfg.ETA);
-	printf("LAMBDA          = %.12e\n", cfg.LAMBDA);
 	printf("ETA_Q           = %.12e\n", cfg.ETA_Q);
 	printf("LAMBDA_Q        = %.12e\n", cfg.LAMBDA_Q);
 	printf("GAMMA_Q         = %.12e\n", cfg.GAMMA_Q);
