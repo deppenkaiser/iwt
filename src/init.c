@@ -33,14 +33,22 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->Q[i] = -(rt->I[i] - iwt_I_min());
         }
 
-        // K initialisieren (fraktale Metrik, N × N)
+        // K initialisieren (fraktale 2D-Metrik)
+        int width = (int)sqrt(cfg->N);
+        double alpha = 3.0 - cfg->D;
+
         for (size_t i = 0; i < cfg->N; i++)
         {
+            int x_i = i % width;
+            int y_i = i / width;
             for (size_t j = 0; j < cfg->N; j++)
             {
-                double dist = (double)(i > j ? i - j : j - i);
-                if (dist == 0) dist = 1.0;
-                double alpha = 3.0 - cfg->D;
+                int x_j = j % width;
+                int y_j = j / width;
+                double dx = x_i - x_j;
+                double dy = y_i - y_j;
+                double dist = sqrt(dx*dx + dy*dy);
+                if (dist < 1.0) dist = 1.0;
                 rt->K[i * cfg->N + j] = 1.0 / pow(dist, alpha);
             }
         }

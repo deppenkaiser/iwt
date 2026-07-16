@@ -1,13 +1,25 @@
 #include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #include <ocl/ocl.h>
 #include "iwt_kernel.h"
 #include "init.h"
 
-int main(void)
+int main(int argc, char** argv)
 {
     int retval = 1;
     struct iwt_config cfg = {0};
     struct iwt_runtime rt = {0};
+
+    // Parameter auswerten
+    bool load_state = false;
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--load") == 0)
+        {
+            load_state = true;
+        }
+    }
 
     // 1. Fundamentale Parameter setzen
     cfg.N = 4096;
@@ -17,7 +29,7 @@ int main(void)
     cfg.T = 1.0;
     cfg.alpha_IWT = 1.0;
     cfg.beta_IWT = 1.0;
-    cfg.MAX_ITER = 1000;
+    cfg.MAX_ITER = 300;
     cfg.I_min = iwt_I_min();
     cfg.I_max = iwt_I_max();
 
@@ -55,9 +67,25 @@ int main(void)
                 {
                     if (initialize_gpu_data(&rt, &cfg))
                     {
-                        if (iwt_load_state(&rt, &cfg, "iwt_state.bin"))
+                        // Backup laden nur bei Parameter -l oder --load
+                        if (load_state)
                         {
-                            printf("State loaded from iwt_state.bin\n");
+                            if (iwt_load_state(&rt, &cfg, "iwt_state.bin"))
+                            {
+                                printf("State loaded from iwt_state.bin\n");
+                            }
+                            else
+                            {
+                                printf("Warning: Could not load state, starting fresh\n");
+                            }
+                        }
+                        else
+                        {
+                            // Backup-Datei löschen (falls vorhanden)
+                            if (remove("iwt_state.bin") == 0)
+                            {
+                                printf("Removed existing state file\n");
+                            }
                         }
 
                         if (run_simulation(&rt, &cfg))
@@ -71,6 +99,8 @@ int main(void)
                             if (iwt_mds_compute(&rt, &cfg, &mds))
                             {
                                 iwt_mds_print(&mds, 10);
+                                iwt_mds_save_pgm(&mds, rt.I, cfg.N, "iwt_visual.pgm");
+                                printf("Visualisierung gespeichert: iwt_visual.pgm\n");
                                 iwt_mds_free(&mds);
                             }
 

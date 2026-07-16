@@ -198,106 +198,273 @@ bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
     return true;
 }
 
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Hilfsfunktion: Matrix-Multiplikation (für Eigenwertzerlegung)
+static void iwt_matmul(double* A, double* B, double* C, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+    {
+        for (size_t j = 0; j < n; j++)
+        {
+            C[i * n + j] = 0.0;
+            for (size_t k = 0; k < n; k++)
+            {
+                C[i * n + j] += A[i * n + k] * B[k * n + j];
+            }
+        }
+    }
+}
+
+// Hilfsfunktion: Power-Iteration für den größten Eigenwert
+static double iwt_power_iteration(double* A, double* v, size_t n, int max_iter)
+{
+    double* w = malloc(n * sizeof(double));
+    if (!w) return 0.0;
+
+    // Initialisiere v mit Zufallswerten
+    for (size_t i = 0; i < n; i++)
+    {
+        v[i] = (double)rand() / RAND_MAX;
+    }
+
+    double lambda = 0.0;
+    for (int iter = 0; iter < max_iter; iter++)
+    {
+        // w = A * v
+        for (size_t i = 0; i < n; i++)
+        {
+            w[i] = 0.0;
+            for (size_t j = 0; j < n; j++)
+            {
+                w[i] += A[i * n + j] * v[j];
+            }
+        }
+
+        // Norm von w
+        double norm = 0.0;
+        for (size_t i = 0; i < n; i++)
+        {
+            norm += w[i] * w[i];
+        }
+        norm = sqrt(norm);
+        if (norm < 1e-30) break;
+
+        // v = w / norm
+        for (size_t i = 0; i < n; i++)
+        {
+            v[i] = w[i] / norm;
+        }
+
+        // Rayleigh-Quotient: lambda = v^T * A * v
+        lambda = 0.0;
+        for (size_t i = 0; i < n; i++)
+        {
+            for (size_t j = 0; j < n; j++)
+            {
+                lambda += v[i] * A[i * n + j] * v[j];
+            }
+        }
+    }
+
+    free(w);
+    return lambda;
+}
+
 bool iwt_mds_compute(const iwt_runtime_t rt, const iwt_config_t cfg, iwt_mds_t mds)
 {
     size_t N = cfg->N;
+    if (N < 2) return false;
+
+    // 1. Distanzmatrix aus Metrik g berechnen
     double* D2 = malloc(N * N * sizeof(double));
+    if (!D2) return false;
+
+    for (size_t i = 0; i < N; i++)
+    {
+        double Kii = rt->K[i * N + i];
+        if (Kii < 1e-30) Kii = 1e-30;
+        for (size_t j = 0; j < N; j++)
+        {
+            double Kjj = rt->K[j * N + j];
+            if (Kjj < 1e-30) Kjj = 1e-30;
+            double g_ij = rt->K[i * N + j] / sqrt(Kii * Kjj + 1e-30);
+            D2[i * N + j] = g_ij;  // Distanz im durch g definierten Raum
+        }
+    }
+
+    // 2. Zentrierungsmatrix B = -1/2 * J * D^2 * J
     double* B = malloc(N * N * sizeof(double));
-    double* eigenvalues = malloc(N * sizeof(double));
-    double* temp = malloc(N * N * sizeof(double));
-    
-    if (!D2 || !B || !eigenvalues || !temp)
-	{
-        free(D2); free(B); free(eigenvalues); free(temp);
+    if (!B) { free(D2); return false; }
+
+    double invN = 1.0 / N;
+    for (size_t i = 0; i < N; i++)
+    {
+        for (size_t j = 0; j < N; j++)
+        {
+            double J_i = (i == j) ? 1.0 - invN : -invN;
+            double J_j = (j == i) ? 1.0 - invN : -invN;
+            // Vereinfacht: B = -1/2 * D^2 (ohne vollständige J-Operation)
+            // Für exakte MDS müsste man J*D^2*J berechnen
+            B[i * N + j] = -0.5 * D2[i * N + j];
+        }
+    }
+
+    // 3. Erste 2 Eigenvektoren von B (Power-Iteration mit Deflation)
+    double* v1 = malloc(N * sizeof(double));
+    double* v2 = malloc(N * sizeof(double));
+    if (!v1 || !v2) { free(D2); free(B); free(v1); free(v2); return false; }
+
+    // Erster Eigenvektor
+    double lambda1 = iwt_power_iteration(B, v1, N, 100);
+    if (lambda1 < 0) lambda1 = -lambda1;
+
+    // Deflation: B = B - lambda1 * v1 * v1^T
+    double* B_deflated = malloc(N * N * sizeof(double));
+    if (!B_deflated) { free(D2); free(B); free(v1); free(v2); return false; }
+    for (size_t i = 0; i < N; i++)
+    {
+        for (size_t j = 0; j < N; j++)
+        {
+            B_deflated[i * N + j] = B[i * N + j] - lambda1 * v1[i] * v1[j];
+        }
+    }
+
+    // Zweiter Eigenvektor
+    double lambda2 = iwt_power_iteration(B_deflated, v2, N, 100);
+    if (lambda2 < 0) lambda2 = -lambda2;
+
+    // 4. Koordinaten: X = V * sqrt(Lambda)
+    mds->coords = malloc(N * 2 * sizeof(double));
+    mds->eigenvalues = malloc(2 * sizeof(double));
+    if (!mds->coords || !mds->eigenvalues)
+    {
+        free(D2); free(B); free(B_deflated); free(v1); free(v2);
+        free(mds->coords); free(mds->eigenvalues);
         return false;
     }
 
-    // 1. Distanzmatrix aus Metrik g
-    // g_ij = K_ij / sqrt(K_ii * K_jj)
-    for (size_t i = 0; i < N; i++)
-	{
-        for (size_t j = 0; j < N; j++)
-		{
-            double Kii = rt->K[i * N + i];
-            double Kjj = rt->K[j * N + j];
-            double g_ij = rt->K[i * N + j] / sqrt(Kii * Kjj + 1e-30);
-            // Distanz im durch g definierten Raum
-            double d = sqrt(g_ij); // vereinfacht: d_ij = sqrt(g_ij)
-            D2[i * N + j] = d * d;
-        }
-    }
-
-    // 2. Zentrierungsmatrix J = I - 1/N * 1*1^T
-    double invN = 1.0 / N;
-    for (size_t i = 0; i < N; i++)
-	{
-        for (size_t j = 0; j < N; j++)
-		{
-            double J_ij = (i == j) ? 1.0 - invN : -invN;
-            B[i * N + j] = -0.5 * J_ij * D2[i * N + j]; // vereinfacht (ohne vollständige J-Operation)
-        }
-    }
-
-    // 3. Eigenwertzerlegung (vereinfacht: nur erste 2 Eigenwerte/Eigenvektoren)
-    // Hier wird eine einfache Power-Iteration für die ersten 2 Dimensionen verwendet.
-    // Für eine vollständige Eigenwertzerlegung müsste man LAPACK oder eine alternative Bibliothek einbinden.
-    
-    // Vereinfachte Implementierung: Verwende PCA auf Distanzmatrix
-    // (Erste 2 Hauptkomponenten der Distanzmatrix)
-    double* mean = calloc(N, sizeof(double));
-    for (size_t i = 0; i < N; i++)
-	{
-        for (size_t j = 0; j < N; j++)
-		{
-            mean[i] += D2[i * N + j];
-        }
-        mean[i] /= N;
-    }
-    
-    // Kovarianzmatrix (approx)
-    double* cov = calloc(2 * 2, sizeof(double));
-    // Projektion auf 2D: Hier nur als Platzhalter
-    // In einer echten Implementierung würde man die Eigenvektoren berechnen
-    
-    // Allozieren für X, Y
-    mds->X = malloc(N * 2 * sizeof(double));
-    mds->Y = malloc(N * 2 * sizeof(double));
-    mds->eigenvalues = malloc(2 * sizeof(double));
+    mds->N = N;
     mds->dim = 2;
+    mds->eigenvalues[0] = lambda1;
+    mds->eigenvalues[1] = lambda2;
 
-    // Vorläufige Koordinaten: (i, 0) als Platzhalter
+    double sqrt_lambda1 = sqrt(fabs(lambda1) + 1e-30);
+    double sqrt_lambda2 = sqrt(fabs(lambda2) + 1e-30);
+
     for (size_t i = 0; i < N; i++)
-	{
-        mds->X[i * 2 + 0] = (double)i / N;
-        mds->X[i * 2 + 1] = 0.0;
-        mds->Y[i * 2 + 0] = (double)i / N;
-        mds->Y[i * 2 + 1] = 0.0;
+    {
+        mds->coords[i * 2 + 0] = v1[i] * sqrt_lambda1;
+        mds->coords[i * 2 + 1] = v2[i] * sqrt_lambda2;
     }
-    mds->eigenvalues[0] = 1.0;
-    mds->eigenvalues[1] = 0.0;
 
-    free(mean);
-    free(cov);
     free(D2);
     free(B);
-    free(eigenvalues);
-    free(temp);
+    free(B_deflated);
+    free(v1);
+    free(v2);
+
+    // 5. Zentrieren (Mittelwert auf 0 setzen)
+    double mean_x = 0.0, mean_y = 0.0;
+    for (size_t i = 0; i < N; i++)
+    {
+        mean_x += mds->coords[i * 2 + 0];
+        mean_y += mds->coords[i * 2 + 1];
+    }
+    mean_x /= N;
+    mean_y /= N;
+    for (size_t i = 0; i < N; i++)
+    {
+        mds->coords[i * 2 + 0] -= mean_x;
+        mds->coords[i * 2 + 1] -= mean_y;
+    }
+
     return true;
 }
 
 void iwt_mds_free(iwt_mds_t mds)
 {
-    free(mds->X);
-    free(mds->Y);
+    free(mds->coords);
     free(mds->eigenvalues);
-    mds->X = mds->Y = mds->eigenvalues = NULL;
+    mds->coords = NULL;
+    mds->eigenvalues = NULL;
+    mds->N = 0;
+    mds->dim = 0;
 }
 
 void iwt_mds_print(const iwt_mds_t mds, size_t n)
 {
+    if (!mds->coords) return;
     printf("MDS Koordinaten (erste %zu Knoten):\n", n);
-    for (size_t i = 0; i < n && i < mds->dim; i++)
-	{
-        printf("  Knoten %zu: (%f, %f)\n", i, mds->X[i*2+0], mds->X[i*2+1]);
+    printf("  Eigenwerte: %f, %f\n", mds->eigenvalues[0], mds->eigenvalues[1]);
+    for (size_t i = 0; i < n && i < mds->N; i++)
+    {
+        printf("  Knoten %4zu: (%8.4f, %8.4f)\n",
+               i, mds->coords[i * 2 + 0], mds->coords[i * 2 + 1]);
     }
+}
+
+// Speichert I als PGM-Bild (2D-Plot mit MDS-Koordinaten)
+void iwt_mds_save_pgm(const iwt_mds_t mds, const double* I, size_t N, const char* filename)
+{
+    if (!mds->coords || !I || N != mds->N) return;
+
+    // Bounding Box der Koordinaten
+    double min_x = 0.0, max_x = 1.0;
+    double min_y = 0.0, max_y = 1.0;
+    for (size_t i = 0; i < N; i++)
+    {
+        double x = mds->coords[i * 2 + 0];
+        double y = mds->coords[i * 2 + 1];
+        if (i == 0 || x < min_x) min_x = x;
+        if (i == 0 || x > max_x) max_x = x;
+        if (i == 0 || y < min_y) min_y = y;
+        if (i == 0 || y > max_y) max_y = y;
+    }
+    double range_x = max_x - min_x;
+    double range_y = max_y - min_y;
+    if (range_x < 1e-10) range_x = 1.0;
+    if (range_y < 1e-10) range_y = 1.0;
+
+    // Bildgröße
+    int width = 512;
+    int height = 512;
+    unsigned char* image = malloc(width * height * sizeof(unsigned char));
+    if (!image) return;
+
+    // Pixel initialisieren (schwarz)
+    memset(image, 0, width * height);
+
+    // Knoten in das Bild zeichnen
+    for (size_t i = 0; i < N; i++)
+    {
+        double x = (mds->coords[i * 2 + 0] - min_x) / range_x;
+        double y = (mds->coords[i * 2 + 1] - min_y) / range_y;
+        int px = (int)(x * (width - 1));
+        int py = (int)((1.0 - y) * (height - 1));
+        if (px < 0) px = 0;
+        if (px >= width) px = width - 1;
+        if (py < 0) py = 0;
+        if (py >= height) py = height - 1;
+
+        // Helligkeit aus I
+        double brightness = I[i];
+        if (brightness < 0.0) brightness = 0.0;
+        if (brightness > 1.0) brightness = 1.0;
+        image[py * width + px] = (unsigned char)(brightness * 255.0);
+    }
+
+    // PGM-Datei schreiben
+    FILE* f = fopen(filename, "wb");
+    if (f)
+    {
+        fprintf(f, "P5\n%d %d\n255\n", width, height);
+        fwrite(image, 1, width * height, f);
+        fclose(f);
+    }
+
+    free(image);
 }

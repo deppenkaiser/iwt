@@ -60,15 +60,16 @@ typedef struct iwt_spectrum
 
 typedef struct iwt_mds
 {
-    double* X;          // Koordinaten (N * 2)
-    double* Y;          // Koordinaten (N * 2)
-    double* eigenvalues;
-    size_t dim;         // 2 für Visualisierung
+    double* coords;      // Koordinaten (N * 2) im euklidischen Raum
+    double* eigenvalues; // Eigenwerte der ersten 2 Dimensionen
+    size_t dim;          // 2 für Visualisierung
+    size_t N;            // Anzahl Knoten
 } *iwt_mds_t;
 
 bool iwt_mds_compute(const iwt_runtime_t rt, const iwt_config_t cfg, iwt_mds_t mds);
 void iwt_mds_free(iwt_mds_t mds);
 void iwt_mds_print(const iwt_mds_t mds, size_t n);
+void iwt_mds_save_pgm(const iwt_mds_t mds, const double* I, size_t N, const char* filename);
 
 double iwt_pi(void);
 double iwt_fundamental_length(void);
