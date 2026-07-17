@@ -14,26 +14,22 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     if ((rt->I != NULL) && (rt->I_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
     {
-        // Vakuumfluktuation
+        // Einheitliches Vakuum (keine Fluktuationen)
         for (size_t i = 0; i < cfg->N; i++)
         {
-            double r = (double)rand() / RAND_MAX;
-            rt->I[i] = 0.01 + 0.001 * (r - 0.5);
+            rt->I[i] = 0.01;
         }
 
-        // I_prev = I (Anfangszustand)
         for (size_t i = 0; i < cfg->N; i++)
         {
             rt->I_prev[i] = rt->I[i];
         }
 
-        // Q aus I ableiten
         for (size_t i = 0; i < cfg->N; i++)
         {
-            rt->Q[i] = -(rt->I[i] - iwt_I_min());
+            rt->Q[i] = 0.0;  // Q wird später als Phasenführer implementiert
         }
 
-        // K initialisieren (fraktale 2D-Metrik)
         int width = (int)sqrt(cfg->N);
         double alpha = 3.0 - cfg->D;
 
@@ -62,26 +58,29 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 void deinitialize_host_data(const iwt_runtime_t rt)
 {
     free(rt->I);
+    free(rt->I_prev);
     free(rt->K);
     free(rt->sumJ);
     free(rt->Q);
-    rt->I = rt->K = rt->sumJ = rt->Q = NULL;
+    rt->I = rt->I_prev = rt->K = rt->sumJ = rt->Q = NULL;
 }
 
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     rt->I_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL); 
+    rt->I_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
     rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
     rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
     rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-    return (rt->I_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) && (rt->Q_gpu != NULL);
+    return (rt->I_gpu != NULL) && (rt->I_prev_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) && (rt->Q_gpu != NULL);
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)
 {
     clReleaseMemObject(rt->I_gpu);
+    clReleaseMemObject(rt->I_prev_gpu);
     clReleaseMemObject(rt->K_gpu);
     clReleaseMemObject(rt->sumJ_gpu);
-    rt->I_gpu = rt->K_gpu = rt->sumJ_gpu = NULL;
+    clReleaseMemObject(rt->Q_gpu);
+    rt->I_gpu = rt->I_prev_gpu = rt->K_gpu = rt->sumJ_gpu = rt->Q_gpu = NULL;
 }

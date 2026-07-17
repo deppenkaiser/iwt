@@ -11,7 +11,6 @@ int main(int argc, char** argv)
     struct iwt_config cfg = {0};
     struct iwt_runtime rt = {0};
 
-    // Parameter auswerten
     bool load_state = false;
     for (int i = 1; i < argc; i++)
     {
@@ -21,7 +20,6 @@ int main(int argc, char** argv)
         }
     }
 
-    // 1. Fundamentale Parameter setzen
     cfg.N = 4096;
     cfg.BATCH_SIZE = 512;
     cfg.D = iwt_fractal_dimension();
@@ -32,14 +30,7 @@ int main(int argc, char** argv)
     cfg.MAX_ITER = 300;
     cfg.I_min = iwt_I_min();
     cfg.I_max = iwt_I_max();
-
-    // 2. Abgeleitete Parameter berechnen
     cfg.DT = 1e-4;
-    cfg.ETA_Q = 0.001;
-    cfg.LAMBDA_Q = 0.01;
-    cfg.GAMMA_Q = 0.001;
-    cfg.GAMMA_ENTROPY = 0.01;
-    cfg.I0 = 0.01;
 
     printf("=== IWT Parameter (aus Theorie) ===\n");
     printf("D               = %.12f\n", cfg.D);
@@ -51,12 +42,8 @@ int main(int argc, char** argv)
     printf("I_max           = %.12f\n", iwt_I_max());
     printf("\n=== Abgeleitete Simulationsparameter ===\n");
     printf("DT              = %.12e\n", cfg.DT);
-    printf("ETA_Q           = %.12e\n", cfg.ETA_Q);
-    printf("LAMBDA_Q        = %.12e\n", cfg.LAMBDA_Q);
-    printf("GAMMA_Q         = %.12e\n", cfg.GAMMA_Q);
     printf("========================================\n\n");
 
-    // 3. OpenCL initialisieren
     if (ocl_initialize(&rt.ocl))
     {
         if (ocl_compile(&rt.ocl))
@@ -67,7 +54,6 @@ int main(int argc, char** argv)
                 {
                     if (initialize_gpu_data(&rt, &cfg))
                     {
-                        // Backup laden nur bei Parameter -l oder --load
                         if (load_state)
                         {
                             if (iwt_load_state(&rt, &cfg, "iwt_state.bin"))
@@ -81,7 +67,6 @@ int main(int argc, char** argv)
                         }
                         else
                         {
-                            // Backup-Datei löschen (falls vorhanden)
                             if (remove("iwt_state.bin") == 0)
                             {
                                 printf("Removed existing state file\n");
@@ -94,7 +79,6 @@ int main(int argc, char** argv)
                             iwt_compute_spectrum(rt.I, cfg.N, &spec);
                             iwt_print_spectrum(&spec);
 
-                            // MDS für Visualisierung
                             struct iwt_mds mds = {0};
                             if (iwt_mds_compute(&rt, &cfg, &mds))
                             {
