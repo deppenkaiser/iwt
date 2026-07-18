@@ -41,6 +41,11 @@ typedef struct iwt_config
     double I_max;
 
     int MAX_ITER;
+
+    // Randbedingungen
+    double I_vac;           // Vakuum-Amplitude (0.01)
+    double phi_0;           // Phasenverschiebung bei Reflexion (π/2)
+    double omega_0;         // Referenzfrequenz (c / l0)
 } *iwt_config_t;
 
 typedef struct iwt_spectrum

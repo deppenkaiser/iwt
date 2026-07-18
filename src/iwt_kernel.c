@@ -115,14 +115,18 @@ private bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-    // Funktion bleibt beim Namen, Inhalt wird auf komplex umgestellt
     bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_UPDATE_INFO);
     
     if (kernel != NULL)
     {
         int N = (int)cfg->N;
+        int width = (int)sqrt(cfg->N);
         double DT = cfg->DT;
+        double I_vac = cfg->I_vac;
+        double phi_0 = cfg->phi_0;
+        double omega_0 = cfg->omega_0;
+        double D = cfg->D;
 
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_prev_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
@@ -136,7 +140,12 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
         clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->sumJ_gpu);
         clSetKernelArg(kernel, 5, sizeof(cl_mem), &rt->Q_gpu);
         clSetKernelArg(kernel, 6, sizeof(int), &N);
-        clSetKernelArg(kernel, 7, sizeof(double), &DT);
+        clSetKernelArg(kernel, 7, sizeof(int), &width);
+        clSetKernelArg(kernel, 8, sizeof(double), &DT);
+        clSetKernelArg(kernel, 9, sizeof(double), &I_vac);
+        clSetKernelArg(kernel, 10, sizeof(double), &phi_0);
+        clSetKernelArg(kernel, 11, sizeof(double), &omega_0);
+        clSetKernelArg(kernel, 12, sizeof(double), &D);
 
         size_t global = cfg->N;
         size_t local = 64;
