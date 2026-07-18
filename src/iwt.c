@@ -1,4 +1,5 @@
 #include "iwt.h"
+#include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
@@ -161,7 +162,9 @@ bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
 
     size_t nI = cfg->N * sizeof(double);
     if (fwrite(rt->I, 1, nI, f) != nI) { fclose(f); return false; }
-	if (fwrite(rt->I_prev, 1, nI, f) != nI) { fclose(f); return false; }
+    if (fwrite(rt->I_prev, 1, nI, f) != nI) { fclose(f); return false; }
+    if (fwrite(rt->I_phase, 1, nI, f) != nI) { fclose(f); return false; }
+    if (fwrite(rt->I_phase_prev, 1, nI, f) != nI) { fclose(f); return false; }
 
     size_t nK = cfg->N * cfg->N * sizeof(double);
     if (fwrite(rt->K, 1, nK, f) != nK) { fclose(f); return false; }
@@ -186,7 +189,9 @@ bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
 
     size_t nI = cfg->N * sizeof(double);
     if (fread(rt->I, 1, nI, f) != nI) { fclose(f); return false; }
-	if (fread(rt->I_prev, 1, nI, f) != nI) { fclose(f); return false; }
+    if (fread(rt->I_prev, 1, nI, f) != nI) { fclose(f); return false; }
+    if (fread(rt->I_phase, 1, nI, f) != nI) { fclose(f); return false; }
+    if (fread(rt->I_phase_prev, 1, nI, f) != nI) { fclose(f); return false; }
 
     size_t nK = cfg->N * cfg->N * sizeof(double);
     if (fread(rt->K, 1, nK, f) != nK) { fclose(f); return false; }
@@ -197,11 +202,6 @@ bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
     fclose(f);
     return true;
 }
-
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 // Hilfsfunktion: Matrix-Multiplikation (für Eigenwertzerlegung)
 static void iwt_matmul(double* A, double* B, double* C, size_t n)
