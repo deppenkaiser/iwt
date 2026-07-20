@@ -3,53 +3,39 @@
 #include <math.h>
 #include <api/api.h>
 #include "iwt.h"
-#include "logging/logging.h"
 
-private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg);
+private bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg);
 private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg);
 private double compute_energy(const iwt_runtime_t rt, const iwt_config_t cfg);
 
-private bool run_flux_calculation_batched(const iwt_runtime_t rt, const iwt_config_t cfg)
+private bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_FLUX);
     
     if (kernel != NULL)
     {
-        bool all_ok = true;
-        size_t num_batches = cfg->N / cfg->BATCH_SIZE;
-        if (cfg->N % cfg->BATCH_SIZE != 0) num_batches++;
-
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
         clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
             cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
 
-        for (size_t batch = 0; (batch < num_batches) && all_ok; ++batch)
-        {
-            size_t batch_start = batch * cfg->BATCH_SIZE;
-            size_t batch_end = batch_start + cfg->BATCH_SIZE;
-            if (batch_end > cfg->N) batch_end = cfg->N;
+        int N = (int)cfg->N;
+        int start = 0;
+        int end = N;
 
-            int N = (int)cfg->N;
-            int start = (int)batch_start;
-            int end = (int)batch_end;
+        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
+        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->K_gpu);
+        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->sumJ_gpu);
+        clSetKernelArg(kernel, 3, sizeof(int), &N);
+        clSetKernelArg(kernel, 4, sizeof(int), &start);
+        clSetKernelArg(kernel, 5, sizeof(int), &end);
 
-            clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
-            clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->K_gpu);
-            clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->sumJ_gpu);
-            clSetKernelArg(kernel, 3, sizeof(int), &N);
-            clSetKernelArg(kernel, 4, sizeof(int), &start);
-            clSetKernelArg(kernel, 5, sizeof(int), &end);
+        size_t global = cfg->N;
+        size_t local = 64;
+        if (local > global) local = global;
 
-            size_t global = batch_end - batch_start;
-            size_t local = 64;
-            if (local > global) local = global;
-
-            all_ok = ocl_enqueue_kernel(&rt->ocl, kernel, global, local);
-        }
-
-        if (all_ok)
+        if (ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
         {
             clEnqueueReadBuffer(rt->ocl.queue, rt->sumJ_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->sumJ, 0, NULL, NULL);
@@ -202,12 +188,15 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
-        // Quasi-Impuls an Knoten 0 (Amplitude)
+        // Impuls an Knoten 0 (Amplitude)
         if (iter == 0)
         {
             rt->I[0] = iwt_I_max();
             rt->I_phase[0] = 0.0;
         }
+        // Für iter > 0: nichts tun
+        // Der Impuls wird durch den Fluss automatisch abgetragen
+
         rt->I_prev[0] = rt->I[0];
         rt->I_phase_prev[0] = rt->I_phase[0];
 
@@ -216,23 +205,9 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
-        if (!run_flux_calculation_batched(rt, cfg))
-		{
-			logging_log_message("run_flux_calculation_batched failed!");
-			break;
-		}
-
-        if (!run_q_calculation(rt, cfg))
-		{
-			logging_log_message("run_q_calculation failed!");
-			break;
-		}
-
-        if (!run_update_info(rt, cfg))
-		{
-			logging_log_message("run_update_info failed!");
-			break;
-		}
+        if (!run_flux_calculation(rt, cfg)) break;
+        if (!run_q_calculation(rt, cfg)) break;
+        if (!run_update_info(rt, cfg)) break;
 
         // Ausgabe
         double max_q = 0.0;
@@ -249,8 +224,12 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         double mean_abs = sum_abs / cfg->N;
         double mean_phase = sum_phase / cfg->N;
 
-        printf("Iter %3d: max|Q| = %e, mean_abs = %f, mean_phase = %f\n",
+        // Amplitude der ersten 5 Knoten und Fluss von Knoten 0 anzeigen
+        printf("Iter %3d: max|Q| = %e, mean_abs = %f, mean_phase = %f, ",
                iter, max_q, mean_abs, mean_phase);
+        printf("I[0..4] = %.3f %.3f %.3f %.3f %.3f, ",
+               rt->I[0], rt->I[1], rt->I[2], rt->I[3], rt->I[4]);
+        printf("sumJ[0] = %e\n", rt->sumJ[0]);
 
         retval = true;
     }

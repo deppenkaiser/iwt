@@ -12,13 +12,12 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->I_phase = malloc(cfg->N * sizeof(double));
     rt->I_phase_prev = malloc(cfg->N * sizeof(double));
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
-	rt->sumJ = malloc(cfg->N * sizeof(double));
+    rt->sumJ = malloc(cfg->N * sizeof(double));
     rt->Q = malloc(cfg->N * sizeof(double));
 
     if ((rt->I != NULL) && (rt->I_prev != NULL) && (rt->I_phase != NULL) &&
         (rt->I_phase_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
     {
-        // Vakuum
         for (size_t i = 0; i < cfg->N; i++)
         {
             rt->I[i] = iwt_I_min();
@@ -28,9 +27,6 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->Q[i] = 0.0;
         }
 
-        // Fraktale Kopplungsmatrix (ohne euklidische Einbettung)
-        // Die Distanz im Indexraum ist die Differenz der Indizes
-        // mit fraktaler Skalierung: d_ij = |i - j|^(1/D)
         double D = cfg->D;
         double alpha = 3.0 - D;
 
@@ -38,11 +34,27 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         {
             for (size_t j = 0; j < cfg->N; j++)
             {
-                // Fraktale Distanz im Indexraum
                 double idx_dist = (double)(i > j ? i - j : j - i);
                 if (idx_dist < 1.0) idx_dist = 1.0;
                 double d_ij = pow(idx_dist, 1.0 / D);
                 rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
+            }
+        }
+
+        // Zeilennormierung der Kopplungsmatrix
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            double row_sum = 0.0;
+            for (size_t j = 0; j < cfg->N; j++)
+            {
+                row_sum += rt->K[i * cfg->N + j];
+            }
+            if (row_sum > 1e-30)
+            {
+                for (size_t j = 0; j < cfg->N; j++)
+                {
+                    rt->K[i * cfg->N + j] /= row_sum;
+                }
             }
         }
 
