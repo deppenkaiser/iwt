@@ -201,14 +201,14 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
         // Impuls an Knoten 0 (Amplitude)
-        if (iter == 1)
+        if (iter == 0)
         {
-            rt->I[0] = 1.0;
+            rt->I[0] = iwt_I_max();
             rt->I_phase[0] = 0.0;
         }
         else
         {
-            rt->I[0] = 0.01;
+            rt->I[0] = iwt_I_min();
             rt->I_phase[0] = 0.0;
         }
         rt->I_prev[0] = rt->I[0];

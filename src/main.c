@@ -31,7 +31,7 @@ int main(int argc, char** argv)
     cfg.I_min = iwt_I_min();
     cfg.I_max = iwt_I_max();
     cfg.DT = 3.0e-3;
-	cfg.I_vac = 0.01;
+	cfg.I_vac = iwt_I_min();
 	cfg.phi_0 = 3.141592653589793 / 2.0;  // π/2
 	cfg.omega_0 = 1.0 / cfg.DT;            // Referenzfrequenz
 

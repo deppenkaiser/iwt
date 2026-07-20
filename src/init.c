@@ -1,4 +1,5 @@
 #include "init.h"
+#include "iwt.h"
 #include <stdio.h>
 #include <math.h>
 
@@ -20,8 +21,8 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         // Vakuum
         for (size_t i = 0; i < cfg->N; i++)
         {
-            rt->I[i] = 0.01;
-            rt->I_prev[i] = 0.01;
+            rt->I[i] = iwt_I_min();
+            rt->I_prev[i] = iwt_I_min();
             rt->I_phase[i] = 0.0;
             rt->I_phase_prev[i] = 0.0;
             rt->Q[i] = 0.0;
