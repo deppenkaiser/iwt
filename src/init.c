@@ -12,7 +12,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->I_phase = malloc(cfg->N * sizeof(double));
     rt->I_phase_prev = malloc(cfg->N * sizeof(double));
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
-    rt->sumJ = malloc(cfg->N * 2 * sizeof(double));
+	rt->sumJ = malloc(cfg->N * sizeof(double));
     rt->Q = malloc(cfg->N * sizeof(double));
 
     if ((rt->I != NULL) && (rt->I_prev != NULL) && (rt->I_phase != NULL) &&
@@ -59,7 +59,7 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->I_phase_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
     rt->I_phase_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
     rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
-    rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * 2 * sizeof(double), NULL);
+	rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
     rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
     return (rt->I_gpu != NULL) && (rt->I_prev_gpu != NULL) && (rt->I_phase_gpu != NULL) &&
            (rt->I_phase_prev_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) && (rt->Q_gpu != NULL);

@@ -7,18 +7,18 @@
 
 typedef struct iwt_runtime
 {
-    double *I;          // jetzt: Amplitude |I|
-    double *I_prev;     // jetzt: Amplitude |I|_prev
-    double *I_phase;    // neu: Phase phi
-    double *I_phase_prev; // neu: Phase phi_prev
+    double *I;
+    double *I_prev;
+    double *I_phase;
+    double *I_phase_prev;
     double *K;
     double *sumJ;
     double *Q;
 
     cl_mem I_gpu;
     cl_mem I_prev_gpu;
-    cl_mem I_phase_gpu;     // neu
-    cl_mem I_phase_prev_gpu; // neu
+    cl_mem I_phase_gpu;
+    cl_mem I_phase_prev_gpu;
     cl_mem K_gpu;
     cl_mem sumJ_gpu;
     cl_mem Q_gpu;
