@@ -41,21 +41,36 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             }
         }
 
-        // Zeilennormierung der Kopplungsmatrix
-        for (size_t i = 0; i < cfg->N; i++)
+        // Symmetrische Normierung der Kopplungsmatrix
+        double* row_sum = malloc(cfg->N * sizeof(double));
+        if (row_sum != NULL)
         {
-            double row_sum = 0.0;
-            for (size_t j = 0; j < cfg->N; j++)
+            for (size_t i = 0; i < cfg->N; i++)
             {
-                row_sum += rt->K[i * cfg->N + j];
+                row_sum[i] = 0.0;
+                for (size_t j = 0; j < cfg->N; j++)
+                {
+                    row_sum[i] += rt->K[i * cfg->N + j];
+                }
             }
-            if (row_sum > 1e-30)
+
+            for (size_t i = 0; i < cfg->N; i++)
             {
                 for (size_t j = 0; j < cfg->N; j++)
                 {
-                    rt->K[i * cfg->N + j] /= row_sum;
+                    double norm = sqrt(row_sum[i] * row_sum[j]);
+                    if (norm > 1e-30)
+                    {
+                        rt->K[i * cfg->N + j] /= norm;
+                    }
+                    else
+                    {
+                        rt->K[i * cfg->N + j] = 0.0;
+                    }
                 }
             }
+
+            free(row_sum);
         }
 
         retval = true;
