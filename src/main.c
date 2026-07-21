@@ -28,16 +28,16 @@ int main(int argc, char** argv)
     cfg.T = 1.0;
     cfg.alpha_IWT = 1.0;
     cfg.beta_IWT = 1.0;
-    cfg.MAX_ITER = 100;
+    cfg.MAX_ITER = 1000;
     cfg.I_max = iwt_I_max();
 	cfg.I_min = iwt_I_min();
-    cfg.DT = 1.0e0;
+    cfg.DT = 1.0e-2;
 	cfg.I_vac = iwt_I_min();
 	cfg.phi_0 = iwt_pi() / 2.0;
 	cfg.omega_0 = 1.0 / cfg.DT;            // Referenzfrequenz
 	cfg.Z_0 = 1.0;
 	cfg.alpha_Z = 0.1;
-	cfg.I_total_init = 1000;
+	cfg.I_total_init = 2000;
 
 	string_clear_screen();
 	string_set_cursor_position(1, 1);
@@ -86,10 +86,6 @@ int main(int argc, char** argv)
                         if (run_simulation(&rt, &cfg))
                         {
 							/*
-                            struct iwt_spectrum spec = {0};
-                            iwt_compute_spectrum(rt.I, cfg.N, &spec);
-                            iwt_print_spectrum(&spec);
-
                             struct iwt_mds mds = {0};
                             if (iwt_mds_compute(&rt, &cfg, &mds))
                             {
@@ -98,12 +94,12 @@ int main(int argc, char** argv)
                                 printf("Visualisierung gespeichert: iwt_visual.pgm\n");
                                 iwt_mds_free(&mds);
                             }
-							*/
 
                             if (iwt_save_state(&rt, &cfg, "iwt_state.bin"))
                             {
                                 printf("State saved to iwt_state.bin\n");
                             }
+							*/
 
                             //printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
                             retval = 0;

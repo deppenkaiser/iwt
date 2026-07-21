@@ -529,6 +529,13 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter, 
 	iwt_print_double(&col, row, "R[104]", rt->R[104]);
 	row += 2; col = 1;
 
+	struct iwt_spectrum spec = {0};
+	iwt_compute_spectrum(rt->I, cfg->N, &spec);
+
+	iwt_print_int(&col, row, "Elektronen", spec.count_electron);
+	iwt_print_int(&col, row, "Protonen:", spec.count_proton);
+	row += 2; col = 1;
+
     string_set_cursor_position(col, row);
 	printf(COLOR_RESET);
     fflush(stdout);
