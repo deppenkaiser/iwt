@@ -48,6 +48,7 @@ typedef struct iwt_config
     double omega_0;
     double Z_0;
     double alpha_Z;
+	size_t I_total_init;
 } *iwt_config_t;
 
 typedef struct iwt_spectrum

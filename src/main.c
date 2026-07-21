@@ -27,7 +27,7 @@ int main(int argc, char** argv)
     cfg.T = 1.0;
     cfg.alpha_IWT = 1.0;
     cfg.beta_IWT = 1.0;
-    cfg.MAX_ITER = 100;
+    cfg.MAX_ITER = 1000;
     cfg.I_max = iwt_I_max();
 	cfg.I_min = iwt_I_min();
     cfg.DT = 1.0e-3;
@@ -36,6 +36,7 @@ int main(int argc, char** argv)
 	cfg.omega_0 = 1.0 / cfg.DT;            // Referenzfrequenz
 	cfg.Z_0 = 1.0;
 	cfg.alpha_Z = 0.1;
+	cfg.I_total_init = 100;
 
     printf("=== IWT Parameter (aus Theorie) ===\n");
     printf("D               = %.12f\n", cfg.D);

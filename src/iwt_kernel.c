@@ -191,8 +191,11 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     // ============================================================
     // EINMALIGE EINSPEISUNG – NUR HIER!
     // ============================================================
-    rt->I[0] = iwt_I_max();   // 1.0
-    rt->I_phase[0] = 0.0;
+	for (size_t i = 0; i < cfg->I_total_init; ++i)
+	{
+		rt->I[i] = 1.0;
+		rt->I_phase[i] = 0.0;
+	}
 
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
