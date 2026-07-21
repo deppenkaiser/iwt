@@ -246,14 +246,13 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             if (abs_q > max_q) max_q = abs_q;
         }
 
-        double mean_abs = sum_abs / cfg->N;
         double I_total = sum_abs;
 
         static double I_total_ref = -1.0;
         if (I_total_ref < 0.0) I_total_ref = I_total;
         double deviation = (I_total - I_total_ref) / (I_total_ref + 1e-30);
 
-        iwt_print_status(rt, cfg, iter, max_q, I_total, I_min, I_max, mean_abs, deviation);
+        iwt_print_status(rt, cfg, iter, max_q, I_total, I_min, I_max, deviation);
 
         retval = true;
     }

@@ -486,7 +486,7 @@ private void iwt_print_double(uint32_t* x, uint32_t y, const char* label, double
 }
 
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter, double max_q, double I_total,
-	double I_min, double I_max, double mean_abs, double deviation)
+	double I_min, double I_max, double deviation)
 {
 	uint32_t col = 1, row = 1;
 	iwt_print_int(&col, row, "#", iter);
@@ -494,7 +494,6 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter, 
 	iwt_print_double(&col, row, "I_total", I_total);
 	iwt_print_double(&col, row, "I_min", I_min);
 	iwt_print_double(&col, row, "I_max", I_max);
-	iwt_print_double(&col, row, "I_mean", mean_abs);
 	iwt_print_double(&col, row, "Deviation", deviation);
 	row += 2; col = 1;
 	iwt_print_double(&col, row, "I[0]", rt->I[0]);
