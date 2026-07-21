@@ -46,6 +46,9 @@ typedef struct iwt_config
     double I_vac;           // Vakuum-Amplitude (0.01)
     double phi_0;           // Phasenverschiebung bei Reflexion (π/2)
     double omega_0;         // Referenzfrequenz (c / l0)
+
+    // NEU: Wellenwiderstand des Vakuums (konstant)
+    double Z_0;             // Vakuum-Impedanz (z.B. 1.0)
 } *iwt_config_t;
 
 typedef struct iwt_spectrum

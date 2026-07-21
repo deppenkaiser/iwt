@@ -28,9 +28,10 @@ int main(int argc, char** argv)
     cfg.alpha_IWT = 1.0;
     cfg.beta_IWT = 1.0;
     cfg.MAX_ITER = 300;
-    cfg.I_min = iwt_I_min();
+	cfg.Z_0 = 1.0;  // Vakuum-Wellenwiderstand (konstant)
     cfg.I_max = iwt_I_max();
-    cfg.DT = 1.0e-1;
+	cfg.I_min = iwt_I_min();
+    cfg.DT = 1.0e-12;
 	cfg.I_vac = iwt_I_min();
 	cfg.phi_0 = 3.141592653589793 / 2.0;  // π/2
 	cfg.omega_0 = 1.0 / cfg.DT;            // Referenzfrequenz
@@ -43,6 +44,7 @@ int main(int argc, char** argv)
     printf("beta_IWT        = %.12e\n", cfg.beta_IWT);
     printf("I_min           = %.12f\n", iwt_I_min());
     printf("I_max           = %.12f\n", iwt_I_max());
+	printf("Z_0             = %.12e\n", cfg.Z_0);
     printf("\n=== Abgeleitete Simulationsparameter ===\n");
     printf("DT              = %.12e\n", cfg.DT);
     printf("========================================\n\n");

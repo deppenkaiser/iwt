@@ -108,6 +108,22 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     
     if (kernel != NULL)
     {
+        // ============================================================
+        // NEU: Berechnung von Z_avg und I_avg (einmal pro Iteration)
+        // ============================================================
+        double Z_avg = 0.0;
+        double I_avg = 0.0;
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            double flow = rt->sumJ[i];
+            double I_i = rt->I[i];
+            I_avg += I_i;
+            double Z_i = I_i / (fabs(flow) + 1e-30);
+            Z_avg += Z_i;
+        }
+        Z_avg /= cfg->N;
+        I_avg /= cfg->N;
+
         int N = (int)cfg->N;
         int width = (int)sqrt(cfg->N);
         double DT = cfg->DT;
@@ -121,6 +137,7 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_prev_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
+        // Kernel-Argumente setzen (Z_0 ENTFERNT)
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
         clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_phase_gpu);
         clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_prev_gpu);
@@ -146,6 +163,7 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             clEnqueueReadBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
+            // Host-Daten synchronisieren
             for (size_t i = 0; i < cfg->N; i++)
             {
                 rt->I_prev[i] = rt->I[i];
@@ -157,29 +175,6 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     }
     
     return retval;
-}
-
-double compute_energy(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-    double E = 0.0;
-    double DT = cfg->DT;
-
-    for (size_t k = 0; k < cfg->N; k++)
-    {
-        double dI_dt = (rt->I[k] - rt->I_prev[k]) / DT;
-        double E_kin = 0.5 * dI_dt * dI_dt;
-
-        double E_pot = 0.0;
-        for (size_t j = 0; j < cfg->N; j++)
-        {
-            double diff = rt->I[j] - rt->I[k];
-            E_pot += 0.5 * rt->K[k * cfg->N + j] * diff * diff;
-        }
-
-        E += E_kin + E_pot;
-    }
-
-    return E;
 }
 
 bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -194,8 +189,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I[0] = iwt_I_max();
             rt->I_phase[0] = 0.0;
         }
-        // Für iter > 0: nichts tun
-        // Der Impuls wird durch den Fluss automatisch abgetragen
 
         rt->I_prev[0] = rt->I[0];
         rt->I_phase_prev[0] = rt->I_phase[0];
@@ -209,27 +202,73 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (!run_q_calculation(rt, cfg)) break;
         if (!run_update_info(rt, cfg)) break;
 
-        // Ausgabe
+        // ============================================================
+        // SKALIERUNG ENTFERNT – die Update-Regel ist bereits erhaltend!
+        // ============================================================
+
+        // ============================================================
+        // Ausgabe (erweitert)
+        // ============================================================
         double max_q = 0.0;
         double sum_abs = 0.0;
         double sum_phase = 0.0;
+        double sum_abs_sq = 0.0;
+        double I_min = 1e30;
+        double I_max = -1e30;
+
         for (size_t i = 0; i < cfg->N; i++)
         {
-            sum_abs += rt->I[i];
+            double I_i = rt->I[i];
+            sum_abs += I_i;
             sum_phase += rt->I_phase[i];
+            sum_abs_sq += I_i * I_i;
+            if (I_i < I_min) I_min = I_i;
+            if (I_i > I_max) I_max = I_i;
             double abs_q = rt->Q[i] > 0 ? rt->Q[i] : -rt->Q[i];
             if (abs_q > max_q) max_q = abs_q;
         }
 
         double mean_abs = sum_abs / cfg->N;
         double mean_phase = sum_phase / cfg->N;
+        double rms = sqrt(sum_abs_sq / cfg->N);
+        double I_total = sum_abs;
 
-        // Amplitude der ersten 5 Knoten und Fluss von Knoten 0 anzeigen
-        printf("Iter %3d: max|Q| = %e, mean_abs = %f, mean_phase = %f, ",
-               iter, max_q, mean_abs, mean_phase);
-        printf("I[0..4] = %.3e %.3e %.3e %.3e %.3e, ",      // <-- GEÄNDERT: %.3f → %.3e
-               rt->I[0], rt->I[1], rt->I[2], rt->I[3], rt->I[4]);
-        printf("sumJ[0] = %e\n", rt->sumJ[0]);
+        // Ausgabe
+        printf("Iter %3d: ", iter);
+        printf("max|Q|=%8.3e ", max_q);
+        printf("mean_abs=%8.3e ", mean_abs);
+        printf("rms=%8.3e ", rms);
+        printf("min=%8.3e ", I_min);
+        printf("max=%8.3e ", I_max);
+        printf("I_total=%8.3e\n", I_total);
+
+        printf("         I[0..9] =");
+        for (int i = 0; i < 10 && i < (int)cfg->N; i++)
+        {
+            printf(" %8.3e", rt->I[i]);
+        }
+        printf("\n");
+
+        printf("         sumJ[0..4] =");
+        for (int i = 0; i < 5 && i < (int)cfg->N; i++)
+        {
+            printf(" %8.3e", rt->sumJ[i]);
+        }
+        printf("\n");
+
+        printf("         I_phase[0..4] =");
+        for (int i = 0; i < 5 && i < (int)cfg->N; i++)
+        {
+            printf(" %8.3e", rt->I_phase[i]);
+        }
+        printf("\n");
+
+        // Erhaltung prüfen (Referenz ist Iter 0)
+        static double I_total_ref = -1.0;
+        if (I_total_ref < 0.0) I_total_ref = I_total;
+        double deviation = (I_total - I_total_ref) / (I_total_ref + 1e-30);
+        printf("         Erhaltung: I_total/I_ref = %8.6f (Abw. %8.3e)\n",
+               I_total / I_total_ref, deviation);
 
         retval = true;
     }
