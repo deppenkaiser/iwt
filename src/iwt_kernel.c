@@ -1,4 +1,5 @@
 #include <ocl/ocl.h>
+#include <string/string.h>
 #include <stdio.h>
 #include <math.h>
 #include <api/api.h>
@@ -189,103 +190,70 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     bool retval = false;
 
     // ============================================================
-    // EINMALIGE EINSPEISUNG – NUR HIER!
+    // 100 Quellknoten mit I=1.0 initialisieren (Gesamtinformation = 100)
     // ============================================================
-	for (size_t i = 0; i < cfg->I_total_init; ++i)
-	{
-		rt->I[i] = 1.0;
-		rt->I_phase[i] = 0.0;
-	}
+    for (int i = 0; i < 100 && i < (int)cfg->N; i++)
+    {
+        rt->I[i] = 1.0;
+        rt->I_phase[i] = 0.0;
+    }
+    
+	for (int i = 100; i < (int)cfg->N; i++)
+    {
+        rt->I[i] = 0.0;
+        rt->I_phase[i] = 0.0;
+    }
+
+	string_clear_screen();
+	string_set_cursor_position(1, 1);
 
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
-        rt->I_prev[0] = rt->I[0];
-        rt->I_phase_prev[0] = rt->I_phase[0];
+        // Vorherige Werte sichern
+        for (int i = 0; i < 100 && i < (int)cfg->N; i++)
+        {
+            rt->I_prev[i] = rt->I[i];
+            rt->I_phase_prev[i] = rt->I_phase[i];
+        }
 
+        // Daten auf GPU schreiben
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
+        // ============================================================
+        // SIMULATIONSSCHRITTE
+        // ============================================================
         if (!run_flux_calculation(rt, cfg)) break;
         if (!run_q_calculation(rt, cfg)) break;
         if (!run_update_info(rt, cfg)) break;
 
         // ============================================================
-        // AUSGABE (unverändert)
+        // STATISTIKEN BEREICHNEN
         // ============================================================
         double max_q = 0.0;
         double sum_abs = 0.0;
-        double sum_phase = 0.0;
-        double sum_abs_sq = 0.0;
         double I_min = 1e30;
         double I_max = -1e30;
 
         for (size_t i = 0; i < cfg->N; i++)
         {
-            double I_i = rt->I[i];
-            sum_abs += I_i;
-            sum_phase += rt->I_phase[i];
-            sum_abs_sq += I_i * I_i;
-            if (I_i < I_min) I_min = I_i;
-            if (I_i > I_max) I_max = I_i;
-            double abs_q = rt->Q[i] > 0 ? rt->Q[i] : -rt->Q[i];
+            sum_abs += rt->I[i];
+            if (rt->I[i] < I_min) I_min = rt->I[i];
+            if (rt->I[i] > I_max) I_max = rt->I[i];
+            double abs_q = fabs(rt->Q[i]);
             if (abs_q > max_q) max_q = abs_q;
         }
 
         double mean_abs = sum_abs / cfg->N;
-        double mean_phase = sum_phase / cfg->N;
-        double rms = sqrt(sum_abs_sq / cfg->N);
         double I_total = sum_abs;
-
-        printf("Iter %3d: ", iter);
-        printf("max|Q|=%8.3e ", max_q);
-        printf("mean_abs=%8.3e ", mean_abs);
-        printf("rms=%8.3e ", rms);
-        printf("min=%8.3e ", I_min);
-        printf("max=%8.3e ", I_max);
-        printf("I_total=%8.3e\n", I_total);
-
-        printf("         I[0..9] =");
-        for (int i = 0; i < 10 && i < (int)cfg->N; i++)
-        {
-            printf(" %8.3e", rt->I[i]);
-        }
-        printf("\n");
-
-        printf("         sumJ[0..4] =");
-        for (int i = 0; i < 5 && i < (int)cfg->N; i++)
-        {
-            printf(" %8.3e", rt->sumJ[i]);
-        }
-        printf("\n");
-
-        printf("         I_phase[0..4] =");
-        for (int i = 0; i < 5 && i < (int)cfg->N; i++)
-        {
-            printf(" %8.3e", rt->I_phase[i]);
-        }
-        printf("\n");
-
-		printf("         R[0..4] =");
-		for (int i = 0; i < 5 && i < (int)cfg->N; i++)
-		{
-			printf(" %8.3e", rt->R[i]);
-		}
-		printf("\n");
-
-		printf("         T[0..4] =");
-		for (int i = 0; i < 5 && i < (int)cfg->N; i++)
-		{
-			printf(" %8.3e", rt->T[i]);
-		}
-		printf("\n");
 
         static double I_total_ref = -1.0;
         if (I_total_ref < 0.0) I_total_ref = I_total;
         double deviation = (I_total - I_total_ref) / (I_total_ref + 1e-30);
-        printf("         Erhaltung: I_total/I_ref = %8.6f (Abw. %8.3e)\n",
-               I_total / I_total_ref, deviation);
+
+        iwt_print_status(rt, cfg, iter, max_q, I_total, I_min, I_max, mean_abs, deviation);
 
         retval = true;
     }

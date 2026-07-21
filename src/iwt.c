@@ -1,4 +1,5 @@
 #include "iwt.h"
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -7,6 +8,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <api/api.h>
+#include <string/string.h>
 
 double iwt_pi(void)
 {
@@ -467,4 +469,66 @@ void iwt_mds_save_pgm(const iwt_mds_t mds, const double* I, size_t N, const char
     }
 
     free(image);
+}
+
+private void iwt_print_int(uint32_t* x, uint32_t y, const char* label, int value)
+{
+    string_set_cursor_position(*x, y);
+    printf(BLACK_ON_WHITE "%s:" BLUE_ON_WHITE "%8d" COLOR_RESET, label, value);
+	*x += strlen(label) + 10;
+}
+
+private void iwt_print_double(uint32_t* x, uint32_t y, const char* label, double value)
+{
+    string_set_cursor_position(*x, y);
+    printf(BLACK_ON_WHITE "%s:" BLUE_ON_WHITE "%.3e" COLOR_RESET, label, value);
+	*x += strlen(label) + 13;
+}
+
+void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter, double max_q, double I_total,
+	double I_min, double I_max, double mean_abs, double deviation)
+{
+	uint32_t col = 1, row = 1;
+	iwt_print_int(&col, row, "#", iter);
+	iwt_print_double(&col, row, "|Q_max|", max_q);
+	iwt_print_double(&col, row, "I_total", I_total);
+	iwt_print_double(&col, row, "I_min", I_min);
+	iwt_print_double(&col, row, "I_max", I_max);
+	iwt_print_double(&col, row, "I_mean", mean_abs);
+	iwt_print_double(&col, row, "Deviation", deviation);
+	row += 2; col = 1;
+	iwt_print_double(&col, row, "I[0]", rt->I[0]);
+	iwt_print_double(&col, row, "I[101]", rt->I[101]);
+	iwt_print_double(&col, row, "I[102]", rt->I[102]);
+	iwt_print_double(&col, row, "I[103]", rt->I[103]);
+	iwt_print_double(&col, row, "I[104]", rt->I[104]);
+	row += 2; col = 1;
+	iwt_print_double(&col, row, "I_phase[0]", rt->I_phase[0]);
+	iwt_print_double(&col, row, "I_phase[101]", rt->I_phase[101]);
+	iwt_print_double(&col, row, "I_phase[102]", rt->I_phase[102]);
+	iwt_print_double(&col, row, "I_phase[103]", rt->I_phase[103]);
+	iwt_print_double(&col, row, "I_phase[104]", rt->I_phase[104]);
+	row += 2; col = 1;
+	iwt_print_double(&col, row, "sum_J[0]", rt->sumJ[0]);
+	iwt_print_double(&col, row, "sum_J[101]", rt->sumJ[101]);
+	iwt_print_double(&col, row, "sum_J[102]", rt->sumJ[102]);
+	iwt_print_double(&col, row, "sum_J[103]", rt->sumJ[103]);
+	iwt_print_double(&col, row, "sum_J[104]", rt->sumJ[104]);
+	row += 2; col = 1;
+	iwt_print_double(&col, row, "T[0]", rt->T[0]);
+	iwt_print_double(&col, row, "T[101]", rt->T[101]);
+	iwt_print_double(&col, row, "T[102]", rt->T[102]);
+	iwt_print_double(&col, row, "T[103]", rt->T[103]);
+	iwt_print_double(&col, row, "T[104]", rt->T[104]);
+	row += 2; col = 1;
+	iwt_print_double(&col, row, "R[0]", rt->R[0]);
+	iwt_print_double(&col, row, "R[101]", rt->R[101]);
+	iwt_print_double(&col, row, "R[102]", rt->R[102]);
+	iwt_print_double(&col, row, "R[103]", rt->R[103]);
+	iwt_print_double(&col, row, "R[104]", rt->R[104]);
+	row += 2; col = 1;
+
+    string_set_cursor_position(col, row);
+	printf(COLOR_RESET);
+    fflush(stdout);
 }

@@ -14,6 +14,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_executable(iwt)
 add_subdirectory(../../libraries/ocl ${CMAKE_BINARY_DIR}/ocl)
+add_subdirectory(../../libraries/string ${CMAKE_BINARY_DIR}/string)
 
 target_sources(iwt PRIVATE
 	src/main.c
@@ -28,5 +29,6 @@ target_include_directories(iwt PRIVATE
 
 target_link_libraries(iwt
 	ocl
+	string
 	m
 )

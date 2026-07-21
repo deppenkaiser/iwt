@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ocl/ocl.h>
+#include <string/string.h>
 #include "iwt_kernel.h"
 #include "init.h"
 
@@ -38,6 +39,8 @@ int main(int argc, char** argv)
 	cfg.alpha_Z = 0.1;
 	cfg.I_total_init = 100;
 
+	string_clear_screen();
+	string_set_cursor_position(1, 1);
     printf("=== IWT Parameter (aus Theorie) ===\n");
     printf("D               = %.12f\n", cfg.D);
     printf("l0              = %.12e m\n", cfg.l0);
@@ -82,6 +85,7 @@ int main(int argc, char** argv)
 
                         if (run_simulation(&rt, &cfg))
                         {
+							/*
                             struct iwt_spectrum spec = {0};
                             iwt_compute_spectrum(rt.I, cfg.N, &spec);
                             iwt_print_spectrum(&spec);
@@ -94,13 +98,14 @@ int main(int argc, char** argv)
                                 printf("Visualisierung gespeichert: iwt_visual.pgm\n");
                                 iwt_mds_free(&mds);
                             }
+							*/
 
                             if (iwt_save_state(&rt, &cfg, "iwt_state.bin"))
                             {
                                 printf("State saved to iwt_state.bin\n");
                             }
 
-                            printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
+                            //printf("N = %ld, DT = %f\n", cfg.N, cfg.DT);
                             retval = 0;
                         }
                         deinitialize_gpu_data(&rt);
