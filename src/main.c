@@ -28,10 +28,10 @@ int main(int argc, char** argv)
     cfg.T = 1.0;
     cfg.alpha_IWT = 1.0;
     cfg.beta_IWT = 1.0;
-    cfg.MAX_ITER = 1000;
+    cfg.MAX_ITER = 100000;
     cfg.I_max = iwt_I_max();
 	cfg.I_min = iwt_I_min();
-    cfg.DT = 1.0e-3;
+    cfg.DT = 1.0e-5;
 	cfg.I_vac = iwt_I_min();
 	cfg.phi_0 = 3.141592653589793 / 2.0;  // π/2
 	cfg.omega_0 = 1.0 / cfg.DT;            // Referenzfrequenz
