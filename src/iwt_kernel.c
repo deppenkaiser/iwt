@@ -227,7 +227,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         // Amplitude der ersten 5 Knoten und Fluss von Knoten 0 anzeigen
         printf("Iter %3d: max|Q| = %e, mean_abs = %f, mean_phase = %f, ",
                iter, max_q, mean_abs, mean_phase);
-        printf("I[0..4] = %.3f %.3f %.3f %.3f %.3f, ",
+        printf("I[0..4] = %.3e %.3e %.3e %.3e %.3e, ",      // <-- GEÄNDERT: %.3f → %.3e
                rt->I[0], rt->I[1], rt->I[2], rt->I[3], rt->I[4]);
         printf("sumJ[0] = %e\n", rt->sumJ[0]);
 
