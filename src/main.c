@@ -37,7 +37,7 @@ int main(int argc, char** argv)
 	cfg.omega_0 = 1.0 / cfg.DT;            // Referenzfrequenz
 	cfg.Z_0 = 1.0;
 	cfg.alpha_Z = 0.1;
-	cfg.I_total_init = 100;
+	cfg.I_total_init = 1000;
 
 	string_clear_screen();
 	string_set_cursor_position(1, 1);

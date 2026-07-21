@@ -189,16 +189,13 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
 
-    // ============================================================
-    // 100 Quellknoten mit I=1.0 initialisieren (Gesamtinformation = 100)
-    // ============================================================
-    for (int i = 0; i < 100 && i < (int)cfg->N; i++)
+    for (int i = 0; (i < cfg->I_total_init) && (i < (int)cfg->N); ++i)
     {
         rt->I[i] = 1.0;
         rt->I_phase[i] = 0.0;
     }
     
-	for (int i = 100; i < (int)cfg->N; i++)
+	for (int i = cfg->I_total_init; i < (int)cfg->N; i++)
     {
         rt->I[i] = 0.0;
         rt->I_phase[i] = 0.0;
@@ -210,7 +207,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
         // Vorherige Werte sichern
-        for (int i = 0; i < 100 && i < (int)cfg->N; i++)
+        for (int i = 0; (i < cfg->I_total_init) && (i < (int)cfg->N); i++)
         {
             rt->I_prev[i] = rt->I[i];
             rt->I_phase_prev[i] = rt->I_phase[i];
