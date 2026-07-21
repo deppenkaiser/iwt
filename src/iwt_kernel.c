@@ -23,6 +23,8 @@ private bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg
         int N = (int)cfg->N;
         int start = 0;
         int end = N;
+        double DT = cfg->DT;
+        double I_max = cfg->I_max;
 
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
         clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->K_gpu);
@@ -30,6 +32,8 @@ private bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg
         clSetKernelArg(kernel, 3, sizeof(int), &N);
         clSetKernelArg(kernel, 4, sizeof(int), &start);
         clSetKernelArg(kernel, 5, sizeof(int), &end);
+        clSetKernelArg(kernel, 6, sizeof(double), &DT);
+        clSetKernelArg(kernel, 7, sizeof(double), &I_max);
 
         size_t global = cfg->N;
         size_t local = 64;
