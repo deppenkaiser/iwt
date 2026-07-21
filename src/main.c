@@ -27,7 +27,7 @@ int main(int argc, char** argv)
     cfg.T = 1.0;
     cfg.alpha_IWT = 1.0;
     cfg.beta_IWT = 1.0;
-    cfg.MAX_ITER = 300;
+    cfg.MAX_ITER = 1000;
 	cfg.Z_0 = 1.0;  // Vakuum-Wellenwiderstand (konstant)
     cfg.I_max = iwt_I_max();
 	cfg.I_min = iwt_I_min();
