@@ -25,15 +25,21 @@ private bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg
         int end = N;
         double DT = cfg->DT;
         double I_max = cfg->I_max;
+        double Z_0 = cfg->Z_0;
+        double alpha = cfg->alpha_Z;
 
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
         clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->K_gpu);
         clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->sumJ_gpu);
-        clSetKernelArg(kernel, 3, sizeof(int), &N);
-        clSetKernelArg(kernel, 4, sizeof(int), &start);
-        clSetKernelArg(kernel, 5, sizeof(int), &end);
-        clSetKernelArg(kernel, 6, sizeof(double), &DT);
-        clSetKernelArg(kernel, 7, sizeof(double), &I_max);
+        clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->R_gpu);
+        clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->T_gpu);
+        clSetKernelArg(kernel, 5, sizeof(int), &N);
+        clSetKernelArg(kernel, 6, sizeof(int), &start);
+        clSetKernelArg(kernel, 7, sizeof(int), &end);
+        clSetKernelArg(kernel, 8, sizeof(double), &DT);
+        clSetKernelArg(kernel, 9, sizeof(double), &I_max);
+        clSetKernelArg(kernel, 10, sizeof(double), &Z_0);
+        clSetKernelArg(kernel, 11, sizeof(double), &alpha);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -43,6 +49,10 @@ private bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg
         {
             clEnqueueReadBuffer(rt->ocl.queue, rt->sumJ_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->sumJ, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->R_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->R, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->T_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->T, 0, NULL, NULL);
             retval = true;
         }
     }
@@ -253,6 +263,20 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             printf(" %8.3e", rt->I_phase[i]);
         }
         printf("\n");
+
+		printf("         R[0..4] =");
+		for (int i = 0; i < 5 && i < (int)cfg->N; i++)
+		{
+			printf(" %8.3e", rt->R[i]);
+		}
+		printf("\n");
+
+		printf("         T[0..4] =");
+		for (int i = 0; i < 5 && i < (int)cfg->N; i++)
+		{
+			printf(" %8.3e", rt->T[i]);
+		}
+		printf("\n");
 
         static double I_total_ref = -1.0;
         if (I_total_ref < 0.0) I_total_ref = I_total;

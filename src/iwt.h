@@ -14,6 +14,8 @@ typedef struct iwt_runtime
     double *K;
     double *sumJ;
     double *Q;
+    double *R;  // NEU: Reflexionskoeffizient
+    double *T;  // NEU: Transmissionskoeffizient
 
     cl_mem I_gpu;
     cl_mem I_prev_gpu;
@@ -22,6 +24,8 @@ typedef struct iwt_runtime
     cl_mem K_gpu;
     cl_mem sumJ_gpu;
     cl_mem Q_gpu;
+    cl_mem R_gpu;  // NEU
+    cl_mem T_gpu;  // NEU
 
     struct ocl_core ocl;
 } *iwt_runtime_t;
@@ -35,20 +39,15 @@ typedef struct iwt_config
     double T;
     double alpha_IWT;
     double beta_IWT;
-
     double DT;
     double I_min;
     double I_max;
-
     int MAX_ITER;
-
-    // Randbedingungen
-    double I_vac;           // Vakuum-Amplitude (0.01)
-    double phi_0;           // Phasenverschiebung bei Reflexion (π/2)
-    double omega_0;         // Referenzfrequenz (c / l0)
-
-    // NEU: Wellenwiderstand des Vakuums (konstant)
-    double Z_0;             // Vakuum-Impedanz (z.B. 1.0)
+    double I_vac;
+    double phi_0;
+    double omega_0;
+    double Z_0;
+    double alpha_Z;
 } *iwt_config_t;
 
 typedef struct iwt_spectrum

@@ -14,9 +14,12 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
     rt->sumJ = malloc(cfg->N * sizeof(double));
     rt->Q = malloc(cfg->N * sizeof(double));
+    rt->R = malloc(cfg->N * sizeof(double));   // NEU
+    rt->T = malloc(cfg->N * sizeof(double));   // NEU
 
     if ((rt->I != NULL) && (rt->I_prev != NULL) && (rt->I_phase != NULL) &&
-        (rt->I_phase_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL))
+        (rt->I_phase_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) &&
+        (rt->Q != NULL) && (rt->R != NULL) && (rt->T != NULL))
     {
         for (size_t i = 0; i < cfg->N; i++)
         {
@@ -25,6 +28,8 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I_phase[i] = 0.0;
             rt->I_phase_prev[i] = 0.0;
             rt->Q[i] = 0.0;
+            rt->R[i] = 0.0;   // NEU
+            rt->T[i] = 0.0;   // NEU
         }
 
         double D = cfg->D;
@@ -86,10 +91,14 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->I_phase_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
     rt->I_phase_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
     rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
-	rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
+    rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
     rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->R_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);   // NEU
+    rt->T_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);   // NEU
+    
     return (rt->I_gpu != NULL) && (rt->I_prev_gpu != NULL) && (rt->I_phase_gpu != NULL) &&
-           (rt->I_phase_prev_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) && (rt->Q_gpu != NULL);
+           (rt->I_phase_prev_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) &&
+           (rt->Q_gpu != NULL) && (rt->R_gpu != NULL) && (rt->T_gpu != NULL);
 }
 
 void deinitialize_host_data(const iwt_runtime_t rt)
@@ -101,7 +110,9 @@ void deinitialize_host_data(const iwt_runtime_t rt)
     free(rt->K);
     free(rt->sumJ);
     free(rt->Q);
-    rt->I = rt->I_prev = rt->I_phase = rt->I_phase_prev = rt->K = rt->sumJ = rt->Q = NULL;
+    free(rt->R);   // NEU
+    free(rt->T);   // NEU
+    rt->I = rt->I_prev = rt->I_phase = rt->I_phase_prev = rt->K = rt->sumJ = rt->Q = rt->R = rt->T = NULL;
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)
@@ -113,5 +124,7 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
     clReleaseMemObject(rt->K_gpu);
     clReleaseMemObject(rt->sumJ_gpu);
     clReleaseMemObject(rt->Q_gpu);
-    rt->I_gpu = rt->I_prev_gpu = rt->I_phase_gpu = rt->I_phase_prev_gpu = rt->K_gpu = rt->sumJ_gpu = rt->Q_gpu = NULL;
+    clReleaseMemObject(rt->R_gpu);   // NEU
+    clReleaseMemObject(rt->T_gpu);   // NEU
+    rt->I_gpu = rt->I_prev_gpu = rt->I_phase_gpu = rt->I_phase_prev_gpu = rt->K_gpu = rt->sumJ_gpu = rt->Q_gpu = rt->R_gpu = rt->T_gpu = NULL;
 }
