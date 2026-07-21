@@ -108,20 +108,12 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     
     if (kernel != NULL)
     {
-        // ============================================================
-        // NEU: Berechnung von Z_avg und I_avg (einmal pro Iteration)
-        // ============================================================
-        double Z_avg = 0.0;
+        // I_avg berechnen (einmal pro Iteration)
         double I_avg = 0.0;
         for (size_t i = 0; i < cfg->N; i++)
         {
-            double flow = rt->sumJ[i];
-            double I_i = rt->I[i];
-            I_avg += I_i;
-            double Z_i = I_i / (fabs(flow) + 1e-30);
-            Z_avg += Z_i;
+            I_avg += rt->I[i];
         }
-        Z_avg /= cfg->N;
         I_avg /= cfg->N;
 
         int N = (int)cfg->N;
@@ -131,13 +123,13 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
         double phi_0 = cfg->phi_0;
         double omega_0 = cfg->omega_0;
         double D = cfg->D;
+        double Z_0 = cfg->Z_0;
 
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_prev_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I, 0, NULL, NULL);
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_prev_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
-        // Kernel-Argumente setzen (Z_0 ENTFERNT)
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_gpu);
         clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_phase_gpu);
         clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_prev_gpu);
@@ -151,6 +143,8 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
         clSetKernelArg(kernel, 10, sizeof(double), &phi_0);
         clSetKernelArg(kernel, 11, sizeof(double), &omega_0);
         clSetKernelArg(kernel, 12, sizeof(double), &D);
+        clSetKernelArg(kernel, 13, sizeof(double), &Z_0);
+        clSetKernelArg(kernel, 14, sizeof(double), &I_avg);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -163,7 +157,6 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             clEnqueueReadBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
-            // Host-Daten synchronisieren
             for (size_t i = 0; i < cfg->N; i++)
             {
                 rt->I_prev[i] = rt->I[i];
@@ -181,15 +174,14 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
 
+    // ============================================================
+    // EINMALIGE EINSPEISUNG – NUR HIER!
+    // ============================================================
+    rt->I[0] = iwt_I_max();   // 1.0
+    rt->I_phase[0] = 0.0;
+
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
-        // Impuls an Knoten 0 (Amplitude)
-        if (iter == 0)
-        {
-            rt->I[0] = iwt_I_max();
-            rt->I_phase[0] = 0.0;
-        }
-
         rt->I_prev[0] = rt->I[0];
         rt->I_phase_prev[0] = rt->I_phase[0];
 
@@ -203,11 +195,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (!run_update_info(rt, cfg)) break;
 
         // ============================================================
-        // SKALIERUNG ENTFERNT – die Update-Regel ist bereits erhaltend!
-        // ============================================================
-
-        // ============================================================
-        // Ausgabe (erweitert)
+        // AUSGABE (unverändert)
         // ============================================================
         double max_q = 0.0;
         double sum_abs = 0.0;
@@ -233,7 +221,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         double rms = sqrt(sum_abs_sq / cfg->N);
         double I_total = sum_abs;
 
-        // Ausgabe
         printf("Iter %3d: ", iter);
         printf("max|Q|=%8.3e ", max_q);
         printf("mean_abs=%8.3e ", mean_abs);
@@ -263,7 +250,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         }
         printf("\n");
 
-        // Erhaltung prüfen (Referenz ist Iter 0)
         static double I_total_ref = -1.0;
         if (I_total_ref < 0.0) I_total_ref = I_total;
         double deviation = (I_total - I_total_ref) / (I_total_ref + 1e-30);

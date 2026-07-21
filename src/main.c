@@ -31,7 +31,7 @@ int main(int argc, char** argv)
 	cfg.Z_0 = 1.0;  // Vakuum-Wellenwiderstand (konstant)
     cfg.I_max = iwt_I_max();
 	cfg.I_min = iwt_I_min();
-    cfg.DT = 1.0e-12;
+    cfg.DT = 1.0e-3;
 	cfg.I_vac = iwt_I_min();
 	cfg.phi_0 = 3.141592653589793 / 2.0;  // π/2
 	cfg.omega_0 = 1.0 / cfg.DT;            // Referenzfrequenz
