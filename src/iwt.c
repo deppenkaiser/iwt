@@ -481,8 +481,10 @@ private void iwt_print_int(uint32_t* x, uint32_t y, const char* label, int value
 private void iwt_print_double(uint32_t* x, uint32_t y, const char* label, double value)
 {
     string_set_cursor_position(*x, y);
-    printf(BLACK_ON_WHITE "%s:" BLUE_ON_WHITE "%.3e" COLOR_RESET, label, value);
-	*x += strlen(label) + 13;
+	char buffer[256] = {0};
+	sprintf(buffer, "%12.3f", value);
+    printf(BLACK_ON_WHITE "%s:" BLUE_ON_WHITE "%s" COLOR_RESET, label, buffer);
+	*x += strlen(label) + strlen(buffer) + 5;
 }
 
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter, double max_q, double I_total,
@@ -502,11 +504,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter, 
 	iwt_print_double(&col, row, "I[103]", rt->I[103]);
 	iwt_print_double(&col, row, "I[104]", rt->I[104]);
 	row += 2; col = 1;
-	iwt_print_double(&col, row, "I_phase[0]", rt->I_phase[0]);
-	iwt_print_double(&col, row, "I_phase[101]", rt->I_phase[101]);
-	iwt_print_double(&col, row, "I_phase[102]", rt->I_phase[102]);
-	iwt_print_double(&col, row, "I_phase[103]", rt->I_phase[103]);
-	iwt_print_double(&col, row, "I_phase[104]", rt->I_phase[104]);
+	iwt_print_double(&col, row, "I_phase[0]", rt->I_phase[0] / iwt_pi() * 180.0);
+	iwt_print_double(&col, row, "I_phase[101]", rt->I_phase[101] / iwt_pi() * 180.0);
+	iwt_print_double(&col, row, "I_phase[102]", rt->I_phase[102] / iwt_pi() * 180.0);
+	iwt_print_double(&col, row, "I_phase[103]", rt->I_phase[103] / iwt_pi() * 180.0);
+	iwt_print_double(&col, row, "I_phase[104]", rt->I_phase[104] / iwt_pi() * 180.0);
 	row += 2; col = 1;
 	iwt_print_double(&col, row, "sum_J[0]", rt->sumJ[0]);
 	iwt_print_double(&col, row, "sum_J[101]", rt->sumJ[101]);
