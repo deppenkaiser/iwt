@@ -495,215 +495,112 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     double max_q, double I_total, double I_min, double I_max,
     double deviation, double sum_I_sq, double info_deviation)
 {
-    uint32_t row = 1;
+    uint32_t col = 1, row = 1;
 
-    // ZEILE 1: Mit Leerzeichen auffüllen, um alte Zeilen vollständig zu überschreiben
-    string_set_cursor_position(1, row);
-    printf(BLACK_ON_WHITE "#:" BLUE_ON_WHITE "%8d" COLOR_RESET "                                         ", iter);
+    // ZEILE 1
+    iwt_print_int(&col, row, "#", iter);
+    iwt_print_double(&col, row, "|Q_max|", max_q);
+    iwt_print_double(&col, row, "I_total", I_total);
+    iwt_print_double(&col, row, "I_min", I_min);
+    iwt_print_double(&col, row, "I_max", I_max);
+    iwt_print_double(&col, row, "Deviation", deviation);
 
-    string_set_cursor_position(20, row);
-    printf(BLACK_ON_WHITE "|Q_max|:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, max_q);
+    // ZEILE 2: NEU
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "ΣI²", sum_I_sq);
+    iwt_print_double(&col, row, "Info_Dev", info_deviation);
 
-    string_set_cursor_position(50, row);
-    printf(BLACK_ON_WHITE "I_total:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, I_total);
+    // ZEILE 3
+    row += 2; col = 1;
+    double xi_real_mean = 0.0, xi_imag_mean = 0.0;
+    double xi_real_var = 0.0, xi_imag_var = 0.0;
 
-    string_set_cursor_position(80, row);
-    printf(BLACK_ON_WHITE "I_min:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, I_min);
-
-    string_set_cursor_position(110, row);
-    printf(BLACK_ON_WHITE "I_max:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, I_max);
-
-    string_set_cursor_position(140, row);
-    printf(BLACK_ON_WHITE "Dev:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, deviation);
-
-    // ZEILE 2: Informationserhaltung
-    row += 2;
-    string_set_cursor_position(1, row);
-    printf(BLACK_ON_WHITE "ΣI²:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, sum_I_sq);
-
-    string_set_cursor_position(30, row);
-    printf(BLACK_ON_WHITE "Info_Dev:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, info_deviation);
-
-    // ZEILE 3: Fluktuations-Statistiken
-    row += 2;
-    if (cfg->enable_fluctuations)
+    for (size_t i = 0; i < cfg->N; i++)
     {
-        double xi_real_mean = 0.0;
-        double xi_imag_mean = 0.0;
-        double xi_real_var = 0.0;
-        double xi_imag_var = 0.0;
-
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            xi_real_mean += rt->xi_real[i];
-            xi_imag_mean += rt->xi_imag[i];
-        }
-        xi_real_mean /= cfg->N;
-        xi_imag_mean /= cfg->N;
-
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            double dr = rt->xi_real[i] - xi_real_mean;
-            double di = rt->xi_imag[i] - xi_imag_mean;
-            xi_real_var += dr * dr;
-            xi_imag_var += di * di;
-        }
-        xi_real_var = sqrt(xi_real_var / cfg->N);
-        xi_imag_var = sqrt(xi_imag_var / cfg->N);
-
-        string_set_cursor_position(1, row);
-        printf(BLACK_ON_WHITE "ξ_real_mean:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, xi_real_mean);
-
-        string_set_cursor_position(30, row);
-        printf(BLACK_ON_WHITE "ξ_imag_mean:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, xi_imag_mean);
-
-        string_set_cursor_position(60, row);
-        printf(BLACK_ON_WHITE "ξ_real_σ:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, xi_real_var);
-
-        string_set_cursor_position(90, row);
-        printf(BLACK_ON_WHITE "ξ_imag_σ:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, xi_imag_var);
-
-        string_set_cursor_position(120, row);
-        printf(BLACK_ON_WHITE "scale:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, cfg->uncertainty_scale);
+        xi_real_mean += rt->xi_real[i];
+        xi_imag_mean += rt->xi_imag[i];
     }
-    else
+    xi_real_mean /= cfg->N;
+    xi_imag_mean /= cfg->N;
+
+    for (size_t i = 0; i < cfg->N; i++)
     {
-        string_set_cursor_position(1, row);
-        printf(BLACK_ON_WHITE "Fluktuationen: DEAKTIVIERT" COLOR_RESET);
+        double dr = rt->xi_real[i] - xi_real_mean;
+        double di = rt->xi_imag[i] - xi_imag_mean;
+        xi_real_var += dr * dr;
+        xi_imag_var += di * di;
     }
+    xi_real_var = sqrt(xi_real_var / cfg->N);
+    xi_imag_var = sqrt(xi_imag_var / cfg->N);
 
-    // ZEILE 5: I-Werte
-    row += 2;
-    string_set_cursor_position(1, row);
-    printf(BLACK_ON_WHITE "I[0]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I[0]);
+    iwt_print_double(&col, row, "ξ_real_mean", xi_real_mean);
+    iwt_print_double(&col, row, "ξ_imag_mean", xi_imag_mean);
+    iwt_print_double(&col, row, "ξ_real_σ", xi_real_var);
+    iwt_print_double(&col, row, "ξ_imag_σ", xi_imag_var);
+    iwt_print_double(&col, row, "scale", cfg->uncertainty_scale);
 
-    string_set_cursor_position(30, row);
-    printf(BLACK_ON_WHITE "I[101]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I[101]);
+    // ZEILE 5
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "I[0]", rt->I[0]);
+    iwt_print_double(&col, row, "I[101]", rt->I[101]);
+    iwt_print_double(&col, row, "I[102]", rt->I[102]);
+    iwt_print_double(&col, row, "I[103]", rt->I[103]);
+    iwt_print_double(&col, row, "I[104]", rt->I[104]);
 
-    string_set_cursor_position(60, row);
-    printf(BLACK_ON_WHITE "I[102]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I[102]);
+    // ZEILE 7
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "I_phase[0]", rt->I_phase[0] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "I_phase[101]", rt->I_phase[101] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "I_phase[102]", rt->I_phase[102] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "I_phase[103]", rt->I_phase[103] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "I_phase[104]", rt->I_phase[104] / iwt_pi() * 180.0);
 
-    string_set_cursor_position(90, row);
-    printf(BLACK_ON_WHITE "I[103]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I[103]);
+    // ZEILE 9
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "sum_J[0]", rt->sumJ[0]);
+    iwt_print_double(&col, row, "sum_J[101]", rt->sumJ[101]);
+    iwt_print_double(&col, row, "sum_J[102]", rt->sumJ[102]);
+    iwt_print_double(&col, row, "sum_J[103]", rt->sumJ[103]);
+    iwt_print_double(&col, row, "sum_J[104]", rt->sumJ[104]);
 
-    string_set_cursor_position(120, row);
-    printf(BLACK_ON_WHITE "I[104]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I[104]);
+    // ZEILE 11
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "T[0]", rt->T[0]);
+    iwt_print_double(&col, row, "T[101]", rt->T[101]);
+    iwt_print_double(&col, row, "T[102]", rt->T[102]);
+    iwt_print_double(&col, row, "T[103]", rt->T[103]);
+    iwt_print_double(&col, row, "T[104]", rt->T[104]);
 
-    // ZEILE 7: I_phase-Werte (in Grad)
-    row += 2;
-    string_set_cursor_position(1, row);
-    printf(BLACK_ON_WHITE "I_phase[0]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I_phase[0] / iwt_pi() * 180.0);
+    // ZEILE 13
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "R[0]", rt->R[0]);
+    iwt_print_double(&col, row, "R[101]", rt->R[101]);
+    iwt_print_double(&col, row, "R[102]", rt->R[102]);
+    iwt_print_double(&col, row, "R[103]", rt->R[103]);
+    iwt_print_double(&col, row, "R[104]", rt->R[104]);
 
-    string_set_cursor_position(30, row);
-    printf(BLACK_ON_WHITE "I_phase[101]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I_phase[101] / iwt_pi() * 180.0);
-
-    string_set_cursor_position(60, row);
-    printf(BLACK_ON_WHITE "I_phase[102]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I_phase[102] / iwt_pi() * 180.0);
-
-    string_set_cursor_position(90, row);
-    printf(BLACK_ON_WHITE "I_phase[103]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I_phase[103] / iwt_pi() * 180.0);
-
-    string_set_cursor_position(120, row);
-    printf(BLACK_ON_WHITE "I_phase[104]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->I_phase[104] / iwt_pi() * 180.0);
-
-    // ZEILE 9: sumJ-Werte
-    row += 2;
-    string_set_cursor_position(1, row);
-    printf(BLACK_ON_WHITE "sum_J[0]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->sumJ[0]);
-
-    string_set_cursor_position(30, row);
-    printf(BLACK_ON_WHITE "sum_J[101]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->sumJ[101]);
-
-    string_set_cursor_position(60, row);
-    printf(BLACK_ON_WHITE "sum_J[102]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->sumJ[102]);
-
-    string_set_cursor_position(90, row);
-    printf(BLACK_ON_WHITE "sum_J[103]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->sumJ[103]);
-
-    string_set_cursor_position(120, row);
-    printf(BLACK_ON_WHITE "sum_J[104]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->sumJ[104]);
-
-    // ZEILE 11: T-Werte
-    row += 2;
-    string_set_cursor_position(1, row);
-    printf(BLACK_ON_WHITE "T[0]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->T[0]);
-
-    string_set_cursor_position(30, row);
-    printf(BLACK_ON_WHITE "T[101]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->T[101]);
-
-    string_set_cursor_position(60, row);
-    printf(BLACK_ON_WHITE "T[102]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->T[102]);
-
-    string_set_cursor_position(90, row);
-    printf(BLACK_ON_WHITE "T[103]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->T[103]);
-
-    string_set_cursor_position(120, row);
-    printf(BLACK_ON_WHITE "T[104]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->T[104]);
-
-    // ZEILE 13: R-Werte
-    row += 2;
-    string_set_cursor_position(1, row);
-    printf(BLACK_ON_WHITE "R[0]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->R[0]);
-
-    string_set_cursor_position(30, row);
-    printf(BLACK_ON_WHITE "R[101]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->R[101]);
-
-    string_set_cursor_position(60, row);
-    printf(BLACK_ON_WHITE "R[102]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->R[102]);
-
-    string_set_cursor_position(90, row);
-    printf(BLACK_ON_WHITE "R[103]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->R[103]);
-
-    string_set_cursor_position(120, row);
-    printf(BLACK_ON_WHITE "R[104]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->R[104]);
-
-    // ZEILE 15: Teilchenspektrum
-    row += 2;
+    // ZEILE 15
+    row += 2; col = 1;
     struct iwt_spectrum spec = {0};
     iwt_compute_spectrum(rt->I, cfg->N, &spec);
+    iwt_print_int(&col, row, "Elektronen", spec.count_electron);
+    iwt_print_int(&col, row, "Protonen", spec.count_proton);
 
-    string_set_cursor_position(1, row);
-    printf(BLACK_ON_WHITE "Elektronen:" BLUE_ON_WHITE "%8d" COLOR_RESET, spec.count_electron);
+    // ZEILE 17
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "ξ_r[0]", rt->xi_real[0]);
+    iwt_print_double(&col, row, "ξ_r[101]", rt->xi_real[101]);
+    iwt_print_double(&col, row, "ξ_r[102]", rt->xi_real[102]);
+    iwt_print_double(&col, row, "ξ_r[103]", rt->xi_real[103]);
+    iwt_print_double(&col, row, "ξ_r[104]", rt->xi_real[104]);
 
-    string_set_cursor_position(30, row);
-    printf(BLACK_ON_WHITE "Protonen:" BLUE_ON_WHITE "%8d" COLOR_RESET, spec.count_proton);
-
-    // ZEILE 17: Fluktuationswerte
-    row += 2;
-    if (cfg->enable_fluctuations)
-    {
-        string_set_cursor_position(1, row);
-        printf(BLACK_ON_WHITE "ξ_r[0]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_real[0]);
-
-        string_set_cursor_position(30, row);
-        printf(BLACK_ON_WHITE "ξ_r[101]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_real[101]);
-
-        string_set_cursor_position(60, row);
-        printf(BLACK_ON_WHITE "ξ_r[102]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_real[102]);
-
-        string_set_cursor_position(90, row);
-        printf(BLACK_ON_WHITE "ξ_r[103]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_real[103]);
-
-        string_set_cursor_position(120, row);
-        printf(BLACK_ON_WHITE "ξ_r[104]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_real[104]);
-
-        row += 2;
-        string_set_cursor_position(1, row);
-        printf(BLACK_ON_WHITE "ξ_i[0]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_imag[0]);
-
-        string_set_cursor_position(30, row);
-        printf(BLACK_ON_WHITE "ξ_i[101]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_imag[101]);
-
-        string_set_cursor_position(60, row);
-        printf(BLACK_ON_WHITE "ξ_i[102]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_imag[102]);
-
-        string_set_cursor_position(90, row);
-        printf(BLACK_ON_WHITE "ξ_i[103]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_imag[103]);
-
-        string_set_cursor_position(120, row);
-        printf(BLACK_ON_WHITE "ξ_i[104]:" BLUE_ON_WHITE "%14.3f" COLOR_RESET, rt->xi_imag[104]);
-    }
+    // ZEILE 19
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "ξ_i[0]", rt->xi_imag[0]);
+    iwt_print_double(&col, row, "ξ_i[101]", rt->xi_imag[101]);
+    iwt_print_double(&col, row, "ξ_i[102]", rt->xi_imag[102]);
+    iwt_print_double(&col, row, "ξ_i[103]", rt->xi_imag[103]);
+    iwt_print_double(&col, row, "ξ_i[104]", rt->xi_imag[104]);
 
     fflush(stdout);
 }
-

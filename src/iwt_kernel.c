@@ -286,7 +286,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     }
 
     // Cursor einmal auf (1,1) setzen (nach der Initialisierungsausgabe)
-    string_set_cursor_position(1, 1);
+    //string_set_cursor_position(1, 1);
 
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
@@ -338,10 +338,10 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         double deviation = (I_total - I_total_ref) / (I_total_ref + 1e-30);
 
         // Cursor auf (1,1) zurücksetzen (ohne Clear)
-        string_set_cursor_position(1, 1);
+        //string_set_cursor_position(1, 1);
 
-        iwt_print_status(rt, cfg, iter, max_q, I_total, I_min, I_max,
-                         deviation, sum_I_sq, info_deviation);
+		string_clear_screen();
+        iwt_print_status(rt, cfg, iter, max_q, I_total, I_min, I_max, deviation, sum_I_sq, info_deviation);
 
         retval = true;
     }

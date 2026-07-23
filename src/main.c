@@ -1,9 +1,7 @@
+#include <math.h>
+#include <time.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <time.h>
-#include <math.h>
 #include <ocl/ocl.h>
 #include <string/string.h>
 #include "iwt_kernel.h"
@@ -38,7 +36,7 @@ int main(int argc, char** argv)
             printf("Verwendung: %s [Optionen]\n", argv[0]);
             printf("  -l, --load            Lade gespeicherten Zustand\n");
             printf("  --no-fluctuations     Deaktiviere Quantenfluktuationen\n");
-            printf("  --seed <n>            Setze Seed für Zufallsgenerator\n");
+            printf("  --seed <n>            Setze Seed für Zufallsgenerator (Standard: Zeit-basiert)\n");
             printf("  -h, --help            Zeige diese Hilfe\n");
             return 0;
         }
@@ -65,74 +63,70 @@ int main(int argc, char** argv)
     cfg.omega_0 = 1.0 / cfg.DT;
     cfg.Z_0 = 1.0;
     cfg.alpha_Z = 0.1;
-
     cfg.hbar = 1.0;
     cfg.uncertainty_scale = sqrt(cfg.hbar / (2.0 * cfg.DT));
     cfg.enable_fluctuations = enable_fluctuations;
     cfg.seed = seed;
 
-    // OpenCL Initialisierung (Debug-Ausgaben werden später überschrieben)
-    if (!ocl_initialize(&rt.ocl))
+    printf("=== IWT Parameter (aus Theorie) ===\n");
+    printf("D               = %.12f\n", cfg.D);
+    printf("l0              = %.12e m\n", cfg.l0);
+    printf("T               = %.12e s\n", cfg.T);
+    printf("alpha_IWT       = %.12e\n", cfg.alpha_IWT);
+    printf("beta_IWT        = %.12e\n", cfg.beta_IWT);
+    printf("I_min           = %.12f\n", iwt_I_min());
+    printf("I_max           = %.12f\n", iwt_I_max());
+    printf("Z_0             = %.12e\n", cfg.Z_0);
+    printf("\n=== Quantenfluktuationen (Anhang O & P) ===\n");
+    printf("hbar            = %.12e (sim. Einheiten)\n", cfg.hbar);
+    printf("uncertainty_scale = %.12e  [√(ℏ/(2·T))]\n", cfg.uncertainty_scale);
+    printf("enable_fluctuations = %s\n", cfg.enable_fluctuations ? "JA" : "NEIN");
+    printf("seed            = %u\n", cfg.seed);
+    printf("\n=== Abgeleitete Simulationsparameter ===\n");
+    printf("DT              = %.12e\n", cfg.DT);
+    printf("========================================\n\n");
+
+    if (ocl_initialize(&rt.ocl))
     {
-        return 1;
-    }
-
-    if (!ocl_compile(&rt.ocl))
-    {
-        ocl_deinitialize(&rt.ocl);
-        return 1;
-    }
-
-    if (!ocl_load_kernels(&rt.ocl))
-    {
-        ocl_deinitialize(&rt.ocl);
-        return 1;
-    }
-
-    // Bildschirm löschen und kurze Info
-    string_clear_screen();
-    string_set_cursor_position(1, 1);
-
-    // Diese 3 Zeilen werden von iwt_print_status() überschrieben
-    // Sie sind nur für den Fall sichtbar, dass die Simulation abstürzt
-    printf("IWT Simulation (N=%zu, MAX_ITER=%d)                                             \n", cfg.N, cfg.MAX_ITER);
-    printf("Fluktuationen: %s | Seed: %u                                                    \n", cfg.enable_fluctuations ? "AKTIVIERT" : "DEAKTIVIERT", cfg.seed);
-    printf("                                                                                \n");
-
-    if (initialize_host_data(&rt, &cfg))
-    {
-        if (initialize_gpu_data(&rt, &cfg))
+        if (ocl_compile(&rt.ocl))
         {
-            if (load_state)
+            if (ocl_load_kernels(&rt.ocl))
             {
-                if (iwt_load_state(&rt, &cfg, "iwt_state.bin"))
+                if (initialize_host_data(&rt, &cfg))
                 {
-                    printf("State loaded from iwt_state.bin\n");
+                    if (initialize_gpu_data(&rt, &cfg))
+                    {
+                        if (load_state)
+                        {
+                            if (iwt_load_state(&rt, &cfg, "iwt_state.bin"))
+                            {
+                                printf("State loaded from iwt_state.bin\n");
+                            }
+                            else
+                            {
+                                printf("Warning: Could not load state, starting fresh\n");
+                            }
+                        }
+                        else
+                        {
+                            if (remove("iwt_state.bin") == 0)
+                            {
+                                printf("Removed existing state file\n");
+                            }
+                        }
+
+                        if (run_simulation(&rt, &cfg))
+                        {
+                            retval = 0;
+                        }
+                        deinitialize_gpu_data(&rt);
+                    }
                 }
-                else
-                {
-                    printf("Warning: Could not load state, starting fresh\n");
-                }
+                deinitialize_host_data(&rt);
             }
-            else
-            {
-                remove("iwt_state.bin");
-            }
-
-            // Cursor auf (1,1) setzen und Simulation starten
-            string_set_cursor_position(1, 1);
-
-            if (run_simulation(&rt, &cfg))
-            {
-                retval = 0;
-            }
-
-            deinitialize_gpu_data(&rt);
         }
+        ocl_deinitialize(&rt.ocl);
     }
-
-    deinitialize_host_data(&rt);
-    ocl_deinitialize(&rt.ocl);
 
     return retval;
 }
