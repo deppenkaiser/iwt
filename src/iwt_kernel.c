@@ -74,19 +74,13 @@ private bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg
 
         int N = (int)cfg->N;
         double DT = cfg->DT;
-        double Z_0 = cfg->Z_0;
-        double alpha = cfg->alpha_Z;
 
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
         clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
         clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->K_gpu);
         clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->sumJ_gpu);
-        clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->R_gpu);
-        clSetKernelArg(kernel, 5, sizeof(cl_mem), &rt->T_gpu);
-        clSetKernelArg(kernel, 6, sizeof(int), &N);
-        clSetKernelArg(kernel, 7, sizeof(double), &DT);
-        clSetKernelArg(kernel, 8, sizeof(double), &Z_0);
-        clSetKernelArg(kernel, 9, sizeof(double), &alpha);
+        clSetKernelArg(kernel, 4, sizeof(int), &N);
+        clSetKernelArg(kernel, 5, sizeof(double), &DT);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -96,10 +90,6 @@ private bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg
         {
             clEnqueueReadBuffer(rt->ocl.queue, rt->sumJ_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->sumJ, 0, NULL, NULL);
-            clEnqueueReadBuffer(rt->ocl.queue, rt->R_gpu, CL_TRUE,
-                0, cfg->N * sizeof(double), rt->R, 0, NULL, NULL);
-            clEnqueueReadBuffer(rt->ocl.queue, rt->T_gpu, CL_TRUE,
-                0, cfg->N * sizeof(double), rt->T, 0, NULL, NULL);
             retval = true;
         }
     }

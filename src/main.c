@@ -47,24 +47,25 @@ int main(int argc, char** argv)
         seed = (unsigned int)time(NULL);
     }
 
+	cfg.T = 1.0;
+	cfg.DT = 1.0e-3;
+	cfg.hbar = 1.0;
+	cfg.uncertainty_scale = sqrt(cfg.hbar / (2.0 * cfg.T));
     cfg.N = 4096;
     cfg.BATCH_SIZE = 512;
     cfg.D = iwt_fractal_dimension();
     cfg.l0 = 1.0;
-    cfg.T = 1.0;
     cfg.alpha_IWT = 1.0;
     cfg.beta_IWT = 1.0;
     cfg.MAX_ITER = 1000;
     cfg.I_max = iwt_I_max();
     cfg.I_min = iwt_I_min();
-    cfg.DT = 1.0e-3;
     cfg.I_vac = iwt_I_min();
     cfg.phi_0 = iwt_pi() / 2.0;
     cfg.omega_0 = 1.0 / cfg.DT;
     cfg.Z_0 = 1.0;
     cfg.alpha_Z = 0.1;
     cfg.hbar = 1.0;
-    cfg.uncertainty_scale = sqrt(cfg.hbar / (2.0 * cfg.DT));
     cfg.enable_fluctuations = enable_fluctuations;
     cfg.seed = seed;
 
