@@ -602,5 +602,6 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "ξ_i[103]", rt->xi_imag[103]);
     iwt_print_double(&col, row, "ξ_i[104]", rt->xi_imag[104]);
 
+	printf("\n");
     fflush(stdout);
 }
