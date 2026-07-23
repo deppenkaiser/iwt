@@ -7,6 +7,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
 
+    // === BESTEHENDE ALLOKATIONEN ===
     rt->I = malloc(cfg->N * sizeof(double));
     rt->I_prev = malloc(cfg->N * sizeof(double));
     rt->I_phase = malloc(cfg->N * sizeof(double));
@@ -14,13 +15,20 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
     rt->sumJ = malloc(cfg->N * sizeof(double));
     rt->Q = malloc(cfg->N * sizeof(double));
-    rt->R = malloc(cfg->N * sizeof(double));   // NEU
-    rt->T = malloc(cfg->N * sizeof(double));   // NEU
+    rt->R = malloc(cfg->N * sizeof(double));
+    rt->T = malloc(cfg->N * sizeof(double));
+
+    // === NEU: ALLOKATIONEN FÜR QUANTENFLUKTUATIONEN ===
+    rt->xi_real = malloc(cfg->N * sizeof(double));
+    rt->xi_imag = malloc(cfg->N * sizeof(double));
+    rt->uncertainty = malloc(cfg->N * sizeof(double));
 
     if ((rt->I != NULL) && (rt->I_prev != NULL) && (rt->I_phase != NULL) &&
         (rt->I_phase_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) &&
-        (rt->Q != NULL) && (rt->R != NULL) && (rt->T != NULL))
+        (rt->Q != NULL) && (rt->R != NULL) && (rt->T != NULL) &&
+        (rt->xi_real != NULL) && (rt->xi_imag != NULL) && (rt->uncertainty != NULL))
     {
+        // === BESTEHENDE INITIALISIERUNG ===
         for (size_t i = 0; i < cfg->N; i++)
         {
             rt->I[i] = iwt_I_min();
@@ -28,10 +36,20 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I_phase[i] = 0.0;
             rt->I_phase_prev[i] = 0.0;
             rt->Q[i] = 0.0;
-            rt->R[i] = 0.0;   // NEU
-            rt->T[i] = 0.0;   // NEU
+            rt->R[i] = 0.0;
+            rt->T[i] = 0.0;
         }
 
+        // === NEU: INITIALISIERUNG DER FLUKTUATIONSFELDER ===
+        // Setze zunächst alle auf 0 (werden später im Simulationslauf mit Zufallswerten gefüllt)
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            rt->xi_real[i] = 0.0;
+            rt->xi_imag[i] = 0.0;
+            rt->uncertainty[i] = 0.0;
+        }
+
+        // === BESTEHENDE KOPPLUNGSMATRIX ===
         double D = cfg->D;
         double alpha = 3.0 - D;
 
@@ -86,6 +104,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
+    // === BESTEHENDE GPU-BUFFER ===
     rt->I_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
     rt->I_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
     rt->I_phase_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
@@ -93,16 +112,28 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
     rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
     rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-    rt->R_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);   // NEU
-    rt->T_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);   // NEU
-    
-    return (rt->I_gpu != NULL) && (rt->I_prev_gpu != NULL) && (rt->I_phase_gpu != NULL) &&
-           (rt->I_phase_prev_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) &&
-           (rt->Q_gpu != NULL) && (rt->R_gpu != NULL) && (rt->T_gpu != NULL);
+    rt->R_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->T_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+
+    // === NEU: GPU-BUFFER FÜR QUANTENFLUKTUATIONEN ===
+    rt->xi_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->xi_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->uncertainty_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+
+    // Prüfung aller GPU-Buffer
+    bool all_buffers_valid =
+        (rt->I_gpu != NULL) && (rt->I_prev_gpu != NULL) &&
+        (rt->I_phase_gpu != NULL) && (rt->I_phase_prev_gpu != NULL) &&
+        (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) &&
+        (rt->Q_gpu != NULL) && (rt->R_gpu != NULL) && (rt->T_gpu != NULL) &&
+        (rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) && (rt->uncertainty_gpu != NULL);
+
+    return all_buffers_valid;
 }
 
 void deinitialize_host_data(const iwt_runtime_t rt)
 {
+    // === BESTEHENDE FREIGABEN ===
     free(rt->I);
     free(rt->I_prev);
     free(rt->I_phase);
@@ -110,13 +141,32 @@ void deinitialize_host_data(const iwt_runtime_t rt)
     free(rt->K);
     free(rt->sumJ);
     free(rt->Q);
-    free(rt->R);   // NEU
-    free(rt->T);   // NEU
-    rt->I = rt->I_prev = rt->I_phase = rt->I_phase_prev = rt->K = rt->sumJ = rt->Q = rt->R = rt->T = NULL;
+    free(rt->R);
+    free(rt->T);
+
+    // === NEU: FREIGABE DER FLUKTUATIONSFELDER ===
+    free(rt->xi_real);
+    free(rt->xi_imag);
+    free(rt->uncertainty);
+
+    // Alle Zeiger auf NULL setzen
+    rt->I = NULL;
+    rt->I_prev = NULL;
+    rt->I_phase = NULL;
+    rt->I_phase_prev = NULL;
+    rt->K = NULL;
+    rt->sumJ = NULL;
+    rt->Q = NULL;
+    rt->R = NULL;
+    rt->T = NULL;
+    rt->xi_real = NULL;
+    rt->xi_imag = NULL;
+    rt->uncertainty = NULL;
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)
 {
+    // === BESTEHENDE GPU-FREIGABEN ===
     clReleaseMemObject(rt->I_gpu);
     clReleaseMemObject(rt->I_prev_gpu);
     clReleaseMemObject(rt->I_phase_gpu);
@@ -124,7 +174,25 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
     clReleaseMemObject(rt->K_gpu);
     clReleaseMemObject(rt->sumJ_gpu);
     clReleaseMemObject(rt->Q_gpu);
-    clReleaseMemObject(rt->R_gpu);   // NEU
-    clReleaseMemObject(rt->T_gpu);   // NEU
-    rt->I_gpu = rt->I_prev_gpu = rt->I_phase_gpu = rt->I_phase_prev_gpu = rt->K_gpu = rt->sumJ_gpu = rt->Q_gpu = rt->R_gpu = rt->T_gpu = NULL;
+    clReleaseMemObject(rt->R_gpu);
+    clReleaseMemObject(rt->T_gpu);
+
+    // === NEU: GPU-FREIGABE DER FLUKTUATIONSFELDER ===
+    clReleaseMemObject(rt->xi_real_gpu);
+    clReleaseMemObject(rt->xi_imag_gpu);
+    clReleaseMemObject(rt->uncertainty_gpu);
+
+    // Alle GPU-Zeiger auf NULL setzen
+    rt->I_gpu = NULL;
+    rt->I_prev_gpu = NULL;
+    rt->I_phase_gpu = NULL;
+    rt->I_phase_prev_gpu = NULL;
+    rt->K_gpu = NULL;
+    rt->sumJ_gpu = NULL;
+    rt->Q_gpu = NULL;
+    rt->R_gpu = NULL;
+    rt->T_gpu = NULL;
+    rt->xi_real_gpu = NULL;
+    rt->xi_imag_gpu = NULL;
+    rt->uncertainty_gpu = NULL;
 }
