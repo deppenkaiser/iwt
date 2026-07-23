@@ -270,12 +270,14 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
 
-    // Initialisierung auf reines Vakuum
+    // ============================================================
+    // INITIALISIERUNG AUF VAKUUM (I = 0.01)
+    // ============================================================
     for (size_t i = 0; i < cfg->N; i++)
     {
-        rt->I[i] = 0.0;
+        rt->I[i] = 0.01;             // Vakuum-Amplitude (aus iwt_classify)
         rt->I_phase[i] = 0.0;
-        rt->I_prev[i] = 0.0;
+        rt->I_prev[i] = 0.01;
         rt->I_phase_prev[i] = 0.0;
     }
 
@@ -285,7 +287,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         sum_I_sq_initial += rt->I[i] * rt->I[i];
     }
 
-	string_clear_screen();
+    string_clear_screen();
 
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
@@ -336,14 +338,14 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (I_total_ref < 0.0) I_total_ref = I_total;
         double deviation = (I_total - I_total_ref) / (I_total_ref + 1e-30);
 
-        // Cursor auf (1,1) zurücksetzen (ohne Clear)
         string_set_cursor_position(1, 1);
-        iwt_print_status(rt, cfg, iter, max_q, I_total, I_min, I_max, deviation, sum_I_sq, info_deviation);
+        iwt_print_status(rt, cfg, iter, max_q, I_total, I_min, I_max,
+                         deviation, sum_I_sq, info_deviation);
 
         retval = true;
     }
 
-	printf("\n");
+    printf("\n");
 
     return retval;
 }
