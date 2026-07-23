@@ -94,17 +94,19 @@ double iwt_beta_IWT()
     return 1;
 }
 
-int iwt_classify(double I)
+int iwt_classify(double Re, double Im)
 {
-    if (fabs(I - 0.01) < 0.001) return 0;   // Vakuum
-    if (fabs(I - 0.25) < 0.001) return 1;   // Elektron
-    if (fabs(I - 1.0)  < 0.001) return 2;   // Proton
-    if (fabs(I - 0.05) < 0.001) return 3;   // u-Quark
-    if (fabs(I - 0.06) < 0.001) return 4;   // d-Quark
-    return -1;                               // sonst
+    double abs_I = sqrt(Re * Re + Im * Im + 1e-30);
+
+    if (fabs(abs_I - 0.01) < 0.001) return 0;   // Vakuum
+    if (fabs(abs_I - 0.25) < 0.001) return 1;   // Elektron
+    if (fabs(abs_I - 1.0)  < 0.001) return 2;   // Proton
+    if (fabs(abs_I - 0.05) < 0.001) return 3;   // u-Quark
+    if (fabs(abs_I - 0.06) < 0.001) return 4;   // d-Quark
+    return -1;                                   // sonst
 }
 
-void iwt_compute_spectrum(const double* I, size_t N, struct iwt_spectrum* spec)
+void iwt_compute_spectrum(const double* I_real, const double* I_imag, size_t N, struct iwt_spectrum* spec)
 {
     spec->count_vacuum = 0;
     spec->count_electron = 0;
@@ -115,7 +117,7 @@ void iwt_compute_spectrum(const double* I, size_t N, struct iwt_spectrum* spec)
 
     for (size_t i = 0; i < N; i++)
     {
-        switch (iwt_classify(I[i]))
+        switch (iwt_classify(I_real[i], I_imag[i]))
         {
             case 0: spec->count_vacuum++; break;
             case 1: spec->count_electron++; break;
@@ -162,17 +164,26 @@ bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
     FILE* f = fopen(fullpath, "wb");
     if (!f) return false;
 
-    size_t nI = cfg->N * sizeof(double);
-    if (fwrite(rt->I, 1, nI, f) != nI) { fclose(f); return false; }
-    if (fwrite(rt->I_prev, 1, nI, f) != nI) { fclose(f); return false; }
-    if (fwrite(rt->I_phase, 1, nI, f) != nI) { fclose(f); return false; }
-    if (fwrite(rt->I_phase_prev, 1, nI, f) != nI) { fclose(f); return false; }
+    // === IWT-Kernfelder (komplex) ===
+    size_t n = cfg->N * sizeof(double);
+    if (fwrite(rt->I_real, 1, n, f) != n) { fclose(f); return false; }
+    if (fwrite(rt->I_imag, 1, n, f) != n) { fclose(f); return false; }
+    if (fwrite(rt->I_prev_real, 1, n, f) != n) { fclose(f); return false; }
+    if (fwrite(rt->I_prev_imag, 1, n, f) != n) { fclose(f); return false; }
+    if (fwrite(rt->I_phase, 1, n, f) != n) { fclose(f); return false; }
+    if (fwrite(rt->I_phase_prev, 1, n, f) != n) { fclose(f); return false; }
 
+    // === Kopplungsmatrix ===
     size_t nK = cfg->N * cfg->N * sizeof(double);
     if (fwrite(rt->K, 1, nK, f) != nK) { fclose(f); return false; }
 
+    // === Quantenpotential ===
     size_t nQ = cfg->N * sizeof(double);
     if (fwrite(rt->Q, 1, nQ, f) != nQ) { fclose(f); return false; }
+
+    // === Fluktuationen (optional, für Reproduzierbarkeit) ===
+    if (fwrite(rt->xi_real, 1, n, f) != n) { fclose(f); return false; }
+    if (fwrite(rt->xi_imag, 1, n, f) != n) { fclose(f); return false; }
 
     fclose(f);
     return true;
@@ -189,17 +200,26 @@ bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* 
     FILE* f = fopen(fullpath, "rb");
     if (!f) return false;
 
-    size_t nI = cfg->N * sizeof(double);
-    if (fread(rt->I, 1, nI, f) != nI) { fclose(f); return false; }
-    if (fread(rt->I_prev, 1, nI, f) != nI) { fclose(f); return false; }
-    if (fread(rt->I_phase, 1, nI, f) != nI) { fclose(f); return false; }
-    if (fread(rt->I_phase_prev, 1, nI, f) != nI) { fclose(f); return false; }
+    // === IWT-Kernfelder (komplex) ===
+    size_t n = cfg->N * sizeof(double);
+    if (fread(rt->I_real, 1, n, f) != n) { fclose(f); return false; }
+    if (fread(rt->I_imag, 1, n, f) != n) { fclose(f); return false; }
+    if (fread(rt->I_prev_real, 1, n, f) != n) { fclose(f); return false; }
+    if (fread(rt->I_prev_imag, 1, n, f) != n) { fclose(f); return false; }
+    if (fread(rt->I_phase, 1, n, f) != n) { fclose(f); return false; }
+    if (fread(rt->I_phase_prev, 1, n, f) != n) { fclose(f); return false; }
 
+    // === Kopplungsmatrix ===
     size_t nK = cfg->N * cfg->N * sizeof(double);
     if (fread(rt->K, 1, nK, f) != nK) { fclose(f); return false; }
 
+    // === Quantenpotential ===
     size_t nQ = cfg->N * sizeof(double);
     if (fread(rt->Q, 1, nQ, f) != nQ) { fclose(f); return false; }
+
+    // === Fluktuationen (für Reproduzierbarkeit) ===
+    if (fread(rt->xi_real, 1, n, f) != n) { fclose(f); return false; }
+    if (fread(rt->xi_imag, 1, n, f) != n) { fclose(f); return false; }
 
     fclose(f);
     return true;
@@ -495,13 +515,12 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     double max_q, double I_total, double I_min, double I_max,
     double deviation, double sum_I_sq, double info_deviation)
 {
-    // Statische Arrays für Zeitreihen (letzte 10 Werte)
+    // Statische Arrays für Zeitreihen
     static double sum_I_sq_history[10] = {0};
     static double I_max_history[10] = {0};
     static int history_idx = 0;
     static int history_count = 0;
 
-    // Aktuellen Wert speichern
     sum_I_sq_history[history_idx] = sum_I_sq;
     I_max_history[history_idx] = I_max;
     history_idx = (history_idx + 1) % 10;
@@ -517,12 +536,12 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "I_max", I_max);
     iwt_print_double(&col, row, "Deviation", deviation);
 
-    // ZEILE 2: Informationserhaltung
+    // ZEILE 2
     row += 2; col = 1;
     iwt_print_double(&col, row, "ΣI²", sum_I_sq);
     iwt_print_double(&col, row, "Info_Dev", info_deviation);
 
-    // ZEILE 3: Fluktuations-Statistiken
+    // ZEILE 3: Fluktuationen
     row += 2; col = 1;
     double xi_real_mean = 0.0, xi_imag_mean = 0.0;
     double xi_real_var = 0.0, xi_imag_var = 0.0;
@@ -551,11 +570,10 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "ξ_imag_σ", xi_imag_var);
     iwt_print_double(&col, row, "scale", cfg->uncertainty_scale);
 
-    // ZEILE 4: Zeitreihe ΣI² (letzte 10 Werte)
+    // ZEILE 4: ΣI² History
     row += 2; col = 1;
     string_set_cursor_position(col, row);
     printf(BLACK_ON_WHITE "ΣI² (letzte 10):" COLOR_RESET);
-
     int start = history_count < 10 ? 0 : history_idx;
     for (int i = 0; i < history_count; i++)
     {
@@ -564,11 +582,10 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
         printf(BLUE_ON_WHITE "%10.1f" COLOR_RESET, sum_I_sq_history[idx]);
     }
 
-    // ZEILE 5: I_max
+    // ZEILE 5: I_max History
     row += 2; col = 1;
     string_set_cursor_position(col, row);
     printf(BLACK_ON_WHITE "I_max (letzte 10):" COLOR_RESET);
-
     for (int i = 0; i < history_count; i++)
     {
         int idx = (start + i) % 10;
@@ -576,21 +593,28 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
         printf(BLUE_ON_WHITE "%10.1f" COLOR_RESET, I_max_history[idx]);
     }
 
-    // ZEILE 7: I-Werte
+    // ZEILE 7: I_real und I_imag
     row += 2; col = 1;
-    iwt_print_double(&col, row, "I[0]", rt->I[0]);
-    iwt_print_double(&col, row, "I[101]", rt->I[101]);
-    iwt_print_double(&col, row, "I[102]", rt->I[102]);
-    iwt_print_double(&col, row, "I[103]", rt->I[103]);
-    iwt_print_double(&col, row, "I[104]", rt->I[104]);
+    iwt_print_double(&col, row, "Re(I)[0]", rt->I_real[0]);
+    iwt_print_double(&col, row, "Re(I)[101]", rt->I_real[101]);
+    iwt_print_double(&col, row, "Re(I)[102]", rt->I_real[102]);
+    iwt_print_double(&col, row, "Re(I)[103]", rt->I_real[103]);
+    iwt_print_double(&col, row, "Re(I)[104]", rt->I_real[104]);
 
-    // ZEILE 9: I_phase
     row += 2; col = 1;
-    iwt_print_double(&col, row, "I_phase[0]", rt->I_phase[0] / iwt_pi() * 180.0);
-    iwt_print_double(&col, row, "I_phase[101]", rt->I_phase[101] / iwt_pi() * 180.0);
-    iwt_print_double(&col, row, "I_phase[102]", rt->I_phase[102] / iwt_pi() * 180.0);
-    iwt_print_double(&col, row, "I_phase[103]", rt->I_phase[103] / iwt_pi() * 180.0);
-    iwt_print_double(&col, row, "I_phase[104]", rt->I_phase[104] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "Im(I)[0]", rt->I_imag[0]);
+    iwt_print_double(&col, row, "Im(I)[101]", rt->I_imag[101]);
+    iwt_print_double(&col, row, "Im(I)[102]", rt->I_imag[102]);
+    iwt_print_double(&col, row, "Im(I)[103]", rt->I_imag[103]);
+    iwt_print_double(&col, row, "Im(I)[104]", rt->I_imag[104]);
+
+    // ZEILE 9: Phase
+    row += 2; col = 1;
+    iwt_print_double(&col, row, "phase[0]", rt->I_phase[0] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "phase[101]", rt->I_phase[101] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "phase[102]", rt->I_phase[102] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "phase[103]", rt->I_phase[103] / iwt_pi() * 180.0);
+    iwt_print_double(&col, row, "phase[104]", rt->I_phase[104] / iwt_pi() * 180.0);
 
     // ZEILE 11: sumJ
     row += 2; col = 1;
@@ -619,11 +643,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     // ZEILE 17: Teilchen
     row += 2; col = 1;
     struct iwt_spectrum spec = {0};
-    iwt_compute_spectrum(rt->I, cfg->N, &spec);
+    iwt_compute_spectrum(rt->I_real, rt->I_imag, cfg->N, &spec);
     iwt_print_int(&col, row, "Elektronen", spec.count_electron);
     iwt_print_int(&col, row, "Protonen", spec.count_proton);
 
-    // ZEILE 19: Fluktuationswerte ξ_r
+    // ZEILE 19: xi_real
     row += 2; col = 1;
     iwt_print_double(&col, row, "ξ_r[0]", rt->xi_real[0]);
     iwt_print_double(&col, row, "ξ_r[101]", rt->xi_real[101]);
@@ -631,7 +655,7 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "ξ_r[103]", rt->xi_real[103]);
     iwt_print_double(&col, row, "ξ_r[104]", rt->xi_real[104]);
 
-    // ZEILE 21: Fluktuationswerte ξ_i
+    // ZEILE 21: xi_imag
     row += 2; col = 1;
     iwt_print_double(&col, row, "ξ_i[0]", rt->xi_imag[0]);
     iwt_print_double(&col, row, "ξ_i[101]", rt->xi_imag[101]);

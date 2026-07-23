@@ -8,24 +8,26 @@
 typedef struct iwt_runtime
 {
     // === Bestehende Felder ===
-    double *I;
-    double *I_prev;
-    double *I_phase;
-    double *I_phase_prev;
+    double *I_real;      // EHEMALS I – jetzt Realteil von I
+    double *I_imag;      // NEU – Imaginärteil von I
+    double *I_prev_real; // EHEMALS I_prev – Realteil
+    double *I_prev_imag; // NEU – Imaginärteil
+    double *I_phase;     // Phase (bleibt)
+    double *I_phase_prev;// Phase (bleibt)
     double *K;
     double *sumJ;
     double *Q;
-    double *R;           // Reflexionskoeffizient
-    double *T;           // Transmissionskoeffizient
+    double *R;
+    double *T;
+    double *xi_real;
+    double *xi_imag;
+    double *uncertainty;
 
-    // === NEU: Felder für Quantenfluktuationen (Anhang O & P) ===
-    double *xi_real;     // Zufallszahlen Realteil (Gauß'sch, Mittelwert 0, Varianz 1)
-    double *xi_imag;     // Zufallszahlen Imaginärteil
-    double *uncertainty; // Unschärfe-Term für jeden Knoten (komplex als zwei double)
-
-    // === Bestehende GPU-Felder ===
-    cl_mem I_gpu;
-    cl_mem I_prev_gpu;
+    // GPU-Buffer
+    cl_mem I_real_gpu;
+    cl_mem I_imag_gpu;
+    cl_mem I_prev_real_gpu;
+    cl_mem I_prev_imag_gpu;
     cl_mem I_phase_gpu;
     cl_mem I_phase_prev_gpu;
     cl_mem K_gpu;
@@ -33,8 +35,6 @@ typedef struct iwt_runtime
     cl_mem Q_gpu;
     cl_mem R_gpu;
     cl_mem T_gpu;
-
-    // === NEU: GPU-Felder für Quantenfluktuationen ===
     cl_mem xi_real_gpu;
     cl_mem xi_imag_gpu;
     cl_mem uncertainty_gpu;
@@ -104,7 +104,8 @@ double iwt_delta_I(void);
 double iwt_alpha_IWT(void);
 double iwt_beta_IWT(void);
 
-void iwt_compute_spectrum(const double* I, size_t N, struct iwt_spectrum* spec);
+void iwt_compute_spectrum(const double* I_real, const double* I_imag, size_t N, struct iwt_spectrum* spec);
+int iwt_classify(double Re, double Im);
 void iwt_print_spectrum(const struct iwt_spectrum* spec);
 bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);
 bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);
