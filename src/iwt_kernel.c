@@ -280,6 +280,19 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         sum_abs_sq_initial += rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
     }
 
+    // ============================================================
+    // NEU: CSV-Datei für Zeitreihen öffnen
+    // ============================================================
+    FILE* csv_file = fopen("iwt_timeseries.csv", "w");
+    if (csv_file != NULL)
+    {
+        fprintf(csv_file, "iter,sum_I_sq,I_max\n");
+    }
+    else
+    {
+        printf("Warning: Could not open iwt_timeseries.csv for writing\n");
+    }
+
     string_clear_screen();
 
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
@@ -298,7 +311,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
         // ============================================================
         // 2. FLUKTUATIONEN AUF I ANWENDEN (GPU)
-        //    Dazu rufen wir run_update_info_fluctuations_only auf
         // ============================================================
         if (!run_apply_fluctuations(rt, cfg)) break;
 
@@ -341,6 +353,14 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             if (abs_q > max_q) max_q = abs_q;
         }
 
+        // ============================================================
+        // NEU: Werte in CSV-Datei schreiben
+        // ============================================================
+        if (csv_file != NULL)
+        {
+            fprintf(csv_file, "%d,%.6f,%.6f\n", iter, sum_abs_sq, I_max);
+        }
+
         static double sum_abs_sq_ref = -1.0;
         if (sum_abs_sq_ref < 0.0) sum_abs_sq_ref = sum_abs_sq_initial;
         double info_deviation = (sum_abs_sq - sum_abs_sq_ref) / (sum_abs_sq_ref + 1e-30);
@@ -354,6 +374,15 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
                          deviation, sum_abs_sq, info_deviation);
 
         retval = true;
+    }
+
+    // ============================================================
+    // CSV-Datei schließen
+    // ============================================================
+    if (csv_file != NULL)
+    {
+        fclose(csv_file);
+        printf("\nZeitreihe gespeichert in: iwt_timeseries.csv\n");
     }
 
     printf("\n");
