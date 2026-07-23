@@ -189,13 +189,48 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
     {
         int N = (int)cfg->N;
         double DT = cfg->DT;
-        int enable_fluctuations = cfg->enable_fluctuations ? 1 : 0;
 
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_prev_real_gpu, CL_TRUE, 0,
+        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
+        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
+        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
+        clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->sumJ_gpu);
+        clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->Q_gpu);
+        clSetKernelArg(kernel, 5, sizeof(int), &N);
+        clSetKernelArg(kernel, 6, sizeof(double), &DT);
+
+        size_t global = cfg->N;
+        size_t local = 64;
+        if (local > global) local = global;
+
+        if (ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
+        {
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
+
+            retval = true;
+        }
+    }
+    
+    return retval;
+}
+
+private bool run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+    bool retval = false;
+    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_APPLY_FLUCTUATIONS);
+    
+    if (kernel != NULL)
+    {
+        // Daten auf GPU schreiben (falls noch nicht geschehen)
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_prev_imag_gpu, CL_TRUE, 0,
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_prev_gpu, CL_TRUE, 0,
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
         if (!upload_uncertainty_to_gpu(rt, cfg))
@@ -203,19 +238,16 @@ private bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
             return false;
         }
 
+        int N = (int)cfg->N;
+        int enable_fluctuations = cfg->enable_fluctuations ? 1 : 0;
+
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
         clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
         clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
-        clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->I_prev_real_gpu);
-        clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->I_prev_imag_gpu);
-        clSetKernelArg(kernel, 5, sizeof(cl_mem), &rt->I_phase_prev_gpu);
-        clSetKernelArg(kernel, 6, sizeof(cl_mem), &rt->sumJ_gpu);
-        clSetKernelArg(kernel, 7, sizeof(cl_mem), &rt->Q_gpu);
-        clSetKernelArg(kernel, 8, sizeof(cl_mem), &rt->xi_real_gpu);
-        clSetKernelArg(kernel, 9, sizeof(cl_mem), &rt->xi_imag_gpu);
-        clSetKernelArg(kernel, 10, sizeof(int), &N);
-        clSetKernelArg(kernel, 11, sizeof(double), &DT);
-        clSetKernelArg(kernel, 12, sizeof(int), &enable_fluctuations);
+        clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->xi_real_gpu);
+        clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->xi_imag_gpu);
+        clSetKernelArg(kernel, 5, sizeof(int), &N);
+        clSetKernelArg(kernel, 6, sizeof(int), &enable_fluctuations);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -269,18 +301,35 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I_phase_prev[i] = rt->I_phase[i];
         }
 
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
-            cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
-            cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
-            cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
-
-        if (!run_flux_calculation(rt, cfg)) break;
-        if (!run_q_calculation(rt, cfg)) break;
+        // ============================================================
+        // 1. FLUKTUATIONEN GENERIEREN (CPU)
+        // ============================================================
         if (!generate_uncertainty_cpu(rt, cfg)) break;
+
+        // ============================================================
+        // 2. FLUKTUATIONEN AUF I ANWENDEN (GPU)
+        //    Dazu rufen wir run_update_info_fluctuations_only auf
+        // ============================================================
+        if (!run_apply_fluctuations(rt, cfg)) break;
+
+        // ============================================================
+        // 3. FLUSS AUS DEM NEUEN I BERECHNEN
+        // ============================================================
+        if (!run_flux_calculation(rt, cfg)) break;
+
+        // ============================================================
+        // 4. Q AUS DEM NEUEN I BERECHNEN
+        // ============================================================
+        if (!run_q_calculation(rt, cfg)) break;
+
+        // ============================================================
+        // 5. KONTINUITÄT (rho = |I|²) ANWENDEN
+        // ============================================================
         if (!run_update_info(rt, cfg)) break;
 
+        // ============================================================
+        // STATISTIKEN
+        // ============================================================
         double max_q = 0.0;
         double sum_abs_sq = 0.0;
         double sum_abs = 0.0;
