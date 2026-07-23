@@ -57,7 +57,7 @@ int main(int argc, char** argv)
     cfg.MAX_ITER = 1000;
     cfg.I_max = iwt_I_max();
     cfg.I_min = iwt_I_min();
-    cfg.DT = 1.0e-2;
+    cfg.DT = 1.0e-3;
     cfg.I_vac = iwt_I_min();
     cfg.phi_0 = iwt_pi() / 2.0;
     cfg.omega_0 = 1.0 / cfg.DT;

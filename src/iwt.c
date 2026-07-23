@@ -495,6 +495,18 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     double max_q, double I_total, double I_min, double I_max,
     double deviation, double sum_I_sq, double info_deviation)
 {
+    // Statische Arrays für Zeitreihen (letzte 10 Werte)
+    static double sum_I_sq_history[10] = {0};
+    static double I_max_history[10] = {0};
+    static int history_idx = 0;
+    static int history_count = 0;
+
+    // Aktuellen Wert speichern
+    sum_I_sq_history[history_idx] = sum_I_sq;
+    I_max_history[history_idx] = I_max;
+    history_idx = (history_idx + 1) % 10;
+    if (history_count < 10) history_count++;
+
     uint32_t col = 1, row = 1;
 
     // ZEILE 1
@@ -505,12 +517,12 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "I_max", I_max);
     iwt_print_double(&col, row, "Deviation", deviation);
 
-    // ZEILE 2: NEU
+    // ZEILE 2: Informationserhaltung
     row += 2; col = 1;
     iwt_print_double(&col, row, "ΣI²", sum_I_sq);
     iwt_print_double(&col, row, "Info_Dev", info_deviation);
 
-    // ZEILE 3
+    // ZEILE 3: Fluktuations-Statistiken
     row += 2; col = 1;
     double xi_real_mean = 0.0, xi_imag_mean = 0.0;
     double xi_real_var = 0.0, xi_imag_var = 0.0;
@@ -539,7 +551,32 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "ξ_imag_σ", xi_imag_var);
     iwt_print_double(&col, row, "scale", cfg->uncertainty_scale);
 
-    // ZEILE 5
+    // ZEILE 4: Zeitreihe ΣI² (letzte 10 Werte)
+    row += 2; col = 1;
+    string_set_cursor_position(col, row);
+    printf(BLACK_ON_WHITE "ΣI² (letzte 10):" COLOR_RESET);
+
+    int start = history_count < 10 ? 0 : history_idx;
+    for (int i = 0; i < history_count; i++)
+    {
+        int idx = (start + i) % 10;
+        string_set_cursor_position(col + 18 + i * 12, row);
+        printf(BLUE_ON_WHITE "%10.1f" COLOR_RESET, sum_I_sq_history[idx]);
+    }
+
+    // ZEILE 5: I_max
+    row += 2; col = 1;
+    string_set_cursor_position(col, row);
+    printf(BLACK_ON_WHITE "I_max (letzte 10):" COLOR_RESET);
+
+    for (int i = 0; i < history_count; i++)
+    {
+        int idx = (start + i) % 10;
+        string_set_cursor_position(col + 18 + i * 12, row);
+        printf(BLUE_ON_WHITE "%10.1f" COLOR_RESET, I_max_history[idx]);
+    }
+
+    // ZEILE 7: I-Werte
     row += 2; col = 1;
     iwt_print_double(&col, row, "I[0]", rt->I[0]);
     iwt_print_double(&col, row, "I[101]", rt->I[101]);
@@ -547,7 +584,7 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "I[103]", rt->I[103]);
     iwt_print_double(&col, row, "I[104]", rt->I[104]);
 
-    // ZEILE 7
+    // ZEILE 9: I_phase
     row += 2; col = 1;
     iwt_print_double(&col, row, "I_phase[0]", rt->I_phase[0] / iwt_pi() * 180.0);
     iwt_print_double(&col, row, "I_phase[101]", rt->I_phase[101] / iwt_pi() * 180.0);
@@ -555,7 +592,7 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "I_phase[103]", rt->I_phase[103] / iwt_pi() * 180.0);
     iwt_print_double(&col, row, "I_phase[104]", rt->I_phase[104] / iwt_pi() * 180.0);
 
-    // ZEILE 9
+    // ZEILE 11: sumJ
     row += 2; col = 1;
     iwt_print_double(&col, row, "sum_J[0]", rt->sumJ[0]);
     iwt_print_double(&col, row, "sum_J[101]", rt->sumJ[101]);
@@ -563,7 +600,7 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "sum_J[103]", rt->sumJ[103]);
     iwt_print_double(&col, row, "sum_J[104]", rt->sumJ[104]);
 
-    // ZEILE 11
+    // ZEILE 13: T
     row += 2; col = 1;
     iwt_print_double(&col, row, "T[0]", rt->T[0]);
     iwt_print_double(&col, row, "T[101]", rt->T[101]);
@@ -571,7 +608,7 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "T[103]", rt->T[103]);
     iwt_print_double(&col, row, "T[104]", rt->T[104]);
 
-    // ZEILE 13
+    // ZEILE 15: R
     row += 2; col = 1;
     iwt_print_double(&col, row, "R[0]", rt->R[0]);
     iwt_print_double(&col, row, "R[101]", rt->R[101]);
@@ -579,14 +616,14 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "R[103]", rt->R[103]);
     iwt_print_double(&col, row, "R[104]", rt->R[104]);
 
-    // ZEILE 15
+    // ZEILE 17: Teilchen
     row += 2; col = 1;
     struct iwt_spectrum spec = {0};
     iwt_compute_spectrum(rt->I, cfg->N, &spec);
     iwt_print_int(&col, row, "Elektronen", spec.count_electron);
     iwt_print_int(&col, row, "Protonen", spec.count_proton);
 
-    // ZEILE 17
+    // ZEILE 19: Fluktuationswerte ξ_r
     row += 2; col = 1;
     iwt_print_double(&col, row, "ξ_r[0]", rt->xi_real[0]);
     iwt_print_double(&col, row, "ξ_r[101]", rt->xi_real[101]);
@@ -594,7 +631,7 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "ξ_r[103]", rt->xi_real[103]);
     iwt_print_double(&col, row, "ξ_r[104]", rt->xi_real[104]);
 
-    // ZEILE 19
+    // ZEILE 21: Fluktuationswerte ξ_i
     row += 2; col = 1;
     iwt_print_double(&col, row, "ξ_i[0]", rt->xi_imag[0]);
     iwt_print_double(&col, row, "ξ_i[101]", rt->xi_imag[101]);
