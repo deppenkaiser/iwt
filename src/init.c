@@ -19,8 +19,6 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
     rt->sumJ = malloc(cfg->N * sizeof(double));
     rt->Q = malloc(cfg->N * sizeof(double));
-    rt->R = malloc(cfg->N * sizeof(double));
-    rt->T = malloc(cfg->N * sizeof(double));
 
     // === Quantenfluktuationen (Anhang O & P) ===
     rt->xi_real = malloc(cfg->N * sizeof(double));
@@ -32,8 +30,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         (rt->I_prev_real != NULL) && (rt->I_prev_imag != NULL) &&
         (rt->I_phase != NULL) && (rt->I_phase_prev != NULL) &&
         (rt->K != NULL) && (rt->sumJ != NULL) &&
-        (rt->Q != NULL) && (rt->R != NULL) && (rt->T != NULL) &&
-        (rt->xi_real != NULL) && (rt->xi_imag != NULL) && (rt->uncertainty != NULL))
+        (rt->Q != NULL) && (rt->xi_real != NULL) && (rt->xi_imag != NULL) && (rt->uncertainty != NULL))
     {
         // === Initialisierung auf Vakuum (I_real = 0.01, I_imag = 0.0) ===
         for (size_t i = 0; i < cfg->N; i++)
@@ -45,8 +42,6 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->I_phase[i] = 0.0;
             rt->I_phase_prev[i] = 0.0;
             rt->Q[i] = 0.0;
-            rt->R[i] = 0.0;
-            rt->T[i] = 0.0;
             rt->xi_real[i] = 0.0;
             rt->xi_imag[i] = 0.0;
             rt->uncertainty[i] = 0.0;
@@ -119,8 +114,6 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
     rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
     rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-    rt->R_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-    rt->T_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
     // === Quantenfluktuationen (Anhang O & P) ===
     rt->xi_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
@@ -133,8 +126,7 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         (rt->I_prev_real_gpu != NULL) && (rt->I_prev_imag_gpu != NULL) &&
         (rt->I_phase_gpu != NULL) && (rt->I_phase_prev_gpu != NULL) &&
         (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) &&
-        (rt->Q_gpu != NULL) && (rt->R_gpu != NULL) && (rt->T_gpu != NULL) &&
-        (rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) && (rt->uncertainty_gpu != NULL);
+        (rt->Q_gpu != NULL) && (rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) && (rt->uncertainty_gpu != NULL);
 
     return all_buffers_valid;
 }
@@ -153,8 +145,6 @@ void deinitialize_host_data(const iwt_runtime_t rt)
     free(rt->K);
     free(rt->sumJ);
     free(rt->Q);
-    free(rt->R);
-    free(rt->T);
 
     // === Quantenfluktuationen (Anhang O & P) ===
     free(rt->xi_real);
@@ -171,8 +161,6 @@ void deinitialize_host_data(const iwt_runtime_t rt)
     rt->K = NULL;
     rt->sumJ = NULL;
     rt->Q = NULL;
-    rt->R = NULL;
-    rt->T = NULL;
     rt->xi_real = NULL;
     rt->xi_imag = NULL;
     rt->uncertainty = NULL;
@@ -192,8 +180,6 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
     clReleaseMemObject(rt->K_gpu);
     clReleaseMemObject(rt->sumJ_gpu);
     clReleaseMemObject(rt->Q_gpu);
-    clReleaseMemObject(rt->R_gpu);
-    clReleaseMemObject(rt->T_gpu);
 
     // === Quantenfluktuationen (Anhang O & P) ===
     clReleaseMemObject(rt->xi_real_gpu);
@@ -210,8 +196,6 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
     rt->K_gpu = NULL;
     rt->sumJ_gpu = NULL;
     rt->Q_gpu = NULL;
-    rt->R_gpu = NULL;
-    rt->T_gpu = NULL;
     rt->xi_real_gpu = NULL;
     rt->xi_imag_gpu = NULL;
     rt->uncertainty_gpu = NULL;

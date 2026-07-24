@@ -17,8 +17,6 @@ typedef struct iwt_runtime
     double *K;
     double *sumJ;
     double *Q;
-    double *R;
-    double *T;
     double *xi_real;
     double *xi_imag;
     double *uncertainty;
@@ -33,8 +31,6 @@ typedef struct iwt_runtime
     cl_mem K_gpu;
     cl_mem sumJ_gpu;
     cl_mem Q_gpu;
-    cl_mem R_gpu;
-    cl_mem T_gpu;
     cl_mem xi_real_gpu;
     cl_mem xi_imag_gpu;
     cl_mem uncertainty_gpu;

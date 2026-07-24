@@ -20,12 +20,10 @@ static double box_muller(unsigned int* seed)
     return z;
 }
 
-// === NEUE FUNKTION: Generierung der Fluktuationen auf der CPU ===
 private bool generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     if (!cfg->enable_fluctuations)
     {
-        // Wenn Fluktuationen deaktiviert sind, setze alles auf 0
         for (size_t i = 0; i < cfg->N; i++)
         {
             rt->xi_real[i] = 0.0;
@@ -36,25 +34,39 @@ private bool generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t
     }
 
     double scale = cfg->uncertainty_scale;
-
-    // Seed für reproduzierbare Ergebnisse initialisieren
     unsigned int seed = cfg->seed;
+
+    // 1. Rohdaten generieren
+    double* raw_real = malloc(cfg->N * sizeof(double));
+    double* raw_imag = malloc(cfg->N * sizeof(double));
+    if (!raw_real || !raw_imag) return false;
 
     for (size_t i = 0; i < cfg->N; i++)
     {
-        // Zwei unabhängige Gauß'sche Zufallszahlen für Real- und Imaginärteil
-        double z_real = box_muller(&seed);
-        double z_imag = box_muller(&seed);
-
-        // Skalierung mit √(ℏ/(2T))
-        rt->xi_real[i] = scale * z_real;
-        rt->xi_imag[i] = scale * z_imag;
-
-        // Kombinierter Unschärfe-Term (komplex als zwei double)
-        // uncertainty[i] wird später im Update-Kernel verwendet
-        rt->uncertainty[i] = 0.0; // Wird auf GPU berechnet
+        raw_real[i] = box_muller(&seed);
+        raw_imag[i] = box_muller(&seed);
     }
 
+    // 2. Mittelwert berechnen
+    double mean_real = 0.0, mean_imag = 0.0;
+    for (size_t i = 0; i < cfg->N; i++)
+    {
+        mean_real += raw_real[i];
+        mean_imag += raw_imag[i];
+    }
+    mean_real /= cfg->N;
+    mean_imag /= cfg->N;
+
+    // 3. Mittelwert korrigieren und skalieren
+    for (size_t i = 0; i < cfg->N; i++)
+    {
+        rt->xi_real[i] = scale * (raw_real[i] - mean_real);
+        rt->xi_imag[i] = scale * (raw_imag[i] - mean_imag);
+        rt->uncertainty[i] = 0.0;
+    }
+
+    free(raw_real);
+    free(raw_imag);
     return true;
 }
 

@@ -624,22 +624,6 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "sum_J[103]", rt->sumJ[103]);
     iwt_print_double(&col, row, "sum_J[104]", rt->sumJ[104]);
 
-    // ZEILE 13: T
-    row += 2; col = 1;
-    iwt_print_double(&col, row, "T[0]", rt->T[0]);
-    iwt_print_double(&col, row, "T[101]", rt->T[101]);
-    iwt_print_double(&col, row, "T[102]", rt->T[102]);
-    iwt_print_double(&col, row, "T[103]", rt->T[103]);
-    iwt_print_double(&col, row, "T[104]", rt->T[104]);
-
-    // ZEILE 15: R
-    row += 2; col = 1;
-    iwt_print_double(&col, row, "R[0]", rt->R[0]);
-    iwt_print_double(&col, row, "R[101]", rt->R[101]);
-    iwt_print_double(&col, row, "R[102]", rt->R[102]);
-    iwt_print_double(&col, row, "R[103]", rt->R[103]);
-    iwt_print_double(&col, row, "R[104]", rt->R[104]);
-
     // ZEILE 17: Teilchen
     row += 2; col = 1;
     struct iwt_spectrum spec = {0};
