@@ -649,3 +649,50 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
 
     fflush(stdout);
 }
+
+void iwt_save_heatmap(const double* data, size_t N, const char* filename, const char* type)
+{
+    // Finde Min/Max
+    double min_val = 1e30;
+    double max_val = -1e30;
+    for (size_t i = 0; i < N; i++)
+    {
+        if (data[i] < min_val) min_val = data[i];
+        if (data[i] > max_val) max_val = data[i];
+    }
+    double range = max_val - min_val;
+    if (range < 1e-30) range = 1.0;
+
+    // PGM-Bild (512x512)
+    int width = 512;
+    int height = 512;
+    unsigned char* image = malloc(width * height * sizeof(unsigned char));
+    if (!image) return;
+
+    memset(image, 0, width * height);
+
+    // MDS-Koordinaten werden benötigt – wir verwenden eine einfache 1D-zu-2D-Abbildung
+    // (später mit MDS-Koordinaten ersetzen)
+    int grid_size = (int)sqrt(N);
+    for (size_t i = 0; i < N; i++)
+    {
+        int x = i % grid_size;
+        int y = i / grid_size;
+        if (x >= width || y >= height) continue;
+
+        double normalized = (data[i] - min_val) / range;
+        unsigned char value = (unsigned char)(normalized * 255.0);
+        image[y * width + x] = value;
+    }
+
+    // PGM-Datei schreiben
+    FILE* f = fopen(filename, "wb");
+    if (f)
+    {
+        fprintf(f, "P5\n%d %d\n255\n", width, height);
+        fwrite(image, 1, width * height, f);
+        fclose(f);
+    }
+
+    free(image);
+}

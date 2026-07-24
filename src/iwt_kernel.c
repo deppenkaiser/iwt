@@ -271,6 +271,52 @@ private bool run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t c
     return retval;
 }
 
+private bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+    bool retval = false;
+    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_MASS_CHARGE);
+    
+    if (kernel != NULL)
+    {
+        // Daten auf GPU schreiben
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
+
+        // Neue GPU-Buffer für Masse und Ladung (müssen in iwt.h hinzugefügt werden)
+        // rt->mass_gpu und rt->charge_gpu werden benötigt
+
+        int N = (int)cfg->N;
+        double delta = 1.0; // Kopplungskonstante für Masse
+
+        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
+        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
+        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
+        clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->mass_gpu);
+        clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->charge_gpu);
+        clSetKernelArg(kernel, 5, sizeof(int), &N);
+        clSetKernelArg(kernel, 6, sizeof(double), &delta);
+
+        size_t global = cfg->N;
+        size_t local = 64;
+        if (local > global) local = global;
+
+        if (ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
+        {
+            clEnqueueReadBuffer(rt->ocl.queue, rt->mass_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->mass, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->charge_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->charge, 0, NULL, NULL);
+            retval = true;
+        }
+    }
+    
+    return retval;
+}
+
 bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
@@ -292,9 +338,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         sum_abs_sq_initial += rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
     }
 
-    // ============================================================
-    // NEU: CSV-Datei für Zeitreihen öffnen
-    // ============================================================
+    // CSV-Datei für Zeitreihen öffnen
     FILE* csv_file = fopen("iwt_timeseries.csv", "w");
     if (csv_file != NULL)
     {
@@ -342,6 +386,11 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (!run_update_info(rt, cfg)) break;
 
         // ============================================================
+        // 6. MASSE UND LADUNG BERECHNEN
+        // ============================================================
+        if (!run_compute_mass_charge(rt, cfg)) break;
+
+        // ============================================================
         // STATISTIKEN
         // ============================================================
         double max_q = 0.0;
@@ -365,9 +414,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             if (abs_q > max_q) max_q = abs_q;
         }
 
-        // ============================================================
-        // NEU: Werte in CSV-Datei schreiben
-        // ============================================================
+        // CSV schreiben
         if (csv_file != NULL)
         {
             fprintf(csv_file, "%d,%.6f,%.6f\n", iter, sum_abs_sq, I_max);
@@ -381,16 +428,33 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (I_total_ref < 0.0) I_total_ref = sum_abs;
         double deviation = (sum_abs - I_total_ref) / (I_total_ref + 1e-30);
 
+        // ============================================================
+        // HEATMAP SPEICHERN (alle 100 Iterationen)
+        // ============================================================
+        if (iter % 10 == 0)
+        {
+            char filename[256];
+
+            snprintf(filename, sizeof(filename), "heatmap_mass_%06d.pgm", iter);
+            iwt_save_heatmap(rt->mass, cfg->N, filename, "mass");
+
+            snprintf(filename, sizeof(filename), "heatmap_charge_%06d.pgm", iter);
+            iwt_save_heatmap(rt->charge, cfg->N, filename, "charge");
+        }
+
+        // ============================================================
+        // AUSGABE
+        // ============================================================
         string_set_cursor_position(1, 1);
         iwt_print_status(rt, cfg, iter, max_q, sum_abs, I_min, I_max,
                          deviation, sum_abs_sq, info_deviation);
 
+        fflush(stdout);
+
         retval = true;
     }
 
-    // ============================================================
     // CSV-Datei schließen
-    // ============================================================
     if (csv_file != NULL)
     {
         fclose(csv_file);

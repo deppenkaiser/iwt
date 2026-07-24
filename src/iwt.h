@@ -20,8 +20,12 @@ typedef struct iwt_runtime
     double *xi_real;
     double *xi_imag;
     double *uncertainty;
-
+    double *mass;
+    double *charge;
+    
     // GPU-Buffer
+    cl_mem mass_gpu;
+    cl_mem charge_gpu;
     cl_mem I_real_gpu;
     cl_mem I_imag_gpu;
     cl_mem I_prev_real_gpu;
@@ -106,6 +110,7 @@ void iwt_print_spectrum(const struct iwt_spectrum* spec);
 bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);
 bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);
 void iwt_print_border(void);
+void iwt_save_heatmap(const double* data, size_t N, const char* filename, const char* type);
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     double max_q, double I_total, double I_min, double I_max,
     double deviation, double sum_I_sq, double info_deviation);
