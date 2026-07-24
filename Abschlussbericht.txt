@@ -1,0 +1,123 @@
+================================================================================
+ABSCHLUSSBERICHT – IWT SIMULATION
+================================================================================
+
+Liebe nächste KI-Instanz,
+
+Du übernimmst ein laufendes Projekt. Hier ist der aktuelle Stand.
+
+================================================================================
+1. DER AKTUELLE STAND
+================================================================================
+
+Die Simulation der Informations-Weber-Theorie (IWT) läuft stabil und produziert:
+
+- Teilchenentstehung aus dem Vakuum (kurzlebige Hotspots)
+- Stabilisierung (ein Teilchen überlebt langfristig)
+- Ladungs-Wirbel (Felder ohne Masse)
+
+Die wichtigsten Erkenntnisse:
+
++----------------------------------------+--------------------------------------+
+| Beobachtung                            | Interpretation                       |
++----------------------------------------+--------------------------------------+
+| Masse = lokalisiert                    | Teilchen (Materie)                   |
+| Ladung = verteilt, dynamisch           | Felder (Photonen, EM-Felder)         |
+| Masse + Ladung = gekoppelt             | Teilchen mit Ladung (Elektron, Proton)|
+| Ladung ohne Masse = ungekoppelt        | Photonen / EM-Felder                 |
++----------------------------------------+--------------------------------------+
+
+Die Heatmap-Analyse hat gezeigt: Die Simulation produziert ein stabiles Teilchen,
+das sich langsam bewegt und nicht zerfällt.
+
+================================================================================
+2. DIE OFFENE FRAGE
+================================================================================
+
+Was ist das stabile Teilchen?
+
+- Elektron  (|I| ≈ 0.25)
+- Proton   (|I| ≈ 1.0)
+- Quark    (|I| ≈ 0.05 oder 0.06)
+
+Wir wissen es nicht. Um das zu klären, müssen wir die Amplitude |I| an der Position
+des Teilchens messen.
+
+================================================================================
+3. DIE AUFGABEN FÜR DIE NÄCHSTE KI-INSTANZ
+================================================================================
+
+AUFGABE 1: Das stabile Teilchen identifizieren
+
+1. Finde die Position des stabilen Teilchens (z.B. bei Iteration 4000)
+2. Lese I_real, I_imag, I_phase an dieser Position
+3. Berechne |I| = sqrt(I_real² + I_imag²)
+4. Vergleiche mit den theoretischen Werten:
+   - |I| ≈ 0.25   → Elektron
+   - |I| ≈ 1.0    → Proton
+   - |I| ≈ 0.05   → Quark
+   - |I| ≈ 0.06   → Quark
+
+AUFGABE 2: Die Ladungs-Wirbel analysieren
+
+1. Analysiere die Ladungs-Heatmaps
+2. Finde heraus, ob die Wirbel Photonen oder Neutrinos entsprechen
+3. Überprüfe, ob die Maxwell-Gravitation (Kapitel 9) korrekt implementiert ist
+
+================================================================================
+4. DIE CODE-STRUKTUR
+================================================================================
+
+/home/czymic/Dokumente/daten/sandbox/apps/iwt/
+├── build/bin/
+│   ├── iwt                         ← ausführbare Datei
+│   ├── heatmap_mass_*.pgm          ← Mass-Heatmaps
+│   ├── heatmap_charge_*.pgm        ← Ladungs-Heatmaps
+│   └── iwt_timeseries.csv          ← Zeitreihe
+└── src/
+    ├── python/
+    │   └── heatmap_converter.py    ← Heatmap-Analyse-Skript
+    ├── init.c
+    ├── init.h
+    ├── iwt.c
+    ├── iwt.h
+    ├── iwt_kernel.c
+    ├── iwt_kernel.h
+    └── main.c
+
+================================================================================
+5. DIE WICHTIGSTEN DATEIEN
+================================================================================
+
++---------------------------+-----------------------------------------------+
+| Datei                     | Beschreibung                                  |
++---------------------------+-----------------------------------------------+
+| heatmap_converter.py      | Analysiert Heatmaps und findet Hotspots       |
+| iwt_kernel.c              | Enthält die Simulationslogik                  |
+| iwt.c                     | Enthält Hilfsfunktionen                       |
+| iwt.h                     | Enthält die Strukturen                        |
++---------------------------+-----------------------------------------------+
+
+================================================================================
+6. DER NÄCHSTE SCHRITT
+================================================================================
+
+Das Skript ist fertig. Der nächste Schritt ist:
+
+1. Das stabile Teilchen identifizieren (siehe Aufgabe 1)
+2. Die Ladungs-Wirbel analysieren (siehe Aufgabe 2)
+3. Die Theorie mit der Simulation vergleichen
+
+================================================================================
+7. WICHTIGE HINWEISE
+================================================================================
+
+- Die Simulation ist stabil und produziert Teilchen
+- Die Heatmap-Analyse ist abgeschlossen
+- Die nächste KI-Instanz sollte sich auf die Identifikation des Teilchens konzentrieren
+- Die Theorie (Kapitel 9 und 12) sollte als Leitfaden dienen
+
+================================================================================
+HIER ENDET DIESER ABSCHNITT.
+DIE NÄCHSTE KI-INSTANZ KANN MIT DER IDENTIFIKATION DES TEILCHENS FORTFAHREN.
+================================================================================
