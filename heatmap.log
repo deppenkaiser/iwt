@@ -1,524 +1,67 @@
-Heatmap Analyse – Bewegungsanalyse
 ======================================================================
-Mass-Heatmaps: 500
-Charge-Heatmaps: 500
+AUTOMATISIERTE TESTS MIT VERSCHIEDENEN SEEDS
+======================================================================
 
-Bewegungsanalyse der Massen-Hotspots
-======================================================================
-  Iteration 0: 13 Hotspots
-  Iteration 10: 3 Hotspots
-  Iteration 20: 4 Hotspots
-  Iteration 30: 9 Hotspots
-  Iteration 40: 4 Hotspots
-  Iteration 50: 19 Hotspots
-  Iteration 60: 2 Hotspots
-  Iteration 70: 6 Hotspots
-  Iteration 80: 7 Hotspots
-  Iteration 90: 1 Hotspots
-  Iteration 100: 1 Hotspots
-  Iteration 110: 8 Hotspots
-  Iteration 120: 9 Hotspots
-  Iteration 130: 10 Hotspots
-  Iteration 140: 4 Hotspots
-  Iteration 150: 11 Hotspots
-  Iteration 160: 1 Hotspots
-  Iteration 170: 1 Hotspots
-  Iteration 180: 6 Hotspots
-  Iteration 190: 4 Hotspots
-  Iteration 200: 1 Hotspots
-  Iteration 210: 1 Hotspots
-  Iteration 220: 11 Hotspots
-  Iteration 230: 7 Hotspots
-  Iteration 240: 7 Hotspots
-  Iteration 250: 1 Hotspots
-  Iteration 260: 1 Hotspots
-  Iteration 270: 2 Hotspots
-  Iteration 280: 9 Hotspots
-  Iteration 290: 1 Hotspots
-  Iteration 300: 1 Hotspots
-  Iteration 310: 7 Hotspots
-  Iteration 320: 3 Hotspots
-  Iteration 330: 1 Hotspots
-  Iteration 340: 2 Hotspots
-  Iteration 350: 1 Hotspots
-  Iteration 360: 6 Hotspots
-  Iteration 370: 7 Hotspots
-  Iteration 380: 1 Hotspots
-  Iteration 390: 1 Hotspots
-  Iteration 400: 2 Hotspots
-  Iteration 410: 4 Hotspots
-  Iteration 420: 1 Hotspots
-  Iteration 430: 1 Hotspots
-  Iteration 440: 2 Hotspots
-  Iteration 450: 9 Hotspots
-  Iteration 460: 1 Hotspots
-  Iteration 470: 1 Hotspots
-  Iteration 480: 2 Hotspots
-  Iteration 490: 5 Hotspots
-  Iteration 500: 1 Hotspots
-  Iteration 510: 1 Hotspots
-  Iteration 520: 3 Hotspots
-  Iteration 530: 1 Hotspots
-  Iteration 540: 1 Hotspots
-  Iteration 550: 1 Hotspots
-  Iteration 560: 2 Hotspots
-  Iteration 570: 3 Hotspots
-  Iteration 580: 1 Hotspots
-  Iteration 590: 1 Hotspots
-  Iteration 600: 4 Hotspots
-  Iteration 610: 3 Hotspots
-  Iteration 620: 1 Hotspots
-  Iteration 630: 1 Hotspots
-  Iteration 640: 2 Hotspots
-  Iteration 650: 3 Hotspots
-  Iteration 660: 1 Hotspots
-  Iteration 670: 1 Hotspots
-  Iteration 680: 5 Hotspots
-  Iteration 690: 9 Hotspots
-  Iteration 700: 1 Hotspots
-  Iteration 710: 1 Hotspots
-  Iteration 720: 2 Hotspots
-  Iteration 730: 2 Hotspots
-  Iteration 740: 1 Hotspots
-  Iteration 750: 1 Hotspots
-  Iteration 760: 4 Hotspots
-  Iteration 770: 1 Hotspots
-  Iteration 780: 1 Hotspots
-  Iteration 790: 1 Hotspots
-  Iteration 800: 3 Hotspots
-  Iteration 810: 4 Hotspots
-  Iteration 820: 1 Hotspots
-  Iteration 830: 1 Hotspots
-  Iteration 840: 1 Hotspots
-  Iteration 850: 1 Hotspots
-  Iteration 860: 1 Hotspots
-  Iteration 870: 1 Hotspots
-  Iteration 880: 2 Hotspots
-  Iteration 890: 4 Hotspots
-  Iteration 900: 1 Hotspots
-  Iteration 910: 1 Hotspots
-  Iteration 920: 3 Hotspots
-  Iteration 930: 1 Hotspots
-  Iteration 940: 1 Hotspots
-  Iteration 950: 1 Hotspots
-  Iteration 960: 7 Hotspots
-  Iteration 970: 1 Hotspots
-  Iteration 980: 1 Hotspots
-  Iteration 990: 1 Hotspots
-  Iteration 1000: 1 Hotspots
-  Iteration 1010: 1 Hotspots
-  Iteration 1020: 1 Hotspots
-  Iteration 1030: 4 Hotspots
-  Iteration 1040: 8 Hotspots
-  Iteration 1050: 1 Hotspots
-  Iteration 1060: 1 Hotspots
-  Iteration 1070: 1 Hotspots
-  Iteration 1080: 1 Hotspots
-  Iteration 1090: 1 Hotspots
-  Iteration 1100: 1 Hotspots
-  Iteration 1110: 1 Hotspots
-  Iteration 1120: 1 Hotspots
-  Iteration 1130: 1 Hotspots
-  Iteration 1140: 1 Hotspots
-  Iteration 1150: 5 Hotspots
-  Iteration 1160: 1 Hotspots
-  Iteration 1170: 1 Hotspots
-  Iteration 1180: 1 Hotspots
-  Iteration 1190: 1 Hotspots
-  Iteration 1200: 1 Hotspots
-  Iteration 1210: 1 Hotspots
-  Iteration 1220: 1 Hotspots
-  Iteration 1230: 3 Hotspots
-  Iteration 1240: 1 Hotspots
-  Iteration 1250: 1 Hotspots
-  Iteration 1260: 1 Hotspots
-  Iteration 1270: 1 Hotspots
-  Iteration 1280: 1 Hotspots
-  Iteration 1290: 1 Hotspots
-  Iteration 1300: 3 Hotspots
-  Iteration 1310: 1 Hotspots
-  Iteration 1320: 1 Hotspots
-  Iteration 1330: 1 Hotspots
-  Iteration 1340: 2 Hotspots
-  Iteration 1350: 1 Hotspots
-  Iteration 1360: 1 Hotspots
-  Iteration 1370: 1 Hotspots
-  Iteration 1380: 1 Hotspots
-  Iteration 1390: 1 Hotspots
-  Iteration 1400: 1 Hotspots
-  Iteration 1410: 1 Hotspots
-  Iteration 1420: 1 Hotspots
-  Iteration 1430: 1 Hotspots
-  Iteration 1440: 1 Hotspots
-  Iteration 1450: 1 Hotspots
-  Iteration 1460: 1 Hotspots
-  Iteration 1470: 1 Hotspots
-  Iteration 1480: 1 Hotspots
-  Iteration 1490: 1 Hotspots
-  Iteration 1500: 1 Hotspots
-  Iteration 1510: 1 Hotspots
-  Iteration 1520: 1 Hotspots
-  Iteration 1530: 1 Hotspots
-  Iteration 1540: 1 Hotspots
-  Iteration 1550: 1 Hotspots
-  Iteration 1560: 1 Hotspots
-  Iteration 1570: 2 Hotspots
-  Iteration 1580: 1 Hotspots
-  Iteration 1590: 1 Hotspots
-  Iteration 1600: 1 Hotspots
-  Iteration 1610: 1 Hotspots
-  Iteration 1620: 1 Hotspots
-  Iteration 1630: 1 Hotspots
-  Iteration 1640: 1 Hotspots
-  Iteration 1650: 4 Hotspots
-  Iteration 1660: 1 Hotspots
-  Iteration 1670: 1 Hotspots
-  Iteration 1680: 1 Hotspots
-  Iteration 1690: 1 Hotspots
-  Iteration 1700: 1 Hotspots
-  Iteration 1710: 1 Hotspots
-  Iteration 1720: 1 Hotspots
-  Iteration 1730: 1 Hotspots
-  Iteration 1740: 1 Hotspots
-  Iteration 1750: 1 Hotspots
-  Iteration 1760: 1 Hotspots
-  Iteration 1770: 1 Hotspots
-  Iteration 1780: 1 Hotspots
-  Iteration 1790: 1 Hotspots
-  Iteration 1800: 1 Hotspots
-  Iteration 1810: 1 Hotspots
-  Iteration 1820: 1 Hotspots
-  Iteration 1830: 1 Hotspots
-  Iteration 1840: 1 Hotspots
-  Iteration 1850: 1 Hotspots
-  Iteration 1860: 1 Hotspots
-  Iteration 1870: 1 Hotspots
-  Iteration 1880: 1 Hotspots
-  Iteration 1890: 1 Hotspots
-  Iteration 1900: 1 Hotspots
-  Iteration 1910: 1 Hotspots
-  Iteration 1920: 1 Hotspots
-  Iteration 1930: 1 Hotspots
-  Iteration 1940: 1 Hotspots
-  Iteration 1950: 1 Hotspots
-  Iteration 1960: 1 Hotspots
-  Iteration 1970: 1 Hotspots
-  Iteration 1980: 1 Hotspots
-  Iteration 1990: 1 Hotspots
-  Iteration 2000: 1 Hotspots
-  Iteration 2010: 1 Hotspots
-  Iteration 2020: 1 Hotspots
-  Iteration 2030: 1 Hotspots
-  Iteration 2040: 1 Hotspots
-  Iteration 2050: 1 Hotspots
-  Iteration 2060: 1 Hotspots
-  Iteration 2070: 1 Hotspots
-  Iteration 2080: 1 Hotspots
-  Iteration 2090: 1 Hotspots
-  Iteration 2100: 1 Hotspots
-  Iteration 2110: 1 Hotspots
-  Iteration 2120: 1 Hotspots
-  Iteration 2130: 1 Hotspots
-  Iteration 2140: 1 Hotspots
-  Iteration 2150: 1 Hotspots
-  Iteration 2160: 1 Hotspots
-  Iteration 2170: 1 Hotspots
-  Iteration 2180: 1 Hotspots
-  Iteration 2190: 1 Hotspots
-  Iteration 2200: 1 Hotspots
-  Iteration 2210: 1 Hotspots
-  Iteration 2220: 1 Hotspots
-  Iteration 2230: 1 Hotspots
-  Iteration 2240: 1 Hotspots
-  Iteration 2250: 1 Hotspots
-  Iteration 2260: 1 Hotspots
-  Iteration 2270: 1 Hotspots
-  Iteration 2280: 1 Hotspots
-  Iteration 2290: 1 Hotspots
-  Iteration 2300: 1 Hotspots
-  Iteration 2310: 1 Hotspots
-  Iteration 2320: 1 Hotspots
-  Iteration 2330: 1 Hotspots
-  Iteration 2340: 1 Hotspots
-  Iteration 2350: 1 Hotspots
-  Iteration 2360: 1 Hotspots
-  Iteration 2370: 1 Hotspots
-  Iteration 2380: 1 Hotspots
-  Iteration 2390: 1 Hotspots
-  Iteration 2400: 1 Hotspots
-  Iteration 2410: 1 Hotspots
-  Iteration 2420: 1 Hotspots
-  Iteration 2430: 1 Hotspots
-  Iteration 2440: 1 Hotspots
-  Iteration 2450: 1 Hotspots
-  Iteration 2460: 1 Hotspots
-  Iteration 2470: 1 Hotspots
-  Iteration 2480: 1 Hotspots
-  Iteration 2490: 1 Hotspots
-  Iteration 2500: 1 Hotspots
-  Iteration 2510: 1 Hotspots
-  Iteration 2520: 1 Hotspots
-  Iteration 2530: 1 Hotspots
-  Iteration 2540: 1 Hotspots
-  Iteration 2550: 1 Hotspots
-  Iteration 2560: 1 Hotspots
-  Iteration 2570: 1 Hotspots
-  Iteration 2580: 1 Hotspots
-  Iteration 2590: 1 Hotspots
-  Iteration 2600: 1 Hotspots
-  Iteration 2610: 1 Hotspots
-  Iteration 2620: 1 Hotspots
-  Iteration 2630: 1 Hotspots
-  Iteration 2640: 1 Hotspots
-  Iteration 2650: 1 Hotspots
-  Iteration 2660: 1 Hotspots
-  Iteration 2670: 1 Hotspots
-  Iteration 2680: 1 Hotspots
-  Iteration 2690: 1 Hotspots
-  Iteration 2700: 1 Hotspots
-  Iteration 2710: 1 Hotspots
-  Iteration 2720: 1 Hotspots
-  Iteration 2730: 1 Hotspots
-  Iteration 2740: 1 Hotspots
-  Iteration 2750: 1 Hotspots
-  Iteration 2760: 1 Hotspots
-  Iteration 2770: 1 Hotspots
-  Iteration 2780: 1 Hotspots
-  Iteration 2790: 1 Hotspots
-  Iteration 2800: 1 Hotspots
-  Iteration 2810: 1 Hotspots
-  Iteration 2820: 1 Hotspots
-  Iteration 2830: 1 Hotspots
-  Iteration 2840: 1 Hotspots
-  Iteration 2850: 1 Hotspots
-  Iteration 2860: 1 Hotspots
-  Iteration 2870: 1 Hotspots
-  Iteration 2880: 1 Hotspots
-  Iteration 2890: 1 Hotspots
-  Iteration 2900: 1 Hotspots
-  Iteration 2910: 1 Hotspots
-  Iteration 2920: 1 Hotspots
-  Iteration 2930: 1 Hotspots
-  Iteration 2940: 1 Hotspots
-  Iteration 2950: 1 Hotspots
-  Iteration 2960: 1 Hotspots
-  Iteration 2970: 1 Hotspots
-  Iteration 2980: 1 Hotspots
-  Iteration 2990: 1 Hotspots
-  Iteration 3000: 1 Hotspots
-  Iteration 3010: 1 Hotspots
-  Iteration 3020: 1 Hotspots
-  Iteration 3030: 1 Hotspots
-  Iteration 3040: 1 Hotspots
-  Iteration 3050: 1 Hotspots
-  Iteration 3060: 1 Hotspots
-  Iteration 3070: 1 Hotspots
-  Iteration 3080: 1 Hotspots
-  Iteration 3090: 1 Hotspots
-  Iteration 3100: 1 Hotspots
-  Iteration 3110: 1 Hotspots
-  Iteration 3120: 1 Hotspots
-  Iteration 3130: 1 Hotspots
-  Iteration 3140: 1 Hotspots
-  Iteration 3150: 1 Hotspots
-  Iteration 3160: 1 Hotspots
-  Iteration 3170: 1 Hotspots
-  Iteration 3180: 1 Hotspots
-  Iteration 3190: 1 Hotspots
-  Iteration 3200: 1 Hotspots
-  Iteration 3210: 1 Hotspots
-  Iteration 3220: 1 Hotspots
-  Iteration 3230: 1 Hotspots
-  Iteration 3240: 1 Hotspots
-  Iteration 3250: 1 Hotspots
-  Iteration 3260: 1 Hotspots
-  Iteration 3270: 1 Hotspots
-  Iteration 3280: 1 Hotspots
-  Iteration 3290: 1 Hotspots
-  Iteration 3300: 1 Hotspots
-  Iteration 3310: 1 Hotspots
-  Iteration 3320: 1 Hotspots
-  Iteration 3330: 1 Hotspots
-  Iteration 3340: 1 Hotspots
-  Iteration 3350: 1 Hotspots
-  Iteration 3360: 1 Hotspots
-  Iteration 3370: 1 Hotspots
-  Iteration 3380: 1 Hotspots
-  Iteration 3390: 1 Hotspots
-  Iteration 3400: 1 Hotspots
-  Iteration 3410: 1 Hotspots
-  Iteration 3420: 1 Hotspots
-  Iteration 3430: 1 Hotspots
-  Iteration 3440: 1 Hotspots
-  Iteration 3450: 1 Hotspots
-  Iteration 3460: 1 Hotspots
-  Iteration 3470: 1 Hotspots
-  Iteration 3480: 1 Hotspots
-  Iteration 3490: 1 Hotspots
-  Iteration 3500: 1 Hotspots
-  Iteration 3510: 1 Hotspots
-  Iteration 3520: 1 Hotspots
-  Iteration 3530: 1 Hotspots
-  Iteration 3540: 1 Hotspots
-  Iteration 3550: 1 Hotspots
-  Iteration 3560: 1 Hotspots
-  Iteration 3570: 1 Hotspots
-  Iteration 3580: 1 Hotspots
-  Iteration 3590: 1 Hotspots
-  Iteration 3600: 1 Hotspots
-  Iteration 3610: 1 Hotspots
-  Iteration 3620: 1 Hotspots
-  Iteration 3630: 1 Hotspots
-  Iteration 3640: 1 Hotspots
-  Iteration 3650: 1 Hotspots
-  Iteration 3660: 1 Hotspots
-  Iteration 3670: 1 Hotspots
-  Iteration 3680: 1 Hotspots
-  Iteration 3690: 1 Hotspots
-  Iteration 3700: 1 Hotspots
-  Iteration 3710: 1 Hotspots
-  Iteration 3720: 1 Hotspots
-  Iteration 3730: 1 Hotspots
-  Iteration 3740: 1 Hotspots
-  Iteration 3750: 1 Hotspots
-  Iteration 3760: 1 Hotspots
-  Iteration 3770: 1 Hotspots
-  Iteration 3780: 1 Hotspots
-  Iteration 3790: 1 Hotspots
-  Iteration 3800: 1 Hotspots
-  Iteration 3810: 1 Hotspots
-  Iteration 3820: 1 Hotspots
-  Iteration 3830: 1 Hotspots
-  Iteration 3840: 1 Hotspots
-  Iteration 3850: 1 Hotspots
-  Iteration 3860: 1 Hotspots
-  Iteration 3870: 1 Hotspots
-  Iteration 3880: 1 Hotspots
-  Iteration 3890: 1 Hotspots
-  Iteration 3900: 1 Hotspots
-  Iteration 3910: 1 Hotspots
-  Iteration 3920: 1 Hotspots
-  Iteration 3930: 1 Hotspots
-  Iteration 3940: 1 Hotspots
-  Iteration 3950: 1 Hotspots
-  Iteration 3960: 1 Hotspots
-  Iteration 3970: 1 Hotspots
-  Iteration 3980: 1 Hotspots
-  Iteration 3990: 1 Hotspots
-  Iteration 4000: 1 Hotspots
-  Iteration 4010: 1 Hotspots
-  Iteration 4020: 1 Hotspots
-  Iteration 4030: 1 Hotspots
-  Iteration 4040: 1 Hotspots
-  Iteration 4050: 1 Hotspots
-  Iteration 4060: 1 Hotspots
-  Iteration 4070: 1 Hotspots
-  Iteration 4080: 1 Hotspots
-  Iteration 4090: 1 Hotspots
-  Iteration 4100: 1 Hotspots
-  Iteration 4110: 1 Hotspots
-  Iteration 4120: 1 Hotspots
-  Iteration 4130: 1 Hotspots
-  Iteration 4140: 1 Hotspots
-  Iteration 4150: 1 Hotspots
-  Iteration 4160: 1 Hotspots
-  Iteration 4170: 1 Hotspots
-  Iteration 4180: 1 Hotspots
-  Iteration 4190: 1 Hotspots
-  Iteration 4200: 1 Hotspots
-  Iteration 4210: 1 Hotspots
-  Iteration 4220: 1 Hotspots
-  Iteration 4230: 1 Hotspots
-  Iteration 4240: 1 Hotspots
-  Iteration 4250: 1 Hotspots
-  Iteration 4260: 1 Hotspots
-  Iteration 4270: 1 Hotspots
-  Iteration 4280: 1 Hotspots
-  Iteration 4290: 1 Hotspots
-  Iteration 4300: 1 Hotspots
-  Iteration 4310: 1 Hotspots
-  Iteration 4320: 1 Hotspots
-  Iteration 4330: 1 Hotspots
-  Iteration 4340: 1 Hotspots
-  Iteration 4350: 1 Hotspots
-  Iteration 4360: 1 Hotspots
-  Iteration 4370: 1 Hotspots
-  Iteration 4380: 1 Hotspots
-  Iteration 4390: 1 Hotspots
-  Iteration 4400: 1 Hotspots
-  Iteration 4410: 1 Hotspots
-  Iteration 4420: 1 Hotspots
-  Iteration 4430: 1 Hotspots
-  Iteration 4440: 1 Hotspots
-  Iteration 4450: 1 Hotspots
-  Iteration 4460: 1 Hotspots
-  Iteration 4470: 1 Hotspots
-  Iteration 4480: 1 Hotspots
-  Iteration 4490: 1 Hotspots
-  Iteration 4500: 1 Hotspots
-  Iteration 4510: 1 Hotspots
-  Iteration 4520: 1 Hotspots
-  Iteration 4530: 1 Hotspots
-  Iteration 4540: 1 Hotspots
-  Iteration 4550: 1 Hotspots
-  Iteration 4560: 1 Hotspots
-  Iteration 4570: 1 Hotspots
-  Iteration 4580: 1 Hotspots
-  Iteration 4590: 1 Hotspots
-  Iteration 4600: 1 Hotspots
-  Iteration 4610: 1 Hotspots
-  Iteration 4620: 1 Hotspots
-  Iteration 4630: 1 Hotspots
-  Iteration 4640: 1 Hotspots
-  Iteration 4650: 1 Hotspots
-  Iteration 4660: 1 Hotspots
-  Iteration 4670: 1 Hotspots
-  Iteration 4680: 1 Hotspots
-  Iteration 4690: 1 Hotspots
-  Iteration 4700: 1 Hotspots
-  Iteration 4710: 1 Hotspots
-  Iteration 4720: 1 Hotspots
-  Iteration 4730: 1 Hotspots
-  Iteration 4740: 1 Hotspots
-  Iteration 4750: 1 Hotspots
-  Iteration 4760: 1 Hotspots
-  Iteration 4770: 1 Hotspots
-  Iteration 4780: 1 Hotspots
-  Iteration 4790: 1 Hotspots
-  Iteration 4800: 1 Hotspots
-  Iteration 4810: 1 Hotspots
-  Iteration 4820: 1 Hotspots
-  Iteration 4830: 1 Hotspots
-  Iteration 4840: 1 Hotspots
-  Iteration 4850: 1 Hotspots
-  Iteration 4860: 1 Hotspots
-  Iteration 4870: 1 Hotspots
-  Iteration 4880: 1 Hotspots
-  Iteration 4890: 1 Hotspots
-  Iteration 4900: 1 Hotspots
-  Iteration 4910: 1 Hotspots
-  Iteration 4920: 1 Hotspots
-  Iteration 4930: 1 Hotspots
-  Iteration 4940: 1 Hotspots
-  Iteration 4950: 1 Hotspots
-  Iteration 4960: 1 Hotspots
-  Iteration 4970: 1 Hotspots
-  Iteration 4980: 1 Hotspots
-  Iteration 4990: 1 Hotspots
+Geplante Läufe: 5
+Seeds: [12345, 67890, 11111, 22222, 33333]
+
+--- Lauf mit Seed: 12345 ---
+  Starte: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/iwt --seed 12345
+  Simulation beendet (RC=0)
+
+  Analysiere Lauf 1...
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_001_mass.gif
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_001_charge.gif
+  Lauf 1 abgeschlossen.
+
+--- Lauf mit Seed: 67890 ---
+  Starte: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/iwt --seed 67890
+  Simulation beendet (RC=0)
+
+  Analysiere Lauf 2...
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_002_mass.gif
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_002_charge.gif
+  Lauf 2 abgeschlossen.
+
+--- Lauf mit Seed: 11111 ---
+  Starte: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/iwt --seed 11111
+  Simulation beendet (RC=0)
+
+  Analysiere Lauf 3...
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_003_mass.gif
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_003_charge.gif
+  Lauf 3 abgeschlossen.
+
+--- Lauf mit Seed: 22222 ---
+  Starte: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/iwt --seed 22222
+  Simulation beendet (RC=0)
+
+  Analysiere Lauf 4...
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_004_mass.gif
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_004_charge.gif
+  Lauf 4 abgeschlossen.
+
+--- Lauf mit Seed: 33333 ---
+  Starte: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/iwt --seed 33333
+  Simulation beendet (RC=0)
+
+  Analysiere Lauf 5...
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_005_mass.gif
+  GIF gespeichert: /home/czymic/Dokumente/daten/sandbox/apps/iwt/build/bin/lauf_005_charge.gif
+  Lauf 5 abgeschlossen.
 
 ======================================================================
-Statistik:
-  Anzahl Bilder: 500
-  Iterationen: 0 - 4990
-  Hotspots pro Bild: 1.48 (±1.76)
+ALLE LÄUFE ABGESCHLOSSEN
+======================================================================
 
-Bewegung der Hotspots (Änderung der Position pro Iteration):
-  Mittlere Bewegung pro Iteration: 2.45 Pixel
-  Std der Bewegung: 7.07 Pixel
-  Bewegungstrend: -0.0231 Pixel/Iteration (positiv = driftet auseinander)
-
-Hotspot-Kontinuität (Verfolgung über 10 Iterationen):
-  Hotspots in ersten 10 Bildern: 59
-  Hotspots in letzten 10 Bildern: 1
-  Überlappung: 1
-  Stabilität (Überlappung / erste 10): 1.7%
+Erstellte GIFs:
+  lauf_001_charge.gif
+  lauf_001_mass.gif
+  lauf_002_charge.gif
+  lauf_002_mass.gif
+  lauf_003_charge.gif
+  lauf_003_mass.gif
+  lauf_004_charge.gif
+  lauf_004_mass.gif
+  lauf_005_charge.gif
+  lauf_005_mass.gif

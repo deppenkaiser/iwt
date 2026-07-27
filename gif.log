@@ -1,0 +1,153 @@
+GIF-Analyse
+======================================================================
+Gefundene GIFs: 10
+
+=== lauf_001_charge.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 1.98
+  Std: 17.07
+  Hotspots pro Frame (Mittelwert): 372.52
+  Hotspots pro Frame (Std): 23.48
+  Hotspots pro Frame (Min): 20
+  Hotspots pro Frame (Max): 451
+  Überlappung (erster ↔ letzter Frame): 4
+  Mittlere Bewegung pro Frame: 0.93 Pixel
+  Std der Bewegung: 0.57 Pixel
+
+=== lauf_001_mass.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 0.63
+  Std: 5.98
+  Hotspots pro Frame (Mittelwert): 3.69
+  Hotspots pro Frame (Std): 2.99
+  Hotspots pro Frame (Min): 1
+  Hotspots pro Frame (Max): 32
+  Überlappung (erster ↔ letzter Frame): 0
+  Mittlere Bewegung pro Frame: 16.39 Pixel
+  Std der Bewegung: 10.84 Pixel
+
+=== lauf_002_charge.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 1.99
+  Std: 17.10
+  Hotspots pro Frame (Mittelwert): 376.47
+  Hotspots pro Frame (Std): 25.95
+  Hotspots pro Frame (Min): 23
+  Hotspots pro Frame (Max): 430
+  Überlappung (erster ↔ letzter Frame): 0
+  Mittlere Bewegung pro Frame: 0.99 Pixel
+  Std der Bewegung: 0.59 Pixel
+
+=== lauf_002_mass.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 0.31
+  Std: 3.23
+  Hotspots pro Frame (Mittelwert): 1.43
+  Hotspots pro Frame (Std): 1.36
+  Hotspots pro Frame (Min): 1
+  Hotspots pro Frame (Max): 12
+  Überlappung (erster ↔ letzter Frame): 0
+  Mittlere Bewegung pro Frame: 4.02 Pixel
+  Std der Bewegung: 9.57 Pixel
+
+=== lauf_003_charge.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 1.98
+  Std: 17.13
+  Hotspots pro Frame (Mittelwert): 409.60
+  Hotspots pro Frame (Std): 25.74
+  Hotspots pro Frame (Min): 27
+  Hotspots pro Frame (Max): 485
+  Überlappung (erster ↔ letzter Frame): 2
+  Mittlere Bewegung pro Frame: 0.93 Pixel
+  Std der Bewegung: 0.57 Pixel
+
+=== lauf_003_mass.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 0.62
+  Std: 5.84
+  Hotspots pro Frame (Mittelwert): 3.62
+  Hotspots pro Frame (Std): 2.63
+  Hotspots pro Frame (Min): 1
+  Hotspots pro Frame (Max): 20
+  Überlappung (erster ↔ letzter Frame): 0
+  Mittlere Bewegung pro Frame: 15.82 Pixel
+  Std der Bewegung: 9.38 Pixel
+
+=== lauf_004_charge.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 1.99
+  Std: 17.07
+  Hotspots pro Frame (Mittelwert): 392.40
+  Hotspots pro Frame (Std): 24.76
+  Hotspots pro Frame (Min): 22
+  Hotspots pro Frame (Max): 460
+  Überlappung (erster ↔ letzter Frame): 1
+  Mittlere Bewegung pro Frame: 0.94 Pixel
+  Std der Bewegung: 0.53 Pixel
+
+=== lauf_004_mass.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 0.54
+  Std: 5.20
+  Hotspots pro Frame (Mittelwert): 4.01
+  Hotspots pro Frame (Std): 2.65
+  Hotspots pro Frame (Min): 1
+  Hotspots pro Frame (Max): 17
+  Überlappung (erster ↔ letzter Frame): 0
+  Mittlere Bewegung pro Frame: 15.60 Pixel
+  Std der Bewegung: 9.98 Pixel
+
+=== lauf_005_charge.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 1.98
+  Std: 17.02
+  Hotspots pro Frame (Mittelwert): 371.25
+  Hotspots pro Frame (Std): 23.80
+  Hotspots pro Frame (Min): 18
+  Hotspots pro Frame (Max): 429
+  Überlappung (erster ↔ letzter Frame): 1
+  Mittlere Bewegung pro Frame: 0.94 Pixel
+  Std der Bewegung: 0.54 Pixel
+
+=== lauf_005_mass.gif ===
+  Frames: 500
+  Größe: (512, 512)
+  Min: 0
+  Max: 255
+  Mittelwert: 0.59
+  Std: 5.60
+  Hotspots pro Frame (Mittelwert): 3.51
+  Hotspots pro Frame (Std): 2.76
+  Hotspots pro Frame (Min): 1
+  Hotspots pro Frame (Max): 20
+  Überlappung (erster ↔ letzter Frame): 0
+  Mittlere Bewegung pro Frame: 17.34 Pixel
+  Std der Bewegung: 11.22 Pixel

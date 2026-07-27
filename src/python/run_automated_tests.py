@@ -49,17 +49,15 @@ def create_gif_from_pattern(pattern, output_filename, duration=0.1):
     return True
 
 def run_simulation(seed):
-    """Führt die Simulation mit einem bestimmten Seed aus."""
     print(f"\n--- Lauf mit Seed: {seed} ---")
     
-    # Alte Heatmaps löschen (nur für diesen Lauf)
     for f in glob.glob(os.path.join(BIN_DIR, "heatmap_*.pgm")):
         os.remove(f)
     
-    # Simulation starten
-    cmd = [EXECUTABLE, "--seed", str(seed), "--no-fluctuations"]
-    # Hinweis: --no-fluctuations ist optional – wenn Du Fluktuationen behalten willst, lösche es
-    # cmd = [EXECUTABLE, "--seed", str(seed)]
+    # ============================================================
+    # KORREKT: OHNE --no-fluctuations
+    # ============================================================
+    cmd = [EXECUTABLE, "--seed", str(seed)]
     
     print(f"  Starte: {' '.join(cmd)}")
     result = subprocess.run(cmd, cwd=BIN_DIR, capture_output=True, text=True)
@@ -73,10 +71,8 @@ def run_simulation(seed):
     return True
 
 def analyze_and_create_gifs(run_number):
-    """Analysiert die Heatmaps und erstellt GIFs für einen Lauf."""
     print(f"\n  Analysiere Lauf {run_number}...")
     
-    # GIFs erstellen
     mass_gif = f"lauf_{run_number:03d}_mass.gif"
     charge_gif = f"lauf_{run_number:03d}_charge.gif"
     
@@ -90,15 +86,12 @@ def main():
     print("AUTOMATISIERTE TESTS MIT VERSCHIEDENEN SEEDS")
     print("=" * 70)
     
-    # Prüfen, ob die ausführbare Datei existiert
     if not os.path.exists(EXECUTABLE):
         print(f"FEHLER: Ausführbare Datei nicht gefunden: {EXECUTABLE}")
         print("Bitte zuerst 'make' in build/ ausführen.")
         return
     
-    # Seeds für die Tests
     seeds = [12345, 67890, 11111, 22222, 33333]
-    # seeds = [42, 43, 44]  # alternative kleine Seeds
     
     print(f"\nGeplante Läufe: {len(seeds)}")
     print(f"Seeds: {seeds}")
@@ -111,13 +104,12 @@ def main():
             continue
         
         print(f"  Lauf {idx} abgeschlossen.")
-        time.sleep(0.5)  # Kurze Pause zwischen den Läufen
+        time.sleep(0.5)
     
     print("\n" + "=" * 70)
     print("ALLE LÄUFE ABGESCHLOSSEN")
     print("=" * 70)
     
-    # Auflistung der erstellten GIFs
     gifs = sorted(glob.glob(os.path.join(BIN_DIR, "lauf_*.gif")))
     if gifs:
         print("\nErstellte GIFs:")
@@ -128,4 +120,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

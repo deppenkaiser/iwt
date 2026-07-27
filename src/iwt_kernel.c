@@ -317,6 +317,50 @@ private bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t 
     return retval;
 }
 
+private bool run_apply_boundary_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+    bool retval = false;
+    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_BOUNDARY_DAMPING);
+    
+    if (kernel != NULL)
+    {
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
+        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
+            cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
+
+        int N = (int)cfg->N;
+        double damping_factor = 0.99;  // 1% Energieabgabe pro Iteration am Rand
+        int boundary_width = 2;        // Anzahl der Randknoten (beidseitig)
+
+        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
+        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
+        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
+        clSetKernelArg(kernel, 3, sizeof(int), &N);
+        clSetKernelArg(kernel, 4, sizeof(double), &damping_factor);
+        clSetKernelArg(kernel, 5, sizeof(int), &boundary_width);
+
+        size_t global = cfg->N;
+        size_t local = 64;
+        if (local > global) local = global;
+
+        if (ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
+        {
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
+            retval = true;
+        }
+    }
+    
+    return retval;
+}
+
 bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
@@ -386,7 +430,12 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (!run_update_info(rt, cfg)) break;
 
         // ============================================================
-        // 6. MASSE UND LADUNG BERECHNEN
+        // 6. RAND-DÄMPFUNG (ROTVERSCHIEBUNG)
+        // ============================================================
+        if (!run_apply_boundary_damping(rt, cfg)) break;
+
+        // ============================================================
+        // 7. MASSE UND LADUNG BERECHNEN
         // ============================================================
         if (!run_compute_mass_charge(rt, cfg)) break;
 
