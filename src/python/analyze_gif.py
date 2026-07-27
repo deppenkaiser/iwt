@@ -80,7 +80,8 @@ def main():
     print("GIF-Analyse")
     print("=" * 70)
 
-    gifs = sorted(glob.glob(os.path.join(BIN_DIR, "lauf_*.gif")))
+    # Alle GIFs im Verzeichnis suchen
+    gifs = sorted(glob.glob(os.path.join(BIN_DIR, "*.gif")))
     if not gifs:
         print("Keine GIFs gefunden in:", BIN_DIR)
         return
