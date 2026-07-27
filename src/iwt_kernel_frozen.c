@@ -26,7 +26,7 @@
 
 #define RHO_0 1e-6
 #define RHO_MIN 1e-8
-#define ALPHA_0 1e-6
+#define ALPHA_0 1e-2
 #define ALPHA_MIN 1e-9
 #define SCALE 0.70710678
 
