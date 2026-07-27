@@ -53,6 +53,10 @@ static double compute_mass(const iwt_runtime_t rt, size_t k, size_t N)
 // BOHM-POTENTIAL (Strukturbildung)
 // ============================================================================
 
+// ============================================================================
+// run_q_calculation - BOHM-POTENTIAL MIT NEUTRINO-HINTERGRUND
+// ============================================================================
+
 bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_Q);
@@ -64,7 +68,9 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     }
 
     if (sum_abs_sq < 1e-30) {
-        for (size_t i = 0; i < cfg->N; i++) rt->Q[i] = 0.0;
+        for (size_t i = 0; i < cfg->N; i++) {
+            rt->Q[i] = 1e-6;  // Neutrino-Hintergrund (auch im Vakuum)
+        }
         return true;
     }
 
@@ -72,6 +78,8 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     double hbar = 1.0;
     double m = 1.0;
     double prefactor = -(hbar * hbar) / (2.0 * m);
+    double epsilon = 1e-6;      // Regularisierung
+    double Q_min = 1e-6;        // Neutrino-Hintergrund (Q ist niemals Null)
 
     clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
     clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
@@ -79,6 +87,8 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     clSetKernelArg(kernel, 3, sizeof(int), &N);
     clSetKernelArg(kernel, 4, sizeof(double), &sum_abs_sq);
     clSetKernelArg(kernel, 5, sizeof(double), &prefactor);
+    clSetKernelArg(kernel, 6, sizeof(double), &epsilon);
+    clSetKernelArg(kernel, 7, sizeof(double), &Q_min);
 
     size_t global = cfg->N;
     size_t local = 64;
@@ -90,8 +100,11 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
         0, cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
 
     for (size_t i = 0; i < cfg->N; i++) {
-        if (isnan(rt->Q[i]) || isinf(rt->Q[i])) rt->Q[i] = 0.0;
+        if (isnan(rt->Q[i]) || isinf(rt->Q[i])) {
+            rt->Q[i] = Q_min;  // Neutrino-Hintergrund bei Fehlern
+        }
     }
+
     return true;
 }
 
