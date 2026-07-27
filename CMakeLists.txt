@@ -19,6 +19,7 @@ add_subdirectory(../../libraries/string ${CMAKE_BINARY_DIR}/string)
 target_sources(iwt PRIVATE
 	src/main.c
 	src/iwt_kernel.c
+	src/iwt_kernel_frozen.c
 	src/iwt.c
 	src/init.c
 )

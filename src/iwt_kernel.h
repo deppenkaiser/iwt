@@ -1,23 +1,52 @@
+// ============================================================================
+// iwt_kernel.h - IWT Kernel-Funktionen (Entwicklungsversion)
+// ============================================================================
+//
+// Enthält:
+//   - Bohm-Potential
+//   - Fluss (Weber-Kern)
+//   - Kontinuität
+//   - Masse & Ladung
+//   - Hauptsimulation
+//
+// Die eingefrorenen Funktionen werden aus iwt_kernel_frozen.h importiert.
+//
+// ============================================================================
+
 #ifndef IWT_KERNEL_H
 #define IWT_KERNEL_H
 
 #include <stdbool.h>
 #include "iwt.h"
 
-bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg);
+// ============================================================================
+// BOHM-POTENTIAL (Strukturbildung)
+// ============================================================================
 
-// Fluktuationen (Anhang P)
-bool generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg);
-bool upload_uncertainty_to_gpu(const iwt_runtime_t rt, const iwt_config_t cfg);
-bool run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cfg);
-
-// Kern-Funktionen
-bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg);
 bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg);
+
+// ============================================================================
+// FLUSS (Transport)
+// ============================================================================
+
+bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg);
+
+// ============================================================================
+// KONTINUITÄT (Erhaltung)
+// ============================================================================
+
 bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg);
+
+// ============================================================================
+// MASSE UND LADUNG
+// ============================================================================
+
 bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg);
 
-// Rotverschiebung als Energiesenke (Anhang Q)
-bool run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_t cfg);
+// ============================================================================
+// HAUPTSIMULATION
+// ============================================================================
 
-#endif
+bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg);
+
+#endif // IWT_KERNEL_H
