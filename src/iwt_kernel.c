@@ -317,10 +317,13 @@ private bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t 
     return retval;
 }
 
-private bool run_apply_boundary_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
+// Die Host-Funktion run_apply_redshift_damping() in iwt_kernel.c
+// ruft den Kernel auf und kopiert die Daten.
+
+private bool run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
-    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_BOUNDARY_DAMPING);
+    cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_REDSHIFT_DAMPING);
     
     if (kernel != NULL)
     {
@@ -328,30 +331,18 @@ private bool run_apply_boundary_damping(const iwt_runtime_t rt, const iwt_config
             cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
         clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
             cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-        clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
-            cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
         int N = (int)cfg->N;
-        double boundary_width = 2;  // Anzahl der Randknoten
-
-        // ============================================================
-        // THEORIEKONFORME DÄMPFUNG (Anhang Q)
-        // ============================================================
-        // alpha_sim = 1 - (2*pi*c / (omega * L_Q,0))^(3-D)
-        // Mit den theoretischen Werten ergibt sich:
-        // alpha_sim ≈ 0.99999999999999999
-        // 
-        // In der Simulation bedeutet das: Jeder Randknoten verliert
-        // nahezu seine gesamte Amplitude pro Iteration.
-        // ============================================================
-        double damping_factor = 1.0 - 1e-16;  // Theoriekonform: ~100% Dämpfung
+        double G = 1.0;
+        double c = 1.0;
+        double l0 = cfg->l0;
 
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
         clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
-        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
-        clSetKernelArg(kernel, 3, sizeof(int), &N);
-        clSetKernelArg(kernel, 4, sizeof(double), &damping_factor);
-        clSetKernelArg(kernel, 5, sizeof(int), &boundary_width);
+        clSetKernelArg(kernel, 2, sizeof(int), &N);
+        clSetKernelArg(kernel, 3, sizeof(double), &G);
+        clSetKernelArg(kernel, 4, sizeof(double), &c);
+        clSetKernelArg(kernel, 5, sizeof(double), &l0);
 
         size_t global = cfg->N;
         size_t local = 64;
@@ -363,8 +354,6 @@ private bool run_apply_boundary_damping(const iwt_runtime_t rt, const iwt_config
                 0, cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
             clEnqueueReadBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE,
                 0, cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-            clEnqueueReadBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE,
-                0, cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
             retval = true;
         }
     }
@@ -441,9 +430,9 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         if (!run_update_info(rt, cfg)) break;
 
         // ============================================================
-        // 6. RAND-DÄMPFUNG (ROTVERSCHIEBUNG)
+        // 6. KUMULATIVE ROTVERSCHIEBUNG (auf allen Knoten)
         // ============================================================
-        if (!run_apply_boundary_damping(rt, cfg)) break;
+        if (!run_apply_redshift_damping(rt, cfg)) break;
 
         // ============================================================
         // 7. MASSE UND LADUNG BERECHNEN
