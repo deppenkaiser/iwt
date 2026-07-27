@@ -10,13 +10,19 @@
 #include "iwt.h"
 
 // ============================================================================
-// KONSTANTEN (aus der Theorie)
+// KONSTANTEN
 // ============================================================================
 
-#define ALPHA 1.0      // Kopplung Amplitudenenergie
-#define BETA 1.0       // Kopplung Phasenenergie
-#define DELTA 1.0      // Kopplung Masse
-#define GAMMA 1.0      // Kopplung Ladung
+#define ALPHA 1.0
+#define BETA 1.0
+#define DELTA 1.0
+#define GAMMA 1.0
+
+#define RHO_0 1e-6
+#define RHO_MIN 1e-8
+#define ALPHA_0 1e-6
+#define ALPHA_MIN 1e-9
+#define SCALE 0.70710678
 
 // ============================================================================
 // HILFSFUNKTIONEN
@@ -85,21 +91,21 @@ static bool is_boundary_node(size_t k, size_t N)
 static double box_muller(unsigned int* seed)
 {
     double u1, u2;
-    do
-	{
+    do {
         u1 = (double)rand_r(seed) / (double)RAND_MAX;
         u2 = (double)rand_r(seed) / (double)RAND_MAX;
     } while (u1 < 1e-30 || u2 < 1e-30);
-    
     return sqrt(-2.0 * log(u1)) * cos(2.0 * iwt_pi() * u2);
 }
 
+// ============================================================================
+// FLUKTUATIONEN ALS DIFFUSION (Energieerhaltend)
+// ============================================================================
+
 bool generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-    if (!cfg->enable_fluctuations)
-	{
-        for (size_t i = 0; i < cfg->N; i++)
-		{
+    if (!cfg->enable_fluctuations) {
+        for (size_t i = 0; i < cfg->N; i++) {
             rt->xi_real[i] = 0.0;
             rt->xi_imag[i] = 0.0;
             rt->uncertainty[i] = 0.0;
@@ -107,38 +113,25 @@ bool generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
         return true;
     }
 
-    double scale = cfg->uncertainty_scale;
+    double scale = SCALE;
     unsigned int seed = cfg->seed;
 
-    double* raw_real = malloc(cfg->N * sizeof(double));
-    double* raw_imag = malloc(cfg->N * sizeof(double));
-    if (!raw_real || !raw_imag) return false;
-
     for (size_t i = 0; i < cfg->N; i++)
-	{
-        raw_real[i] = box_muller(&seed);
-        raw_imag[i] = box_muller(&seed);
-    }
+    {
+        double rho_i = rt->I_real[i] * rt->I_real[i] + 
+                       rt->I_imag[i] * rt->I_imag[i] + 1e-30;
 
-    // Mittelwert abziehen (energieneutral)
-    double mean_real = 0.0, mean_imag = 0.0;
-    for (size_t i = 0; i < cfg->N; i++)
-	{
-        mean_real += raw_real[i];
-        mean_imag += raw_imag[i];
-    }
-    mean_real /= cfg->N;
-    mean_imag /= cfg->N;
+        // Fluktuation im Vakuum, nicht in Strukturen
+        double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
 
-    for (size_t i = 0; i < cfg->N; i++)
-	{
-        rt->xi_real[i] = scale * (raw_real[i] - mean_real);
-        rt->xi_imag[i] = scale * (raw_imag[i] - mean_imag);
+        double delta = box_muller(&seed) * fluct_strength;
+
+        // Fluktuation unabhängig von der Amplitude
+        rt->xi_real[i] = delta;
+        rt->xi_imag[i] = delta;
         rt->uncertainty[i] = 0.0;
     }
 
-    free(raw_real);
-    free(raw_imag);
     return true;
 }
 
@@ -162,21 +155,18 @@ bool run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cfg)
         cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
     clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
         cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-    clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
-        cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
     if (!upload_uncertainty_to_gpu(rt, cfg)) return false;
 
     int N = (int)cfg->N;
-    int enable_fluctuations = cfg->enable_fluctuations ? 1 : 0;
+    int enable = cfg->enable_fluctuations ? 1 : 0;
 
     clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
     clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
-    clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
-    clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->xi_real_gpu);
-    clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->xi_imag_gpu);
-    clSetKernelArg(kernel, 5, sizeof(int), &N);
-    clSetKernelArg(kernel, 6, sizeof(int), &enable_fluctuations);
+    clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->xi_real_gpu);
+    clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->xi_imag_gpu);
+    clSetKernelArg(kernel, 4, sizeof(int), &N);
+    clSetKernelArg(kernel, 5, sizeof(int), &enable);
 
     size_t global = cfg->N;
     size_t local = 64;
@@ -188,8 +178,6 @@ bool run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cfg)
         0, cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
     clEnqueueReadBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE,
         0, cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-    clEnqueueReadBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE,
-        0, cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
     return true;
 }
@@ -365,82 +353,22 @@ bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 bool run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-    // ============================================================
-    // PARAMETER AUS DER THEORIE (Anhang Q)
-    // ============================================================
-    
-    double l0 = cfg->l0;
-    double D = cfg->D;
-    double L_Q0 = 2.0e46;      // Korrelationslänge des Q-Feldes
-    double DT = cfg->DT;
-    
-    // Massenänderungsfaktor (Anhang Q, Gleichung Q.7)
-    double mass_factor = pow(l0 / L_Q0, D - 3.0);
-    
-    // ============================================================
-    // STATISTIK VOR DER TRANSFORMATION
-    // ============================================================
-    
-    double sum_I_sq_before = 0.0;
-    double sum_E_before = 0.0;
-    double sum_mass_before = 0.0;
-    
-    for (size_t i = 0; i < cfg->N; i++)
-	{
-        sum_I_sq_before += rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
-        sum_E_before += compute_energy(rt, i, cfg->N, DT);
-        sum_mass_before += compute_mass(rt, i, cfg->N);
-    }
-    
-    // ============================================================
-    // TRANSFORMATION DER RANDKNOTEN (Energiesenke)
-    // ============================================================
-    
+    double alpha_0 = ALPHA_0;
+    double alpha_min = ALPHA_MIN;
+
     for (size_t i = 0; i < cfg->N; i++)
     {
-        if (!is_boundary_node(i, cfg->N)) continue;
-        
-        // 1. Amplitude bleibt konstant (Informationserhaltung, Axiom 2)
-        double amplitude = sqrt(rt->I_real[i] * rt->I_real[i] + 
-                                rt->I_imag[i] * rt->I_imag[i]);
-        
-        // 2. Phase vor der Transformation
-        double phase_in = rt->I_phase[i];
-        
-        // 3. Masse am Rand (Kapitel 3)
-        double m_in = compute_mass(rt, i, cfg->N);
-        
-        // 4. Massenänderung (Anhang Q, Gleichung Q.7)
-        double m_out = m_in * mass_factor;
-        
-        // 5. Phase wird langsamer (Energiesenke, Anhang Q, Gleichung Q.12)
-        double phase_out = phase_in * (m_in / m_out);
-        
-        // 6. Neue Amplitude (unverändert) und neue Phase
-        rt->I_real[i] = amplitude * cos(phase_out);
-        rt->I_imag[i] = amplitude * sin(phase_out);
-        rt->I_phase[i] = phase_out;
-        
-        // 7. Energieverlust ans Vakuum (implizit durch Phasenänderung)
-        //    Die Energie wird nicht vernichtet, sondern umkodiert.
-        //    Die Differenz E_in - E_out wird an das Vakuum überführt.
+        double rho_i = rt->I_real[i] * rt->I_real[i] + 
+                       rt->I_imag[i] * rt->I_imag[i] + 1e-30;
+
+        double anti_rho = 1.0 / rho_i;
+
+        double alpha = alpha_0 * (anti_rho / (1.0 + anti_rho)) + alpha_min;
+
+        rt->I_real[i] *= (1.0 - alpha);
+        rt->I_imag[i] *= (1.0 - alpha);
     }
-    
-    // ============================================================
-    // STATISTIK NACH DER TRANSFORMATION
-    // ============================================================
-    
-    double sum_I_sq_after = 0.0;
-    double sum_E_after = 0.0;
-    double sum_mass_after = 0.0;
-    
-    for (size_t i = 0; i < cfg->N; i++)
-	{
-        sum_I_sq_after += rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
-        sum_E_after += compute_energy(rt, i, cfg->N, DT);
-        sum_mass_after += compute_mass(rt, i, cfg->N);
-    }
-                
+
     return true;
 }
 
