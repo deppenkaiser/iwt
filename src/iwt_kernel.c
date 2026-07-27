@@ -478,7 +478,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         double deviation = (sum_abs - I_total_ref) / (I_total_ref + 1e-30);
 
         // ============================================================
-        // HEATMAP SPEICHERN (alle 100 Iterationen)
+        // HEATMAP SPEICHERN (alle N Iterationen)
         // ============================================================
         if (iter % 10 == 0)
         {
