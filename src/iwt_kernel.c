@@ -277,33 +277,50 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
+    bool retval = false;
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_UPDATE_INFO);
-    if (!kernel) return false;
+    
+    if (kernel != NULL)
+    {
+        int N = (int)cfg->N;
+        double DT = cfg->DT;
 
-    int N = (int)cfg->N;
-    double DT = cfg->DT;
+        // ============================================================
+        // LEAPFROG (VERLET) - SYMPLEKTISCHER INTEGRATOR
+        // ============================================================
+        // 
+        // 1. Halber Schritt für die Phase (mit altem rho)
+        // 2. Vollständiger Schritt für rho (mit phase_half)
+        // 3. Halber Schritt für die Phase (mit neuem rho)
+        //
+        // Der Kernel muss entsprechend angepasst werden!
+        // ============================================================
 
-    clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
-    clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
-    clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
-    clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->sumJ_gpu);
-    clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->Q_gpu);
-    clSetKernelArg(kernel, 5, sizeof(int), &N);
-    clSetKernelArg(kernel, 6, sizeof(double), &DT);
+        clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
+        clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
+        clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
+        clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->sumJ_gpu);
+        clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->Q_gpu);
+        clSetKernelArg(kernel, 5, sizeof(int), &N);
+        clSetKernelArg(kernel, 6, sizeof(double), &DT);
 
-    size_t global = cfg->N;
-    size_t local = 64;
-    if (local > global) local = global;
+        size_t global = cfg->N;
+        size_t local = 64;
+        if (local > global) local = global;
 
-    if (!ocl_enqueue_kernel(&rt->ocl, kernel, global, local)) return false;
-
-    clEnqueueReadBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE,
-        0, cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
-    clEnqueueReadBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE,
-        0, cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-    clEnqueueReadBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE,
-        0, cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
-    return true;
+        if (ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
+        {
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
+            clEnqueueReadBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE,
+                0, cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
+            retval = true;
+        }
+    }
+    
+    return retval;
 }
 
 bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg)
