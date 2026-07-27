@@ -48,7 +48,7 @@ int main(int argc, char** argv)
     }
 
 	cfg.T = 1.0;
-	cfg.DT = 1.0e-6;
+	cfg.DT = 1.0e-2;
 	cfg.hbar = 1.0;
 	cfg.uncertainty_scale = sqrt(cfg.hbar / (2.0 * cfg.T));
     cfg.N = 4096;

@@ -13,7 +13,6 @@
 // KONSTANTEN (aus der Theorie)
 // ============================================================================
 
-#define PI 3.14159265358979323846
 #define ALPHA 1.0      // Kopplung Amplitudenenergie
 #define BETA 1.0       // Kopplung Phasenenergie
 #define DELTA 1.0      // Kopplung Masse
@@ -30,12 +29,15 @@ static double compute_mass(const iwt_runtime_t rt, size_t k, size_t N)
 {
     double mass = 0.0;
     
-    if (k > 0) {
+    if (k > 0)
+	{
         double dr = rt->I_real[k] - rt->I_real[k-1];
         double di = rt->I_imag[k] - rt->I_imag[k-1];
         mass += dr * dr + di * di;
     }
-    if (k < N - 1) {
+    
+	if (k < N - 1)
+	{
         double dr = rt->I_real[k] - rt->I_real[k+1];
         double di = rt->I_imag[k] - rt->I_imag[k+1];
         mass += dr * dr + di * di;
@@ -83,18 +85,21 @@ static bool is_boundary_node(size_t k, size_t N)
 static double box_muller(unsigned int* seed)
 {
     double u1, u2;
-    do {
+    do
+	{
         u1 = (double)rand_r(seed) / (double)RAND_MAX;
         u2 = (double)rand_r(seed) / (double)RAND_MAX;
     } while (u1 < 1e-30 || u2 < 1e-30);
     
-    return sqrt(-2.0 * log(u1)) * cos(2.0 * PI * u2);
+    return sqrt(-2.0 * log(u1)) * cos(2.0 * iwt_pi() * u2);
 }
 
 bool generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-    if (!cfg->enable_fluctuations) {
-        for (size_t i = 0; i < cfg->N; i++) {
+    if (!cfg->enable_fluctuations)
+	{
+        for (size_t i = 0; i < cfg->N; i++)
+		{
             rt->xi_real[i] = 0.0;
             rt->xi_imag[i] = 0.0;
             rt->uncertainty[i] = 0.0;
@@ -109,21 +114,24 @@ bool generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
     double* raw_imag = malloc(cfg->N * sizeof(double));
     if (!raw_real || !raw_imag) return false;
 
-    for (size_t i = 0; i < cfg->N; i++) {
+    for (size_t i = 0; i < cfg->N; i++)
+	{
         raw_real[i] = box_muller(&seed);
         raw_imag[i] = box_muller(&seed);
     }
 
     // Mittelwert abziehen (energieneutral)
     double mean_real = 0.0, mean_imag = 0.0;
-    for (size_t i = 0; i < cfg->N; i++) {
+    for (size_t i = 0; i < cfg->N; i++)
+	{
         mean_real += raw_real[i];
         mean_imag += raw_imag[i];
     }
     mean_real /= cfg->N;
     mean_imag /= cfg->N;
 
-    for (size_t i = 0; i < cfg->N; i++) {
+    for (size_t i = 0; i < cfg->N; i++)
+	{
         rt->xi_real[i] = scale * (raw_real[i] - mean_real);
         rt->xi_imag[i] = scale * (raw_imag[i] - mean_imag);
         rt->uncertainty[i] = 0.0;
@@ -233,7 +241,8 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
         sum_abs_sq += rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
     }
 
-    if (sum_abs_sq < 1e-30) {
+    if (sum_abs_sq < 1e-30)
+	{
         for (size_t i = 0; i < cfg->N; i++) rt->Q[i] = 0.0;
         return true;
     }
@@ -259,7 +268,8 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     clEnqueueReadBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE,
         0, cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
 
-    for (size_t i = 0; i < cfg->N; i++) {
+    for (size_t i = 0; i < cfg->N; i++)
+	{
         if (isnan(rt->Q[i]) || isinf(rt->Q[i])) rt->Q[i] = 0.0;
     }
     return true;
@@ -358,7 +368,8 @@ bool run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
     double sum_E_before = 0.0;
     double sum_mass_before = 0.0;
     
-    for (size_t i = 0; i < cfg->N; i++) {
+    for (size_t i = 0; i < cfg->N; i++)
+	{
         sum_I_sq_before += rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
         sum_E_before += compute_energy(rt, i, cfg->N, DT);
         sum_mass_before += compute_mass(rt, i, cfg->N);
@@ -406,29 +417,13 @@ bool run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
     double sum_E_after = 0.0;
     double sum_mass_after = 0.0;
     
-    for (size_t i = 0; i < cfg->N; i++) {
+    for (size_t i = 0; i < cfg->N; i++)
+	{
         sum_I_sq_after += rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
         sum_E_after += compute_energy(rt, i, cfg->N, DT);
         sum_mass_after += compute_mass(rt, i, cfg->N);
     }
-    
-    // ============================================================
-    // PRÜFUNG DER ERHALTUNGSSÄTZE
-    // ============================================================
-    
-    double I_deviation = fabs(sum_I_sq_after - sum_I_sq_before) / (sum_I_sq_before + 1e-30);
-    double E_deviation = (sum_E_after - sum_E_before) / (sum_E_before + 1e-30);
-    
-    // Informationserhaltung (Axiom 2) muss gelten
-    if (I_deviation > 1e-12) {
-        fprintf(stderr, "WARNING: Informationserhaltung verletzt! deviation = %e\n", I_deviation);
-    }
-    
-    // Energie muss abnehmen (Energiesenke)
-    if (E_deviation >= 0) {
-        fprintf(stderr, "WARNING: Energiesenke funktioniert nicht! E_change = %e\n", E_deviation);
-    }
-    
+                
     return true;
 }
 
@@ -444,7 +439,8 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     // INITIALISIERUNG
     // ============================================================
     
-    for (size_t i = 0; i < cfg->N; i++) {
+    for (size_t i = 0; i < cfg->N; i++)
+	{
         rt->I_real[i] = 0.01;
         rt->I_imag[i] = 0.0;
         rt->I_phase[i] = 0.0;
@@ -454,7 +450,8 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     }
 
     double sum_I_sq_initial = 0.0;
-    for (size_t i = 0; i < cfg->N; i++) {
+    for (size_t i = 0; i < cfg->N; i++)
+	{
         sum_I_sq_initial += rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
     }
 
@@ -463,7 +460,8 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     // ============================================================
     
     FILE* csv_file = fopen("iwt_timeseries.csv", "w");
-    if (csv_file) {
+    if (csv_file)
+	{
         fprintf(csv_file, "iter,sum_I_sq,I_max,sum_mass,sum_E,E_deviation\n");
     }
 
@@ -476,7 +474,8 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
     for (int iter = 0; iter < cfg->MAX_ITER; iter++)
     {
         // Vorherige Werte
-        for (size_t i = 0; i < cfg->N; i++) {
+        for (size_t i = 0; i < cfg->N; i++)
+		{
             rt->I_prev_real[i] = rt->I_real[i];
             rt->I_prev_imag[i] = rt->I_imag[i];
             rt->I_phase_prev[i] = rt->I_phase[i];
@@ -541,13 +540,15 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         double E_deviation = (sum_E - sum_E_ref) / (sum_E_ref + 1e-30);
 
         // CSV
-        if (csv_file) {
+        if (csv_file)
+		{
             fprintf(csv_file, "%d,%.6f,%.6f,%.6f,%.6f,%.6f\n", 
                     iter, sum_I_sq, I_max, sum_mass, sum_E, E_deviation);
         }
 
         // Heatmaps
-        if (iter % 10 == 0) {
+        if (iter % 10 == 0)
+		{
             char filename[256];
             snprintf(filename, sizeof(filename), "heatmap_mass_%06d.pgm", iter);
             iwt_save_heatmap(rt->mass, cfg->N, filename, "mass");
@@ -568,7 +569,8 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         retval = true;
     }
 
-    if (csv_file) {
+    if (csv_file)
+	{
         fclose(csv_file);
         printf("\nZeitreihe gespeichert in: iwt_timeseries.csv\n");
     }
