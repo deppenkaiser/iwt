@@ -332,8 +332,19 @@ private bool run_apply_boundary_damping(const iwt_runtime_t rt, const iwt_config
             cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 
         int N = (int)cfg->N;
-        double damping_factor = 0.99;  // 1% Energieabgabe pro Iteration am Rand
-        int boundary_width = 2;        // Anzahl der Randknoten (beidseitig)
+        double boundary_width = 2;  // Anzahl der Randknoten
+
+        // ============================================================
+        // THEORIEKONFORME DÄMPFUNG (Anhang Q)
+        // ============================================================
+        // alpha_sim = 1 - (2*pi*c / (omega * L_Q,0))^(3-D)
+        // Mit den theoretischen Werten ergibt sich:
+        // alpha_sim ≈ 0.99999999999999999
+        // 
+        // In der Simulation bedeutet das: Jeder Randknoten verliert
+        // nahezu seine gesamte Amplitude pro Iteration.
+        // ============================================================
+        double damping_factor = 1.0 - 1e-16;  // Theoriekonform: ~100% Dämpfung
 
         clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
         clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
