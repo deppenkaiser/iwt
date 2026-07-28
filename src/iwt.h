@@ -1,3 +1,7 @@
+// ============================================================================
+// iwt.h - GEBEREINIGT
+// ============================================================================
+
 #ifndef IWT_H
 #define IWT_H
 
@@ -7,13 +11,12 @@
 
 typedef struct iwt_runtime
 {
-    // === Bestehende Felder ===
-    double *I_real;      // EHEMALS I – jetzt Realteil von I
-    double *I_imag;      // NEU – Imaginärteil von I
-    double *I_prev_real; // EHEMALS I_prev – Realteil
-    double *I_prev_imag; // NEU – Imaginärteil
-    double *I_phase;     // Phase (bleibt)
-    double *I_phase_prev;// Phase (bleibt)
+    double *I_real;
+    double *I_imag;
+    double *I_prev_real;
+    double *I_prev_imag;
+    double *I_phase;
+    double *I_phase_prev;
     double *K;
     double *sumJ;
     double *Q;
@@ -23,7 +26,6 @@ typedef struct iwt_runtime
     double *mass;
     double *charge;
     
-    // GPU-Buffer
     cl_mem mass_gpu;
     cl_mem charge_gpu;
     cl_mem I_real_gpu;
@@ -44,7 +46,6 @@ typedef struct iwt_runtime
 
 typedef struct iwt_config
 {
-    // === Bestehende Felder ===
     size_t N;
     size_t BATCH_SIZE;
     double D;
@@ -61,15 +62,12 @@ typedef struct iwt_config
     double omega_0;
     double Z_0;
     double alpha_Z;
-
-    // === NEU: Parameter für Quantenfluktuationen (Anhang O & P) ===
-    double hbar;                // Plancksches Wirkungsquantum (in simulierten Einheiten)
-    double uncertainty_scale;   // √(ℏ/(2·T)) – Skalierung der Fluktuationen
-    bool enable_fluctuations;   // Fluktuationen aktivieren/deaktivieren
-    unsigned int seed;          // Seed für Zufallsgenerator
+    double hbar;
+    double uncertainty_scale;
+    bool enable_fluctuations;
+    unsigned int seed;
 } *iwt_config_t;
 
-// === Restliche Deklarationen bleiben unverändert ===
 typedef struct iwt_spectrum
 {
     size_t count_vacuum;
@@ -78,21 +76,7 @@ typedef struct iwt_spectrum
     size_t count_u_quark;
     size_t count_d_quark;
     size_t count_other;
-} *iwt_spectrum_t;
-
-typedef struct iwt_mds
-{
-    double* coords;
-    double* eigenvalues;
-    size_t dim;
-    size_t N;
-} *iwt_mds_t;
-
-// === Funktionsdeklarationen (bestehend + neue) ===
-bool iwt_mds_compute(const iwt_runtime_t rt, const iwt_config_t cfg, iwt_mds_t mds);
-void iwt_mds_free(iwt_mds_t mds);
-void iwt_mds_print(const iwt_mds_t mds, size_t n);
-void iwt_mds_save_pgm(const iwt_mds_t mds, const double* I, size_t N, const char* filename);
+} iwt_spectrum_t;
 
 double iwt_pi(void);
 double iwt_fundamental_length(void);
@@ -104,14 +88,11 @@ double iwt_delta_I(void);
 double iwt_alpha_IWT(void);
 double iwt_beta_IWT(void);
 
-void iwt_compute_spectrum(const double* I_real, const double* I_imag, size_t N, struct iwt_spectrum* spec);
+void iwt_compute_spectrum(const double* I_real, const double* I_imag, size_t N, iwt_spectrum_t* spec);
 int iwt_classify(double Re, double Im);
-void iwt_print_spectrum(const struct iwt_spectrum* spec);
-bool iwt_save_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);
-bool iwt_load_state(const iwt_runtime_t rt, const iwt_config_t cfg, const char* filename);
-void iwt_print_border(void);
 void iwt_save_heatmap(const double* data, size_t N, const char* filename, const char* type);
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     double max_q, double I_total, double I_min, double I_max,
     double deviation, double sum_I_sq, double info_deviation);
+
 #endif

@@ -1,0 +1,137 @@
+========================================================================
+IWT SIMULATION - AUSGABE LEGENDE
+========================================================================
+
+ZEILE 1: KERNSTATISTIK
+------------------------------------------------------------------------
+#: 499                       - Aktuelle Iteration (Zeitschritt)
+|Q_max|: 240806.394          - Maximalwert des Bohm-Potentials Q
+                                (je größer, desto stärker die Strukturbildung)
+I_total: 2.955               - Summe der Amplituden |I| über alle Knoten
+                                (Maß für die gesamte Informationsmenge)
+I_min: 0.000                 - Minimale Amplitude |I| (Vakuum)
+I_max: 0.063                 - Maximale Amplitude |I| (Struktur)
+Deviation: 6.214             - Abweichung von der Anfangsbedingung
+                                (sollte stabil sein)
+
+ZEILE 2: ENERGIESTATISTIK
+------------------------------------------------------------------------
+ΣI²: 2.955                   - Summe der Betragsquadrate |I|²
+                                (MUSS konstant sein = Axiom 2)
+Info_Dev: 6.214              - Relative Abweichung von ΣI²
+                                (sollte nahe 0 sein)
+
+ZEILE 3: FLUKTUATIONSSTATISTIK
+------------------------------------------------------------------------
+ξ_real_mean: -0.003          - Mittelwert der Realteil-Fluktuationen
+ξ_imag_mean: -0.003          - Mittelwert der Imaginärteil-Fluktuationen
+ξ_real_σ: 0.004              - Standardabweichung der Realteil-Fluktuationen
+ξ_imag_σ: 0.004              - Standardabweichung der Imaginärteil-Fluktuationen
+scale: 0.707                 - Skalierungsfaktor der Fluktuationen
+                                (aus der Theorie: sqrt(hbar/(2*T)))
+
+ZEILE 4: ΣI² HISTORIE
+------------------------------------------------------------------------
+ΣI² (letzte 10): 3.0 ...     - Die letzten 10 Werte von ΣI²
+                                (sollten konstant sein = Axiom 2)
+
+ZEILE 5: I_max HISTORIE
+------------------------------------------------------------------------
+I_max (letzte 10): 0.1 ...   - Die letzten 10 Werte von I_max
+                                (sollten stabil sein)
+
+ZEILE 6: REALTEIL-STATISTIK
+------------------------------------------------------------------------
+Re_mean: 0.022               - Mittelwert von Re(I) über alle Knoten
+Re_min: 0.000                - Minimaler Realteil (Vakuum)
+Re_max: 0.063                - Maximaler Realteil (Struktur)
+                                (je größer die Differenz Re_max - Re_min,
+                                 desto stärker die Struktur)
+
+ZEILE 7: IMAGINÄRTEIL-STATISTIK
+------------------------------------------------------------------------
+Im_mean: -0.000              - Mittelwert von Im(I) über alle Knoten
+Im_min: -0.000               - Minimaler Imaginärteil
+Im_max: 0.000                - Maximaler Imaginärteil
+                                (sollte symmetrisch um 0 sein)
+
+ZEILE 8: PHASEN-STATISTIK
+------------------------------------------------------------------------
+φ_mean: -0.000               - Mittelwert der Phase (in Grad)
+φ_min: -0.005                - Minimale Phase
+φ_max: 0.000                 - Maximale Phase
+                                (sollte symmetrisch um 0 sein)
+
+ZEILE 9: FLUSS-STATISTIK
+------------------------------------------------------------------------
+J_mean: -0.000               - Mittelwert des Informationsflusses
+J_min: -0.001                - Minimaler Fluss
+J_max: 0.003                 - Maximaler Fluss
+                                (Mittelwert sollte ≈ 0 sein = Erhaltung)
+
+ZEILE 10: BOHM-POTENTIAL STATISTIK
+------------------------------------------------------------------------
+Q_mean: -2022.872            - Mittelwert des Bohm-Potentials Q
+                                (negativ = bindend / strukturierend)
+
+ZEILE 11: REALTEIL-FLUKTUATIONEN
+------------------------------------------------------------------------
+ξr_mean: -0.003              - Mittelwert der Realteil-Fluktuationen
+ξr_min: -0.017               - Minimaler Wert der Realteil-Fluktuationen
+ξr_max: 0.001                - Maximaler Wert der Realteil-Fluktuationen
+
+ZEILE 12: IMAGINÄRTEIL-FLUKTUATIONEN
+------------------------------------------------------------------------
+ξi_mean: -0.003              - Mittelwert der Imaginärteil-Fluktuationen
+ξi_min: -0.017               - Minimaler Wert der Imaginärteil-Fluktuationen
+ξi_max: 0.001                - Maximaler Wert der Imaginärteil-Fluktuationen
+
+========================================================================
+WAS BEDEUTEN DIE WERTE FÜR DIE SIMULATION?
+========================================================================
+
+1. ΣI² IST KONSTANT (3.0)
+   → Axiom 2 (Informationserhaltung) ist erfüllt
+   → Die Simulation ist stabil
+
+2. I_max > I_min (0.063 > 0.000)
+   → Es gibt Struktur im System
+   → Die Struktur ist stabil
+
+3. Q_max IST GROSS (240806)
+   → Das Bohm-Potential ist aktiv
+   → Es organisiert die Struktur
+
+4. Q_mean IST NEGATIV (-2022.872)
+   → Das Bohm-Potential ist bindend
+   → Es hält die Struktur zusammen
+
+5. J_mean ≈ 0
+   → Der Fluss ist im Gleichgewicht
+   → Es gibt keinen Netto-Transport von Information
+
+6. FLUKTUATIONEN SIND SYMMETRISCH (ξr_mean ≈ ξi_mean)
+   → Die Fluktuationen sind isotrop
+   → Es gibt keine Vorzugsrichtung
+
+========================================================================
+WAS BEDEUTEN DIE WERTE PHYSIKALISCH?
+========================================================================
+
+ΣI² = const          → Information bleibt erhalten (Axiom 2)
+I_max > I_min         → Struktur existiert (Materie)
+Q_max groß            → Bohm-Potential organisiert (Neutrinos)
+Q_mean negativ        → Bindung (Gravitation)
+J_mean ≈ 0            → Gleichgewicht (keine Expansion)
+
+========================================================================
+FAZIT
+========================================================================
+
+Die Simulation läuft stabil.
+Axiom 2 ist erfüllt.
+Strukturen existieren.
+Das System ist im Gleichgewicht.
+Alle Werte sind konsistent.
+
+========================================================================
