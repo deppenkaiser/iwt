@@ -57,7 +57,6 @@ typedef struct iwt_config
     double I_min;
     double I_max;
     int MAX_ITER;
-    double I_vac;
     double phi_0;
     double omega_0;
     double Z_0;

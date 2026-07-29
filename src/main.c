@@ -48,7 +48,6 @@ int main(int argc, char **argv)
     cfg.MAX_ITER = 500;
     cfg.I_max = iwt_I_max();
     cfg.I_min = iwt_I_min();
-    cfg.I_vac = 0.1;
     cfg.phi_0 = iwt_pi() / 2.0;
     cfg.omega_0 = 1.0 / cfg.DT;
     cfg.Z_0 = 1.0;
