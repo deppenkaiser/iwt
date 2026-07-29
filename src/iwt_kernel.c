@@ -94,19 +94,25 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_FLUX);
     if (!kernel) return false;
 
-    clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0, cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
-    clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0, cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-    clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0, cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
+    clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
+                         cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
+    clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
+                         cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
+    clEnqueueWriteBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE, 0,
+                         cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
+    clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
+                         cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
 
     int N = (int)cfg->N;
     double DT = cfg->DT;
 
     clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
     clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
-    clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->K_gpu);
-    clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->sumJ_gpu);
-    clSetKernelArg(kernel, 4, sizeof(int), &N);
-    clSetKernelArg(kernel, 5, sizeof(double), &DT);
+    clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->Q_gpu);
+    clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->K_gpu);
+    clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->sumJ_gpu);
+    clSetKernelArg(kernel, 5, sizeof(int), &N);
+    clSetKernelArg(kernel, 6, sizeof(double), &DT);
 
     size_t global = cfg->N;
     size_t local = 64;
@@ -114,7 +120,8 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     if (!ocl_enqueue_kernel(&rt->ocl, kernel, global, local)) return false;
 
-    clEnqueueReadBuffer(rt->ocl.queue, rt->sumJ_gpu, CL_TRUE, 0, cfg->N * sizeof(double), rt->sumJ, 0, NULL, NULL);
+    clEnqueueReadBuffer(rt->ocl.queue, rt->sumJ_gpu, CL_TRUE,
+                        0, cfg->N * sizeof(double), rt->sumJ, 0, NULL, NULL);
     return true;
 }
 

@@ -283,7 +283,9 @@ void iwt_save_heatmap_ppm(const double *data, size_t N, const char *filename, co
 {
     int width = 512;
     int height = 512;
-    unsigned char *image = malloc(width * height * 3);
+
+    // Speicher mit 0 initialisieren (calloc statt malloc)
+    unsigned char *image = calloc(width * height * 3, sizeof(unsigned char));
     if (!image) return;
 
     double min_val = 1e30;
@@ -325,7 +327,9 @@ void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filenam
 {
     int width = 512;
     int height = 512;
-    unsigned char *image = malloc(width * height * 3);
+
+    // Speicher mit 0 initialisieren (calloc statt malloc)
+    unsigned char *image = calloc(width * height * 3, sizeof(unsigned char));
     if (!image) return;
 
     double max_abs = 0.0;
@@ -381,3 +385,4 @@ void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filenam
     }
     free(image);
 }
+
