@@ -1,5 +1,5 @@
 // ============================================================================
-// iwt.h - GEBEREINIGT
+// iwt.h
 // ============================================================================
 
 #ifndef IWT_H
@@ -90,7 +90,8 @@ double iwt_beta_IWT(void);
 
 void iwt_compute_spectrum(const double* I_real, const double* I_imag, size_t N, iwt_spectrum_t* spec);
 int iwt_classify(double Re, double Im);
-void iwt_save_heatmap(const double* data, size_t N, const char* filename, const char* type);
+void iwt_save_heatmap_ppm(const double* data, size_t N, const char* filename, const char* type);
+void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filename);
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     double max_q, double I_total, double I_min, double I_max,
     double deviation, double sum_I_sq, double info_deviation);

@@ -83,7 +83,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     sum_I_sq_history[history_idx] = sum_I_sq;
     I_max_history[history_idx] = I_max;
     history_idx = (history_idx + 1) % 10;
-    if (history_count < 10) history_count++;
+    if (history_count < 10)
+        history_count++;
 
     uint32_t col = 1, row = 1;
 
@@ -96,12 +97,14 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "Deviation", deviation);
 
     // ZEILE 2
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     iwt_print_double(&col, row, "ΣI²", sum_I_sq);
     iwt_print_double(&col, row, "Info_Dev", info_deviation);
 
     // ZEILE 3: Fluktuationen
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     double xi_real_mean = 0.0, xi_imag_mean = 0.0;
     double xi_real_var = 0.0, xi_imag_var = 0.0;
 
@@ -130,7 +133,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "scale", cfg->uncertainty_scale);
 
     // ZEILE 4: ΣI² History
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     string_set_cursor_position(col, row);
     printf(BLACK_ON_WHITE "ΣI² (letzte 10):" COLOR_RESET);
     int start = history_count < 10 ? 0 : history_idx;
@@ -142,7 +146,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     }
 
     // ZEILE 5: I_max History
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     string_set_cursor_position(col, row);
     printf(BLACK_ON_WHITE "I_max (letzte 10):" COLOR_RESET);
     for (int i = 0; i < history_count; i++)
@@ -153,14 +158,17 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     }
 
     // ZEILE 7: Re(I) Statistik
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     double Re_mean = 0.0, Re_min = 1e30, Re_max = -1e30;
     for (size_t i = 0; i < cfg->N; i++)
     {
         double v = rt->I_real[i];
         Re_mean += v;
-        if (v < Re_min) Re_min = v;
-        if (v > Re_max) Re_max = v;
+        if (v < Re_min)
+            Re_min = v;
+        if (v > Re_max)
+            Re_max = v;
     }
     Re_mean /= cfg->N;
     iwt_print_double(&col, row, "Re_mean", Re_mean);
@@ -168,14 +176,17 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "Re_max", Re_max);
 
     // ZEILE 9: Im(I) Statistik
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     double Im_mean = 0.0, Im_min = 1e30, Im_max = -1e30;
     for (size_t i = 0; i < cfg->N; i++)
     {
         double v = rt->I_imag[i];
         Im_mean += v;
-        if (v < Im_min) Im_min = v;
-        if (v > Im_max) Im_max = v;
+        if (v < Im_min)
+            Im_min = v;
+        if (v > Im_max)
+            Im_max = v;
     }
     Im_mean /= cfg->N;
     iwt_print_double(&col, row, "Im_mean", Im_mean);
@@ -183,14 +194,17 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "Im_max", Im_max);
 
     // ZEILE 11: Phase Statistik
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     double phase_mean = 0.0, phase_min = 1e30, phase_max = -1e30;
     for (size_t i = 0; i < cfg->N; i++)
     {
         double v = rt->I_phase[i] / iwt_pi() * 180.0;
         phase_mean += v;
-        if (v < phase_min) phase_min = v;
-        if (v > phase_max) phase_max = v;
+        if (v < phase_min)
+            phase_min = v;
+        if (v > phase_max)
+            phase_max = v;
     }
     phase_mean /= cfg->N;
     iwt_print_double(&col, row, "φ_mean", phase_mean);
@@ -198,14 +212,17 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "φ_max", phase_max);
 
     // ZEILE 13: sumJ Statistik
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     double J_mean = 0.0, J_min = 1e30, J_max = -1e30;
     for (size_t i = 0; i < cfg->N; i++)
     {
         double v = rt->sumJ[i];
         J_mean += v;
-        if (v < J_min) J_min = v;
-        if (v > J_max) J_max = v;
+        if (v < J_min)
+            J_min = v;
+        if (v > J_max)
+            J_max = v;
     }
     J_mean /= cfg->N;
     iwt_print_double(&col, row, "J_mean", J_mean);
@@ -213,7 +230,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "J_max", J_max);
 
     // ZEILE 15: Q Statistik
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     double Q_mean = 0.0;
     for (size_t i = 0; i < cfg->N; i++)
     {
@@ -223,14 +241,17 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "Q_mean", Q_mean);
 
     // ZEILE 17: xi_real Statistik
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     double xir_mean = 0.0, xir_min = 1e30, xir_max = -1e30;
     for (size_t i = 0; i < cfg->N; i++)
     {
         double v = rt->xi_real[i];
         xir_mean += v;
-        if (v < xir_min) xir_min = v;
-        if (v > xir_max) xir_max = v;
+        if (v < xir_min)
+            xir_min = v;
+        if (v > xir_max)
+            xir_max = v;
     }
     xir_mean /= cfg->N;
     iwt_print_double(&col, row, "ξr_mean", xir_mean);
@@ -238,14 +259,17 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "ξr_max", xir_max);
 
     // ZEILE 19: xi_imag Statistik
-    row += 2; col = 1;
+    row += 2;
+    col = 1;
     double xii_mean = 0.0, xii_min = 1e30, xii_max = -1e30;
     for (size_t i = 0; i < cfg->N; i++)
     {
         double v = rt->xi_imag[i];
         xii_mean += v;
-        if (v < xii_min) xii_min = v;
-        if (v > xii_max) xii_max = v;
+        if (v < xii_min)
+            xii_min = v;
+        if (v > xii_max)
+            xii_max = v;
     }
     xii_mean /= cfg->N;
     iwt_print_double(&col, row, "ξi_mean", xii_mean);
@@ -255,8 +279,13 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     fflush(stdout);
 }
 
-void iwt_save_heatmap(const double *data, size_t N, const char *filename, const char *type)
+void iwt_save_heatmap_ppm(const double *data, size_t N, const char *filename, const char *type)
 {
+    int width = 512;
+    int height = 512;
+    unsigned char *image = malloc(width * height * 3);
+    if (!image) return;
+
     double min_val = 1e30;
     double max_val = -1e30;
     for (size_t i = 0; i < N; i++)
@@ -267,13 +296,6 @@ void iwt_save_heatmap(const double *data, size_t N, const char *filename, const 
     double range = max_val - min_val;
     if (range < 1e-30) range = 1.0;
 
-    int width = 512;
-    int height = 512;
-    unsigned char *image = malloc(width * height * sizeof(unsigned char));
-    if (!image) return;
-
-    memset(image, 0, width * height);
-
     int grid_size = (int)sqrt(N);
     for (size_t i = 0; i < N; i++)
     {
@@ -283,16 +305,79 @@ void iwt_save_heatmap(const double *data, size_t N, const char *filename, const 
 
         double normalized = (data[i] - min_val) / range;
         unsigned char value = (unsigned char)(normalized * 255.0);
-        image[y * width + x] = value;
+
+        image[(y * width + x) * 3 + 0] = value;
+        image[(y * width + x) * 3 + 1] = value;
+        image[(y * width + x) * 3 + 2] = value;
     }
 
     FILE *f = fopen(filename, "wb");
     if (f)
     {
-        fprintf(f, "P5\n%d %d\n255\n", width, height);
-        fwrite(image, 1, width * height, f);
+        fprintf(f, "P6\n%d %d\n255\n", width, height);
+        fwrite(image, 1, width * height * 3, f);
         fclose(f);
     }
+    free(image);
+}
 
+void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filename)
+{
+    int width = 512;
+    int height = 512;
+    unsigned char *image = malloc(width * height * 3);
+    if (!image) return;
+
+    double max_abs = 0.0;
+    for (size_t i = 0; i < N; i++)
+    {
+        if (fabs(charge[i]) > max_abs) max_abs = fabs(charge[i]);
+    }
+    if (max_abs < 1e-30) max_abs = 1.0;
+
+    int grid_size = (int)sqrt(N);
+    for (size_t i = 0; i < N; i++)
+    {
+        int x = i % grid_size;
+        int y = i / grid_size;
+        if (x >= width || y >= height) continue;
+
+        double normalized = charge[i] / max_abs;
+        unsigned char r, g, b;
+
+        if (normalized > 0.01)
+        {
+            // Positiv: Blau
+            r = 0;
+            g = 0;
+            b = (unsigned char)(normalized * 255.0);
+        }
+        else if (normalized < -0.01)
+        {
+            // Negativ: Rot
+            r = (unsigned char)(-normalized * 255.0);
+            g = 0;
+            b = 0;
+        }
+        else
+        {
+            // Null: Weiß
+            r = 255;
+            g = 255;
+            b = 255;
+        }
+
+        image[(y * width + x) * 3 + 0] = r;
+        image[(y * width + x) * 3 + 1] = g;
+        image[(y * width + x) * 3 + 2] = b;
+    }
+
+    FILE *f = fopen(filename, "wb");
+    if (f)
+    {
+        fprintf(f, "P6\n%d %d\n255\n", width, height);
+        fwrite(image, 1, width * height * 3, f);
+        fclose(f);
+    }
     free(image);
 }
