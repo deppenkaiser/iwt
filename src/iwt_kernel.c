@@ -253,8 +253,6 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             if (abs_q > max_q) max_q = abs_q;
         }
 
-        double deviation = (sum_abs_sq - sum_abs_sq_initial) / (sum_abs_sq_initial + 1e-30);
-
         if (csv_file)
         {
             fprintf(csv_file, "%d,%.6f,%.6f,%.6f,%.6f\n", iter, sum_abs_sq, I_max, sum_mass, sum_E);
@@ -270,7 +268,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
         }
 
         string_set_cursor_position(1, 1);
-        iwt_print_status(rt, cfg, iter, max_q, sum_abs_sq, I_min, I_max, deviation, sum_abs_sq, deviation);
+        iwt_print_status(rt, cfg, iter, max_q, sum_abs_sq, I_min, I_max, sum_abs_sq);
 
         fflush(stdout);
         retval = true;

@@ -47,23 +47,12 @@ typedef struct iwt_runtime
 typedef struct iwt_config
 {
     size_t N;
-    size_t BATCH_SIZE;
     double D;
     double l0;
     double T;
-    double alpha_IWT;
-    double beta_IWT;
     double DT;
-    double I_min;
-    double I_max;
     int MAX_ITER;
-    double phi_0;
-    double omega_0;
-    double Z_0;
-    double alpha_Z;
     double hbar;
-    double uncertainty_scale;
-    bool enable_fluctuations;
     unsigned int seed;
 } *iwt_config_t;
 
@@ -81,9 +70,6 @@ double iwt_pi(void);
 double iwt_fundamental_length(void);
 double iwt_fundamental_time(void);
 double iwt_fractal_dimension(void);
-double iwt_I_min(void);
-double iwt_I_max(void);
-double iwt_delta_I(void);
 double iwt_alpha_IWT(void);
 double iwt_beta_IWT(void);
 
@@ -92,7 +78,6 @@ int iwt_classify(double Re, double Im);
 void iwt_save_heatmap_ppm(const double* data, size_t N, const char* filename, const char* type);
 void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filename);
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
-    double max_q, double I_total, double I_min, double I_max,
-    double deviation, double sum_I_sq, double info_deviation);
+    double max_q, double I_total, double I_min, double I_max, double sum_I_sq);
 
 #endif

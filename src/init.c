@@ -41,9 +41,9 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         // === Initialisierung auf Vakuum (I_real = 0.01, I_imag = 0.0) ===
         for (size_t i = 0; i < cfg->N; i++)
         {
-            rt->I_real[i] = 0.01;
+            rt->I_real[i] = 0.0;
             rt->I_imag[i] = 0.0;
-            rt->I_prev_real[i] = 0.01;
+            rt->I_prev_real[i] = 0.0;
             rt->I_prev_imag[i] = 0.0;
             rt->I_phase[i] = 0.0;
             rt->I_phase_prev[i] = 0.0;

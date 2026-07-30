@@ -39,18 +39,6 @@ double iwt_fractal_dimension(void)
     return log(N) / log(s);
 }
 
-double iwt_I_min(void) { return 0.0; }
-
-double iwt_I_max(void) { return 1.0; }
-
-double iwt_delta_I(void)
-{
-    double I_min = iwt_I_min();
-    double I_max = iwt_I_max();
-    double steps = pow(2.0, 32.0) - 1.0;
-    return (I_max - I_min) / steps;
-}
-
 double iwt_alpha_IWT(void) { return 1; }
 
 double iwt_beta_IWT(void) { return 1; }
@@ -72,8 +60,7 @@ static void iwt_print_double(uint32_t *x, uint32_t y, const char *label, double 
 }
 
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
-                      double max_q, double I_total, double I_min, double I_max,
-                      double deviation, double sum_I_sq, double info_deviation)
+    double max_q, double I_total, double I_min, double I_max, double sum_I_sq)
 {
     static double sum_I_sq_history[10] = {0};
     static double I_max_history[10] = {0};
@@ -94,13 +81,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "I_total", I_total);
     iwt_print_double(&col, row, "I_min", I_min);
     iwt_print_double(&col, row, "I_max", I_max);
-    iwt_print_double(&col, row, "Deviation", deviation);
 
     // ZEILE 2
     row += 2;
     col = 1;
     iwt_print_double(&col, row, "ΣI²", sum_I_sq);
-    iwt_print_double(&col, row, "Info_Dev", info_deviation);
 
     // ZEILE 3: Fluktuationen
     row += 2;
@@ -130,7 +115,6 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     iwt_print_double(&col, row, "ξ_imag_mean", xi_imag_mean);
     iwt_print_double(&col, row, "ξ_real_σ", xi_real_var);
     iwt_print_double(&col, row, "ξ_imag_σ", xi_imag_var);
-    iwt_print_double(&col, row, "scale", cfg->uncertainty_scale);
 
     // ZEILE 4: ΣI² History
     row += 2;

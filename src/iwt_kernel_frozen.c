@@ -51,17 +51,6 @@ static double box_muller(unsigned int *seed)
 
 bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-	if (!cfg->enable_fluctuations)
-	{
-		for (size_t i = 0; i < cfg->N; i++)
-		{
-			rt->xi_real[i] = 0.0;
-			rt->xi_imag[i] = 0.0;
-			rt->uncertainty[i] = 0.0;
-		}
-		return true;
-	}
-
 	double scale = SCALE;
 	unsigned int seed = cfg->seed;
 
@@ -109,14 +98,12 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 		return false;
 
 	int N = (int)cfg->N;
-	int enable = cfg->enable_fluctuations ? 1 : 0;
 
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
 	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->xi_real_gpu);
 	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->xi_imag_gpu);
 	clSetKernelArg(kernel, 4, sizeof(int), &N);
-	clSetKernelArg(kernel, 5, sizeof(int), &enable);
 
 	size_t global = cfg->N;
 	size_t local = 64;
