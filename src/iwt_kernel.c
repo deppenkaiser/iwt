@@ -94,6 +94,7 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_FLUX);
     if (!kernel) return false;
 
+    // Daten auf die GPU kopieren
     clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
                          cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
     clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
