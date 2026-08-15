@@ -170,42 +170,26 @@ private void _free_memory(void** pp)
 void deinitialize_host_data(const iwt_runtime_t rt)
 {
 	// === IWT-Kernfelder (komplex) ===
-	free(rt->I_real);
-	free(rt->I_imag);
-	free(rt->I_prev_real);
-	free(rt->I_prev_imag);
-	free(rt->I_phase);
-	free(rt->I_phase_prev);
+	_free_memory((void**)&rt->I_real);
+	_free_memory((void**)&rt->I_imag);
+	_free_memory((void**)&rt->I_prev_real);
+	_free_memory((void**)&rt->I_prev_imag);
+	_free_memory((void**)&rt->I_phase);
+	_free_memory((void**)&rt->I_phase_prev);
 
 	// === Kopplungsmatrix und Hilfsfelder ===
-	free(rt->K);
-	free(rt->sumJ);
-	free(rt->Q);
+	_free_memory((void**)&rt->K);
+	_free_memory((void**)&rt->sumJ);
+	_free_memory((void**)&rt->Q);
 
 	// === Masse und Ladung ===
-	free(rt->mass);
-	free(rt->charge);
+	_free_memory((void**)&rt->mass);
+	_free_memory((void**)&rt->charge);
 
 	// === Quantenfluktuationen (Anhang O & P) ===
-	free(rt->xi_real);
-	free(rt->xi_imag);
-	free(rt->uncertainty);
-
-	// === Alle Zeiger auf NULL setzen ===
-	rt->I_real = NULL;
-	rt->I_imag = NULL;
-	rt->I_prev_real = NULL;
-	rt->I_prev_imag = NULL;
-	rt->I_phase = NULL;
-	rt->I_phase_prev = NULL;
-	rt->K = NULL;
-	rt->sumJ = NULL;
-	rt->Q = NULL;
-	rt->mass = NULL;
-	rt->charge = NULL;
-	rt->xi_real = NULL;
-	rt->xi_imag = NULL;
-	rt->uncertainty = NULL;
+	_free_memory((void**)&rt->xi_real);
+	_free_memory((void**)&rt->xi_imag);
+	_free_memory((void**)&rt->uncertainty);
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)
