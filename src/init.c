@@ -1,7 +1,7 @@
 #include "init.h"
 #include "iwt.h"
-#include <cstddef>
-#include <cstdio>
+#include <stddef.h>
+#include <stdio.h>
 #include <math.h>
 #include <stdio.h>
 #include <api/api.h>
