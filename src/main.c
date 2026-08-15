@@ -65,8 +65,8 @@ int main(int argc, char **argv)
                         }
                         deinitialize_gpu_data(&rt);
                     }
+                	deinitialize_host_data(&rt);
                 }
-                deinitialize_host_data(&rt);
             }
         }
         ocl_deinitialize(&rt.ocl);

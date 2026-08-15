@@ -1,7 +1,10 @@
 #include "init.h"
 #include "iwt.h"
+#include <cstddef>
+#include <cstdio>
 #include <math.h>
 #include <stdio.h>
+#include <api/api.h>
 
 bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
@@ -153,6 +156,15 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 		(rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) && (rt->uncertainty_gpu != NULL);
 
 	return all_buffers_valid;
+}
+
+private void _free_memory(void** pp)
+{
+	if (*pp != NULL)
+	{
+		free(*pp);
+		*pp = NULL;
+	}
 }
 
 void deinitialize_host_data(const iwt_runtime_t rt)
