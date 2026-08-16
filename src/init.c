@@ -167,6 +167,15 @@ private void _free_memory(void** pp)
 	}
 }
 
+private void _free_gpu_memory(cl_mem* pp)
+{
+	if (*pp != NULL)
+	{
+		clReleaseMemObject(*pp);
+		*pp = NULL;
+	}
+}
+
 void deinitialize_host_data(const iwt_runtime_t rt)
 {
 	// === IWT-Kernfelder (komplex) ===
@@ -195,40 +204,24 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 void deinitialize_gpu_data(const iwt_runtime_t rt)
 {
 	// === IWT-Kernfelder (komplex) ===
-	clReleaseMemObject(rt->I_real_gpu);
-	clReleaseMemObject(rt->I_imag_gpu);
-	clReleaseMemObject(rt->I_prev_real_gpu);
-	clReleaseMemObject(rt->I_prev_imag_gpu);
-	clReleaseMemObject(rt->I_phase_gpu);
-	clReleaseMemObject(rt->I_phase_prev_gpu);
+	_free_gpu_memory(&rt->I_real_gpu);
+	_free_gpu_memory(&rt->I_imag_gpu);
+	_free_gpu_memory(&rt->I_prev_real_gpu);
+	_free_gpu_memory(&rt->I_prev_imag_gpu);
+	_free_gpu_memory(&rt->I_phase_gpu);
+	_free_gpu_memory(&rt->I_phase_prev_gpu);
 
 	// === Kopplungsmatrix und Hilfsfelder ===
-	clReleaseMemObject(rt->K_gpu);
-	clReleaseMemObject(rt->sumJ_gpu);
-	clReleaseMemObject(rt->Q_gpu);
+	_free_gpu_memory(&rt->K_gpu);
+	_free_gpu_memory(&rt->sumJ_gpu);
+	_free_gpu_memory(&rt->Q_gpu);
 
 	// === Masse und Ladung ===
-	clReleaseMemObject(rt->mass_gpu);
-	clReleaseMemObject(rt->charge_gpu);
+	_free_gpu_memory(&rt->mass_gpu);
+	_free_gpu_memory(&rt->charge_gpu);
 
 	// === Quantenfluktuationen (Anhang O & P) ===
-	clReleaseMemObject(rt->xi_real_gpu);
-	clReleaseMemObject(rt->xi_imag_gpu);
-	clReleaseMemObject(rt->uncertainty_gpu);
-
-	// === Alle GPU-Zeiger auf NULL setzen ===
-	rt->I_real_gpu = NULL;
-	rt->I_imag_gpu = NULL;
-	rt->I_prev_real_gpu = NULL;
-	rt->I_prev_imag_gpu = NULL;
-	rt->I_phase_gpu = NULL;
-	rt->I_phase_prev_gpu = NULL;
-	rt->K_gpu = NULL;
-	rt->sumJ_gpu = NULL;
-	rt->Q_gpu = NULL;
-	rt->mass_gpu = NULL;
-	rt->charge_gpu = NULL;
-	rt->xi_real_gpu = NULL;
-	rt->xi_imag_gpu = NULL;
-	rt->uncertainty_gpu = NULL;
+	_free_gpu_memory(&rt->xi_real_gpu);
+	_free_gpu_memory(&rt->xi_imag_gpu);
+	_free_gpu_memory(&rt->uncertainty_gpu);
 }
