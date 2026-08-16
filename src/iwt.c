@@ -10,6 +10,9 @@
 #include <string.h>
 #include <string/string.h>
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 double iwt_pi(void) { return 4.0 * atan(1.0); }
 
 double iwt_fundamental_length(void)
@@ -67,6 +70,14 @@ private void _iwt_print_double_triple(uint32_t *x, uint32_t y, const char *label
     }
 }
 
+private void _iwt_print_double_quad(uint32_t *x, uint32_t y, const char *labels[4], const double values[4])
+{
+    for (int i = 0; i < 4; i++)
+    {
+        _iwt_print_double(x, y, labels[i], values[i]);
+    }
+}
+
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     double max_q, double I_total, double I_min, double I_max, double sum_I_sq)
 {
@@ -85,10 +96,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
 
     // ZEILE 1
     _iwt_print_int(&col, row, "#", iter);
-    _iwt_print_double(&col, row, "|Q_max|", max_q);
-    _iwt_print_double(&col, row, "I_total", I_total);
-    _iwt_print_double(&col, row, "I_min", I_min);
-    _iwt_print_double(&col, row, "I_max", I_max);
+    {
+        const char *labels[4] = { "|Q_max|", "I_total", "I_min", "I_max" };
+        const double values[4] = { max_q, I_total, I_min, I_max };
+        _iwt_print_double_quad(&col, row, labels, values);
+    }
 
     // ZEILE 2
     row += 2;
@@ -119,10 +131,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     xi_real_var = sqrt(xi_real_var / cfg->N);
     xi_imag_var = sqrt(xi_imag_var / cfg->N);
 
-    _iwt_print_double(&col, row, "ξ_real_mean", xi_real_mean);
-    _iwt_print_double(&col, row, "ξ_imag_mean", xi_imag_mean);
-    _iwt_print_double(&col, row, "ξ_real_σ", xi_real_var);
-    _iwt_print_double(&col, row, "ξ_imag_σ", xi_imag_var);
+    {
+        const char *labels[4] = { "ξ_real_mean", "ξ_imag_mean", "ξ_real_σ", "ξ_imag_σ" };
+        const double values[4] = { xi_real_mean, xi_imag_mean, xi_real_var, xi_imag_var };
+        _iwt_print_double_quad(&col, row, labels, values);
+    }
 
     // ZEILE 4: ΣI² History
     row += 2;
@@ -157,10 +170,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     {
         double v = rt->I_real[i];
         Re_mean += v;
-        if (v < Re_min)
-            Re_min = v;
-        if (v > Re_max)
-            Re_max = v;
+        Re_min = MIN(Re_min, v);
+        Re_max = MAX(Re_max, v);
     }
     Re_mean /= cfg->N;
     {
@@ -177,10 +188,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     {
         double v = rt->I_imag[i];
         Im_mean += v;
-        if (v < Im_min)
-            Im_min = v;
-        if (v > Im_max)
-            Im_max = v;
+        Im_min = MIN(Im_min, v);
+        Im_max = MAX(Im_max, v);
     }
     Im_mean /= cfg->N;
     {
@@ -197,10 +206,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     {
         double v = rt->I_phase[i] / iwt_pi() * 180.0;
         phase_mean += v;
-        if (v < phase_min)
-            phase_min = v;
-        if (v > phase_max)
-            phase_max = v;
+        phase_min = MIN(phase_min, v);
+        phase_max = MAX(phase_max, v);
     }
     phase_mean /= cfg->N;
     {
@@ -217,10 +224,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     {
         double v = rt->sumJ[i];
         J_mean += v;
-        if (v < J_min)
-            J_min = v;
-        if (v > J_max)
-            J_max = v;
+        J_min = MIN(J_min, v);
+        J_max = MAX(J_max, v);
     }
     J_mean /= cfg->N;
     {
@@ -248,10 +253,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     {
         double v = rt->xi_real[i];
         xir_mean += v;
-        if (v < xir_min)
-            xir_min = v;
-        if (v > xir_max)
-            xir_max = v;
+        xir_min = MIN(xir_min, v);
+        xir_max = MAX(xir_max, v);
     }
     xir_mean /= cfg->N;
     {
@@ -268,10 +271,8 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     {
         double v = rt->xi_imag[i];
         xii_mean += v;
-        if (v < xii_min)
-            xii_min = v;
-        if (v > xii_max)
-            xii_max = v;
+        xii_min = MIN(xii_min, v);
+        xii_max = MAX(xii_max, v);
     }
     xii_mean /= cfg->N;
     {
@@ -296,8 +297,8 @@ void iwt_save_heatmap_ppm(const double *data, size_t N, const char *filename, co
     double max_val = -1e30;
     for (size_t i = 0; i < N; i++)
     {
-        if (data[i] < min_val) min_val = data[i];
-        if (data[i] > max_val) max_val = data[i];
+        min_val = MIN(min_val, data[i]);
+        max_val = MAX(max_val, data[i]);
     }
     double range = max_val - min_val;
     if (range < 1e-30) range = 1.0;
@@ -339,7 +340,7 @@ void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filenam
     double max_abs = 0.0;
     for (size_t i = 0; i < N; i++)
     {
-        if (fabs(charge[i]) > max_abs) max_abs = fabs(charge[i]);
+        max_abs = MAX(max_abs, fabs(charge[i]));
     }
     if (max_abs < 1e-30) max_abs = 1.0;
 

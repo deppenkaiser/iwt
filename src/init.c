@@ -11,26 +11,26 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     bool retval = false;
 
     // === IWT-Kernfelder (komplex) ===
-    rt->I_real = malloc(cfg->N * sizeof(double));
-    rt->I_imag = malloc(cfg->N * sizeof(double));
-    rt->I_prev_real = malloc(cfg->N * sizeof(double));
-    rt->I_prev_imag = malloc(cfg->N * sizeof(double));
-    rt->I_phase = malloc(cfg->N * sizeof(double));
-    rt->I_phase_prev = malloc(cfg->N * sizeof(double));
+    rt->I_real = calloc(cfg->N, sizeof(double));
+    rt->I_imag = calloc(cfg->N, sizeof(double));
+    rt->I_prev_real = calloc(cfg->N, sizeof(double));
+    rt->I_prev_imag = calloc(cfg->N, sizeof(double));
+    rt->I_phase = calloc(cfg->N, sizeof(double));
+    rt->I_phase_prev = calloc(cfg->N, sizeof(double));
 
     // === Kopplungsmatrix und Hilfsfelder ===
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
     rt->sumJ = malloc(cfg->N * sizeof(double));
-    rt->Q = malloc(cfg->N * sizeof(double));
+    rt->Q = calloc(cfg->N, sizeof(double));
 
     // === Masse und Ladung ===
-    rt->mass = malloc(cfg->N * sizeof(double));
-    rt->charge = malloc(cfg->N * sizeof(double));
+    rt->mass = calloc(cfg->N, sizeof(double));
+    rt->charge = calloc(cfg->N, sizeof(double));
 
     // === Quantenfluktuationen (Anhang O & P) ===
-    rt->xi_real = malloc(cfg->N * sizeof(double));
-    rt->xi_imag = malloc(cfg->N * sizeof(double));
-    rt->uncertainty = malloc(cfg->N * sizeof(double));
+    rt->xi_real = calloc(cfg->N, sizeof(double));
+    rt->xi_imag = calloc(cfg->N, sizeof(double));
+    rt->uncertainty = calloc(cfg->N, sizeof(double));
 
     // === Prüfung aller Allokationen ===
     if ((rt->I_real != NULL) && (rt->I_imag != NULL) &&
@@ -41,24 +41,10 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         (rt->mass != NULL) && (rt->charge != NULL) &&
         (rt->xi_real != NULL) && (rt->xi_imag != NULL) && (rt->uncertainty != NULL))
     {
-        // === Initialisierung auf Vakuum (I_real = 0.01, I_imag = 0.0) ===
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            rt->I_real[i] = 0.0;
-            rt->I_imag[i] = 0.0;
-            rt->I_prev_real[i] = 0.0;
-            rt->I_prev_imag[i] = 0.0;
-            rt->I_phase[i] = 0.0;
-            rt->I_phase_prev[i] = 0.0;
-            rt->Q[i] = 0.0;
-            rt->mass[i] = 0.0;
-            rt->charge[i] = 0.0;
-            rt->xi_real[i] = 0.0;
-            rt->xi_imag[i] = 0.0;
-            rt->uncertainty[i] = 0.0;
-        }
-
         // === Kopplungsmatrix (fraktal) ===
+        // (I_real, I_imag, I_prev_real, I_prev_imag, I_phase, I_phase_prev,
+        //  Q, mass, charge, xi_real, xi_imag, uncertainty sind bereits
+        //  durch calloc() auf 0 initialisiert)
         double D = cfg->D;
         double alpha = 3.0 - D;
         int grid_size = (int)sqrt(cfg->N);
@@ -84,12 +70,11 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         }
 
         // === Symmetrische Normierung der Kopplungsmatrix ===
-        double *row_sum = malloc(cfg->N * sizeof(double));
+        double *row_sum = calloc(cfg->N, sizeof(double));
         if (row_sum != NULL)
         {
             for (size_t i = 0; i < cfg->N; i++)
             {
-                row_sum[i] = 0.0;
                 for (size_t j = 0; j < cfg->N; j++)
                 {
                     row_sum[i] += rt->K[i * cfg->N + j];
