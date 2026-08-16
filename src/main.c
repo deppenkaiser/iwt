@@ -2,14 +2,17 @@
 // main.c - GEBEREINIGT
 // ============================================================================
 
-#include "init.h"
-#include "iwt_kernel.h"
+//#include "init.h"
+//#include "iwt_kernel.h"
+#include "gui.h"
 #include <ocl/ocl.h>
-#include <stdio.h>
-#include <string.h>
+#include <stdint.h>
+//#include <stdio.h>
+//#include <string.h>
 #include <string/string.h>
-#include <time.h>
+//#include <time.h>
 
+#if 0
 int main(int argc, char **argv)
 {
     int retval = 1;
@@ -73,4 +76,11 @@ int main(int argc, char **argv)
     }
 
     return retval;
+}
+#endif
+
+int main(int argc, char **argv)
+{
+    struct iwt_gui_data data = {0};
+    return gui_application_run("iwt.app", argc, argv, &data);
 }

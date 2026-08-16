@@ -15,9 +15,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_executable(iwt)
 add_subdirectory(../../libraries/ocl ${CMAKE_BINARY_DIR}/ocl)
 add_subdirectory(../../libraries/string ${CMAKE_BINARY_DIR}/string)
+add_subdirectory(../../libraries/gui ${CMAKE_BINARY_DIR}/gui)
 
 target_sources(iwt PRIVATE
 	src/main.c
+	src/gui.c
 	src/iwt_kernel.c
 	src/iwt_kernel_frozen.c
 	src/iwt.c
@@ -31,5 +33,6 @@ target_include_directories(iwt PRIVATE
 target_link_libraries(iwt
 	ocl
 	string
+	gui
 	m
 )
