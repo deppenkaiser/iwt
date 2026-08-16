@@ -43,20 +43,28 @@ double iwt_alpha_IWT(void) { return 1; }
 
 double iwt_beta_IWT(void) { return 1; }
 
-static void iwt_print_int(uint32_t *x, uint32_t y, const char *label, int value)
+private void _iwt_print_int(uint32_t *x, uint32_t y, const char *label, int value)
 {
     string_set_cursor_position(*x, y);
     printf(BLACK_ON_WHITE "%s:" BLUE_ON_WHITE "%8d" COLOR_RESET, label, value);
     *x += strlen(label) + 10;
 }
 
-static void iwt_print_double(uint32_t *x, uint32_t y, const char *label, double value)
+private void _iwt_print_double(uint32_t *x, uint32_t y, const char *label, double value)
 {
     string_set_cursor_position(*x, y);
     char buffer[256] = {0};
     sprintf(buffer, "%12.3f", value);
     printf(BLACK_ON_WHITE "%s:" BLUE_ON_WHITE "%s" COLOR_RESET, label, buffer);
     *x += strlen(label) + strlen(buffer) + 5;
+}
+
+private void _iwt_print_double_triple(uint32_t *x, uint32_t y, const char *labels[3], const double values[3])
+{
+    for (int i = 0; i < 3; i++)
+    {
+        _iwt_print_double(x, y, labels[i], values[i]);
+    }
 }
 
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
@@ -76,16 +84,16 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     uint32_t col = 1, row = 1;
 
     // ZEILE 1
-    iwt_print_int(&col, row, "#", iter);
-    iwt_print_double(&col, row, "|Q_max|", max_q);
-    iwt_print_double(&col, row, "I_total", I_total);
-    iwt_print_double(&col, row, "I_min", I_min);
-    iwt_print_double(&col, row, "I_max", I_max);
+    _iwt_print_int(&col, row, "#", iter);
+    _iwt_print_double(&col, row, "|Q_max|", max_q);
+    _iwt_print_double(&col, row, "I_total", I_total);
+    _iwt_print_double(&col, row, "I_min", I_min);
+    _iwt_print_double(&col, row, "I_max", I_max);
 
     // ZEILE 2
     row += 2;
     col = 1;
-    iwt_print_double(&col, row, "ΣI²", sum_I_sq);
+    _iwt_print_double(&col, row, "ΣI²", sum_I_sq);
 
     // ZEILE 3: Fluktuationen
     row += 2;
@@ -111,10 +119,10 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     xi_real_var = sqrt(xi_real_var / cfg->N);
     xi_imag_var = sqrt(xi_imag_var / cfg->N);
 
-    iwt_print_double(&col, row, "ξ_real_mean", xi_real_mean);
-    iwt_print_double(&col, row, "ξ_imag_mean", xi_imag_mean);
-    iwt_print_double(&col, row, "ξ_real_σ", xi_real_var);
-    iwt_print_double(&col, row, "ξ_imag_σ", xi_imag_var);
+    _iwt_print_double(&col, row, "ξ_real_mean", xi_real_mean);
+    _iwt_print_double(&col, row, "ξ_imag_mean", xi_imag_mean);
+    _iwt_print_double(&col, row, "ξ_real_σ", xi_real_var);
+    _iwt_print_double(&col, row, "ξ_imag_σ", xi_imag_var);
 
     // ZEILE 4: ΣI² History
     row += 2;
@@ -155,9 +163,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
             Re_max = v;
     }
     Re_mean /= cfg->N;
-    iwt_print_double(&col, row, "Re_mean", Re_mean);
-    iwt_print_double(&col, row, "Re_min", Re_min);
-    iwt_print_double(&col, row, "Re_max", Re_max);
+    {
+        const char *labels[3] = { "Re_mean", "Re_min", "Re_max" };
+        const double values[3] = { Re_mean, Re_min, Re_max };
+        _iwt_print_double_triple(&col, row, labels, values);
+    }
 
     // ZEILE 9: Im(I) Statistik
     row += 2;
@@ -173,9 +183,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
             Im_max = v;
     }
     Im_mean /= cfg->N;
-    iwt_print_double(&col, row, "Im_mean", Im_mean);
-    iwt_print_double(&col, row, "Im_min", Im_min);
-    iwt_print_double(&col, row, "Im_max", Im_max);
+    {
+        const char *labels[3] = { "Im_mean", "Im_min", "Im_max" };
+        const double values[3] = { Im_mean, Im_min, Im_max };
+        _iwt_print_double_triple(&col, row, labels, values);
+    }
 
     // ZEILE 11: Phase Statistik
     row += 2;
@@ -191,9 +203,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
             phase_max = v;
     }
     phase_mean /= cfg->N;
-    iwt_print_double(&col, row, "φ_mean", phase_mean);
-    iwt_print_double(&col, row, "φ_min", phase_min);
-    iwt_print_double(&col, row, "φ_max", phase_max);
+    {
+        const char *labels[3] = { "φ_mean", "φ_min", "φ_max" };
+        const double values[3] = { phase_mean, phase_min, phase_max };
+        _iwt_print_double_triple(&col, row, labels, values);
+    }
 
     // ZEILE 13: sumJ Statistik
     row += 2;
@@ -209,9 +223,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
             J_max = v;
     }
     J_mean /= cfg->N;
-    iwt_print_double(&col, row, "J_mean", J_mean);
-    iwt_print_double(&col, row, "J_min", J_min);
-    iwt_print_double(&col, row, "J_max", J_max);
+    {
+        const char *labels[3] = { "J_mean", "J_min", "J_max" };
+        const double values[3] = { J_mean, J_min, J_max };
+        _iwt_print_double_triple(&col, row, labels, values);
+    }
 
     // ZEILE 15: Q Statistik
     row += 2;
@@ -222,7 +238,7 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
         Q_mean += rt->Q[i];
     }
     Q_mean /= cfg->N;
-    iwt_print_double(&col, row, "Q_mean", Q_mean);
+    _iwt_print_double(&col, row, "Q_mean", Q_mean);
 
     // ZEILE 17: xi_real Statistik
     row += 2;
@@ -238,9 +254,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
             xir_max = v;
     }
     xir_mean /= cfg->N;
-    iwt_print_double(&col, row, "ξr_mean", xir_mean);
-    iwt_print_double(&col, row, "ξr_min", xir_min);
-    iwt_print_double(&col, row, "ξr_max", xir_max);
+    {
+        const char *labels[3] = { "ξr_mean", "ξr_min", "ξr_max" };
+        const double values[3] = { xir_mean, xir_min, xir_max };
+        _iwt_print_double_triple(&col, row, labels, values);
+    }
 
     // ZEILE 19: xi_imag Statistik
     row += 2;
@@ -256,9 +274,11 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
             xii_max = v;
     }
     xii_mean /= cfg->N;
-    iwt_print_double(&col, row, "ξi_mean", xii_mean);
-    iwt_print_double(&col, row, "ξi_min", xii_min);
-    iwt_print_double(&col, row, "ξi_max", xii_max);
+    {
+        const char *labels[3] = { "ξi_mean", "ξi_min", "ξi_max" };
+        const double values[3] = { xii_mean, xii_min, xii_max };
+        _iwt_print_double_triple(&col, row, labels, values);
+    }
 
     fflush(stdout);
 }
