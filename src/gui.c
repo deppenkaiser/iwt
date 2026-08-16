@@ -86,6 +86,7 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
     {
         case GE_A_STARTUP:
         {
+			data->cfg.gamma = 0.0;
             data->cfg.T = 1.0;
             data->cfg.DT = 1.0e-12;
             data->cfg.hbar = 1.0;
@@ -117,10 +118,10 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
                 // === Anfangszustand (Vakuum + Basisamplitude) ===
                 for (size_t i = 0; i < data->cfg.N; i++)
                 {
-                    data->rt.I_real[i] = 0.01;
+                    data->rt.I_real[i] = 0.0;
                     data->rt.I_imag[i] = 0.0;
                     data->rt.I_phase[i] = 0.0;
-                    data->rt.I_prev_real[i] = 0.01;
+                    data->rt.I_prev_real[i] = 0.0;
                     data->rt.I_prev_imag[i] = 0.0;
                     data->rt.I_phase_prev[i] = 0.0;
                 }

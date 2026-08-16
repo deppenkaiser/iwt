@@ -106,6 +106,7 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 
     int N = (int)cfg->N;
     double DT = cfg->DT;
+	double gamma = cfg->gamma;
 
     clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
     clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
@@ -114,6 +115,7 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->sumJ_gpu);
     clSetKernelArg(kernel, 5, sizeof(int), &N);
     clSetKernelArg(kernel, 6, sizeof(double), &DT);
+	clSetKernelArg(kernel, 7, sizeof(double), &gamma);
 
     size_t global = cfg->N;
     size_t local = 64;

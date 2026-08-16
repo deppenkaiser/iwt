@@ -47,6 +47,7 @@ typedef struct iwt_runtime
 typedef struct iwt_config
 {
     size_t N;
+	double gamma;
     double D;
     double l0;
     double T;
