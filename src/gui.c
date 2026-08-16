@@ -1,5 +1,8 @@
 #include "gui.h"
+#include "init.h"
 #include <api/api.h>
+#include <stdio.h>
+#include <time.h>
 
 callback bool gui_application(gui_event_type_t event, gui_application_t core)
 {
@@ -9,8 +12,39 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
     switch (event)
     {
         case GE_A_STARTUP:
-            is_ok = true;
+        {
+            data->cfg.T = 1.0;
+            data->cfg.DT = 1.0e-12;
+            data->cfg.hbar = 1.0;
+            data->cfg.N = 4096;
+            data->cfg.D = iwt_fractal_dimension();
+            data->cfg.l0 = 1.0;
+            data->cfg.MAX_ITER = 500;
+            data->cfg.seed = (unsigned int)time(NULL);
+
+            printf("=== IWT Parameter (aus Theorie) ===\n");
+            printf("D               = %.12f\n", data->cfg.D);
+            printf("l0              = %.12e m\n", data->cfg.l0);
+            printf("T               = %.12e s\n", data->cfg.T);
+            printf("\n=== Quantenfluktuationen (Anhang O & P) ===\n");
+            printf("hbar            = %.12e (sim. Einheiten)\n", data->cfg.hbar);
+            printf("seed            = %u\n", data->cfg.seed);
+            printf("\n=== Abgeleitete Simulationsparameter ===\n");
+            printf("DT              = %.12e\n", data->cfg.DT);
+            printf("========================================\n\n");
+
+            is_ok = ocl_initialize(&data->rt.ocl)
+                && ocl_compile(&data->rt.ocl)
+                && ocl_load_kernels(&data->rt.ocl)
+                && initialize_host_data(&data->rt, &data->cfg)
+                && initialize_gpu_data(&data->rt, &data->cfg);
+
+            if (!is_ok)
+            {
+                fprintf(stderr, "IWT: OpenCL-/Daten-Initialisierung fehlgeschlagen.\n");
+            }
             break;
+        }
 
         case GE_A_ACTIVATE:
         {
@@ -25,6 +59,9 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
         }
 
         case GE_A_SHUTDOWN:
+            deinitialize_gpu_data(&data->rt);
+            deinitialize_host_data(&data->rt);
+            ocl_deinitialize(&data->rt.ocl);
             is_ok = true;
             break;
 
