@@ -44,6 +44,12 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg);
 bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg);
 
 // ============================================================================
+// EIN EINZELNER SIMULATIONSSCHRITT (für Live-Anzeige)
+// ============================================================================
+
+bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg);
+
+// ============================================================================
 // HAUPTSIMULATION
 // ============================================================================
 

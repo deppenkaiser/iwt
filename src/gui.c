@@ -1,8 +1,81 @@
 #include "gui.h"
 #include "init.h"
+#include "iwt_kernel.h"
 #include <api/api.h>
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
+
+private GLuint _compile_shader(GLenum type, const char* source)
+{
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, NULL);
+    glCompileShader(shader);
+
+    GLint status = GL_FALSE;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    if (status == GL_FALSE)
+    {
+        char log[512] = {0};
+        glGetShaderInfoLog(shader, sizeof(log), NULL, log);
+        fprintf(stderr, "IWT: Shader-Fehler: %s\n", log);
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
+private GLuint _create_overlay_program(void)
+{
+    static const char* vertex_source =
+        "#version 150 core\n"
+        "in vec2 pos;\n"
+        "in vec2 uv;\n"
+        "out vec2 v_uv;\n"
+        "void main()\n"
+        "{\n"
+        "    v_uv = uv;\n"
+        "    gl_Position = vec4(pos, 0.0, 1.0);\n"
+        "}\n";
+
+    static const char* fragment_source =
+        "#version 150 core\n"
+        "in vec2 v_uv;\n"
+        "out vec4 frag_color;\n"
+        "uniform sampler2D tex;\n"
+        "void main()\n"
+        "{\n"
+        "    frag_color = texture(tex, v_uv);\n"
+        "}\n";
+
+    GLuint vs = _compile_shader(GL_VERTEX_SHADER, vertex_source);
+    GLuint fs = _compile_shader(GL_FRAGMENT_SHADER, fragment_source);
+    if (vs == 0 || fs == 0) return 0;
+
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+    glBindAttribLocation(program, 0, "pos");
+    glBindAttribLocation(program, 1, "uv");
+    glLinkProgram(program);
+
+    GLint status = GL_FALSE;
+    glGetProgramiv(program, GL_LINK_STATUS, &status);
+    if (status == GL_FALSE)
+    {
+        char log[512] = {0};
+        glGetProgramInfoLog(program, sizeof(log), NULL, log);
+        fprintf(stderr, "IWT: Programm-Link-Fehler: %s\n", log);
+        glDeleteProgram(program);
+        program = 0;
+    }
+
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    return program;
+}
 
 callback bool gui_application(gui_event_type_t event, gui_application_t core)
 {
@@ -39,7 +112,20 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
                 && initialize_host_data(&data->rt, &data->cfg)
                 && initialize_gpu_data(&data->rt, &data->cfg);
 
-            if (!is_ok)
+            if (is_ok)
+            {
+                // === Anfangszustand (Vakuum + Basisamplitude) ===
+                for (size_t i = 0; i < data->cfg.N; i++)
+                {
+                    data->rt.I_real[i] = 0.01;
+                    data->rt.I_imag[i] = 0.0;
+                    data->rt.I_phase[i] = 0.0;
+                    data->rt.I_prev_real[i] = 0.01;
+                    data->rt.I_prev_imag[i] = 0.0;
+                    data->rt.I_phase_prev[i] = 0.0;
+                }
+            }
+            else
             {
                 fprintf(stderr, "IWT: OpenCL-/Daten-Initialisierung fehlgeschlagen.\n");
             }
@@ -62,6 +148,8 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             deinitialize_gpu_data(&data->rt);
             deinitialize_host_data(&data->rt);
             ocl_deinitialize(&data->rt.ocl);
+            free(data->overlay_rgb);
+            data->overlay_rgb = NULL;
             is_ok = true;
             break;
 
@@ -74,15 +162,72 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
 
 callback void gui_gl(gui_gl_t core, gui_event_t e)
 {
+    iwt_gui_data_t data = core->user_data;
+
     switch (e->type)
     {
         case GE_GL_REALIZE:
+        {
+            data->overlay_width = (int)sqrt((double)data->cfg.N);
+            data->overlay_height = data->overlay_width;
+            data->overlay_rgb = calloc((size_t)data->overlay_width * data->overlay_height * 3, sizeof(unsigned char));
+
+            glGenTextures(1, &data->gl_texture);
+            glBindTexture(GL_TEXTURE_2D, data->gl_texture);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, data->overlay_width, data->overlay_height, 0,
+                GL_RGB, GL_UNSIGNED_BYTE, data->overlay_rgb);
+
+            data->gl_program = _create_overlay_program();
+
+            static const float quad_vertices[] = {
+                // pos          // uv
+                -1.0f, -1.0f,   0.0f, 1.0f,
+                 1.0f, -1.0f,   1.0f, 1.0f,
+                 1.0f,  1.0f,   1.0f, 0.0f,
+                -1.0f, -1.0f,   0.0f, 1.0f,
+                 1.0f,  1.0f,   1.0f, 0.0f,
+                -1.0f,  1.0f,   0.0f, 0.0f,
+            };
+
+            glGenVertexArrays(1, &data->gl_vao);
+            glGenBuffers(1, &data->gl_vbo);
+            glBindVertexArray(data->gl_vao);
+            glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+            glBindVertexArray(0);
             break;
+        }
 
         case GE_GL_RENDER:
-            glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+        {
+            run_simulation_step(&data->rt, &data->cfg);
+            data->iter++;
+
+            iwt_build_overlay_rgb(data->rt.mass, data->rt.charge, data->cfg.N,
+                data->overlay_rgb, data->overlay_width, data->overlay_height);
+
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
+
+            glBindTexture(GL_TEXTURE_2D, data->gl_texture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, data->overlay_width, data->overlay_height,
+                GL_RGB, GL_UNSIGNED_BYTE, data->overlay_rgb);
+
+            glUseProgram(data->gl_program);
+            glUniform1i(glGetUniformLocation(data->gl_program, "tex"), 0);
+            glBindVertexArray(data->gl_vao);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glBindVertexArray(0);
             break;
+        }
 
         default:
             break;

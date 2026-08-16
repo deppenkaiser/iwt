@@ -391,3 +391,48 @@ void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filenam
     free(image);
 }
 
+void iwt_build_overlay_rgb(const double *mass, const double *charge, size_t N, unsigned char *out_rgb, int width, int height)
+{
+    memset(out_rgb, 0, (size_t)width * height * 3);
+
+    double mass_min = 1e30;
+    double mass_max = -1e30;
+    for (size_t i = 0; i < N; i++)
+    {
+        mass_min = MIN(mass_min, mass[i]);
+        mass_max = MAX(mass_max, mass[i]);
+    }
+    double mass_range = mass_max - mass_min;
+    if (mass_range < 1e-30) mass_range = 1.0;
+
+    double max_abs = 0.0;
+    for (size_t i = 0; i < N; i++)
+    {
+        max_abs = MAX(max_abs, fabs(charge[i]));
+    }
+    if (max_abs < 1e-30) max_abs = 1.0;
+
+    // Helligkeit = Masse, Farbrichtung (Rot/Blau) = Ladung, analog zu
+    // iwt_save_heatmap_ppm() und iwt_save_charge_heatmap(), aber kombiniert.
+    int grid_size = (int)sqrt(N);
+    for (size_t i = 0; i < N; i++)
+    {
+        int x = i % grid_size;
+        int y = i / grid_size;
+        if (x >= width || y >= height) continue;
+
+        double brightness = (mass[i] - mass_min) / mass_range;
+        double charge_norm = charge[i] / max_abs;
+        double abs_charge = fabs(charge_norm);
+
+        double r = brightness * (charge_norm < 0.0 ? -charge_norm : (1.0 - abs_charge));
+        double g = brightness * (1.0 - abs_charge);
+        double b = brightness * (charge_norm > 0.0 ? charge_norm : (1.0 - abs_charge));
+
+        size_t idx = ((size_t)y * width + x) * 3;
+        out_rgb[idx + 0] = (unsigned char)(r * 255.0);
+        out_rgb[idx + 1] = (unsigned char)(g * 255.0);
+        out_rgb[idx + 2] = (unsigned char)(b * 255.0);
+    }
+}
+

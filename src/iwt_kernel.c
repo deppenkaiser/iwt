@@ -186,6 +186,26 @@ bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg)
     return true;
 }
 
+bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+    for (size_t i = 0; i < cfg->N; i++)
+    {
+        rt->I_prev_real[i] = rt->I_real[i];
+        rt->I_prev_imag[i] = rt->I_imag[i];
+        rt->I_phase_prev[i] = rt->I_phase[i];
+    }
+
+    if (!frozen_generate_uncertainty_cpu(rt, cfg)) return false;
+    if (!frozen_run_apply_fluctuations(rt, cfg)) return false;
+    if (!frozen_run_apply_redshift_damping(rt, cfg)) return false;
+    if (!run_flux_calculation(rt, cfg)) return false;
+    if (!run_q_calculation(rt, cfg)) return false;
+    if (!run_update_info(rt, cfg)) return false;
+    if (!run_compute_mass_charge(rt, cfg)) return false;
+
+    return true;
+}
+
 bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
     bool retval = false;
