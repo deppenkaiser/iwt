@@ -48,6 +48,7 @@ typedef struct iwt_config
 {
     size_t N;
 	double gamma;
+	double beta;
     double D;
     double l0;
     double T;

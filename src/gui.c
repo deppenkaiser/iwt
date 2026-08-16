@@ -86,7 +86,8 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
     {
         case GE_A_STARTUP:
         {
-			data->cfg.gamma = 0.0;
+			data->cfg.gamma = 1.0; // Struktur bildend
+			data->cfg.beta = 1.0; // Bohm-Kopplungsstärke
             data->cfg.T = 1.0;
             data->cfg.DT = 1.0e-12;
             data->cfg.hbar = 1.0;

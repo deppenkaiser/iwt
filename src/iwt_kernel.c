@@ -55,9 +55,9 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     }
 
     int N = (int)cfg->N;
-    double hbar = 1.0;
+    double hbar = cfg->hbar;
     double m = 1.0;
-    double prefactor = -(hbar * hbar) / (2.0 * m);
+    double beta = cfg->beta;        // NEU
     double epsilon = 1e-6;
     double Q_min = 1e-6;
 
@@ -66,9 +66,11 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
     clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->Q_gpu);
     clSetKernelArg(kernel, 3, sizeof(int), &N);
     clSetKernelArg(kernel, 4, sizeof(double), &sum_abs_sq);
-    clSetKernelArg(kernel, 5, sizeof(double), &prefactor);
-    clSetKernelArg(kernel, 6, sizeof(double), &epsilon);
-    clSetKernelArg(kernel, 7, sizeof(double), &Q_min);
+    clSetKernelArg(kernel, 5, sizeof(double), &hbar);
+    clSetKernelArg(kernel, 6, sizeof(double), &m);
+    clSetKernelArg(kernel, 7, sizeof(double), &beta);    // NEU
+    clSetKernelArg(kernel, 8, sizeof(double), &epsilon);
+    clSetKernelArg(kernel, 9, sizeof(double), &Q_min);
 
     size_t global = cfg->N;
     size_t local = 64;
