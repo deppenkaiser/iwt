@@ -18,15 +18,17 @@ typedef struct iwt_cluster
     // Position (Schwerpunkt)
     double x;
     double y;
-    
+    double z;
+
     // Physikalische Eigenschaften
     double mass;
     double charge;
     double phase;
-    
+
     // Geschwindigkeit
     double vx;
     double vy;
+    double vz;
     
     // Knotenliste (für die Phasenverschiebung)
     size_t node_count;
@@ -60,6 +62,9 @@ typedef struct iwt_runtime
     double *pos_x;
     double *pos_y;
     double *pos_z;
+
+    // Nachbarschafts-Adjazenz (K-Matrix-Schwellwert), N*N, statisch
+    bool *adjacency;
     
     cl_mem mass_gpu;
     cl_mem charge_gpu;
@@ -92,6 +97,7 @@ typedef struct iwt_config
     double hbar;
     unsigned int seed;
 	bool enable_motion;
+	double cluster_threshold;
 } *iwt_config_t;
 
 typedef struct iwt_spectrum

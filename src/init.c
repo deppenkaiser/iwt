@@ -28,6 +28,9 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->pos_y = malloc(cfg->N * sizeof(double));
     rt->pos_z = malloc(cfg->N * sizeof(double));
 
+    // === Nachbarschafts-Adjazenz (statisch, wird einmalig berechnet) ===
+    rt->adjacency = malloc(cfg->N * cfg->N * sizeof(bool));
+
     // === Masse und Ladung ===
     rt->mass = calloc(cfg->N, sizeof(double));
     rt->charge = calloc(cfg->N, sizeof(double));
@@ -53,6 +56,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         (rt->K != NULL) && (rt->sumJ != NULL) &&
         (rt->Q != NULL) &&
         (rt->pos_x != NULL) && (rt->pos_y != NULL) && (rt->pos_z != NULL) &&
+        (rt->adjacency != NULL) &&
         (rt->mass != NULL) && (rt->charge != NULL) &&
         (rt->xi_real != NULL) && (rt->xi_imag != NULL) &&
         (rt->uncertainty != NULL) &&
@@ -102,6 +106,17 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 
             // 3. KEINE NORMIERUNG - die Kopplungsmatrix bleibt fraktal
             //    (Die Normierung würde die fraktale Struktur zerstören)
+
+            // 4. Nachbarschafts-Adjazenz aus K-Matrix-Schwellwert ableiten
+            //    (einmalig, da Positionen und damit K statisch sind)
+            for (size_t i = 0; i < cfg->N; i++)
+            {
+                for (size_t j = 0; j < cfg->N; j++)
+                {
+                    rt->adjacency[i * cfg->N + j] =
+                        (i != j) && (rt->K[i * cfg->N + j] > cfg->cluster_threshold);
+                }
+            }
 
             retval = true;
         }
@@ -185,6 +200,9 @@ void deinitialize_host_data(const iwt_runtime_t rt)
     _free_memory((void**)&rt->pos_x);
     _free_memory((void**)&rt->pos_y);
     _free_memory((void**)&rt->pos_z);
+
+    // === Nachbarschafts-Adjazenz ===
+    _free_memory((void**)&rt->adjacency);
 
     // === Masse und Ladung ===
     _free_memory((void**)&rt->mass);
