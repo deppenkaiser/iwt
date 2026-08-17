@@ -407,26 +407,55 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 }
 
 private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, 
-                             double G, double c, double* Fx, double* Fy)
+                             double G, double c, double epsilon0, 
+                             double* Fx, double* Fy)
 {
     double dx = b->x - a->x;
     double dy = b->y - a->y;
     double r = sqrt(dx * dx + dy * dy);
     if (r < 1e-30) { *Fx = 0.0; *Fy = 0.0; return; }
     
+    // ================================================================
+    // Relativgeschwindigkeit und -beschleunigung (vereinfacht)
+    // ================================================================
     double dvx = b->vx - a->vx;
     double dvy = b->vy - a->vy;
-    double dr = (dx * dvx + dy * dvy) / r;  // radiale Geschwindigkeit
+    double dr = (dx * dvx + dy * dvy) / r;      // radiale Geschwindigkeit
     
-    double F_mag = G * a->mass * b->mass / (r * r);
-    double beta = 0.5;  // Weber-Gravitation
+    // Beschleunigung (Differenz der Geschwindigkeiten, vereinfacht)
+    double dax = 0.0;  // müsste aus den Kräften berechnet werden
+    double day = 0.0;
+    double d2r = (dx * dax + dy * day) / r;     // radiale Beschleunigung
     
-    // Weber-Kraft (Kapitel 8)
-    double factor = 1.0 - (dr * dr) / (c * c) + beta * (r * 0.0) / (c * c);
-    F_mag *= factor;
+    // ================================================================
+    // 1. WEBER-GRAVITATION (WG) - wirkt zwischen Massen
+    //    β = 0.5 für massive Körper
+    // ================================================================
+    double F_WG_mag = G * a->mass * b->mass / (r * r);
+    double beta_WG = 0.5;
+    double factor_WG = 1.0 - (dr * dr) / (c * c) + beta_WG * (r * d2r) / (c * c);
+    F_WG_mag *= factor_WG;
     
-    *Fx = F_mag * dx / r;
-    *Fy = F_mag * dy / r;
+    double F_WG_x = F_WG_mag * (-dx / r);  // anziehend (Minus-Zeichen)
+    double F_WG_y = F_WG_mag * (-dy / r);
+    
+    // ================================================================
+    // 2. WEBER-ELEKTRODYNAMIK (WED) - wirkt zwischen Ladungen
+    //    β = 2 für elektrische Ladungen
+    // ================================================================
+    double F_WED_mag = (a->charge * b->charge) / (4.0 * 3.141592653589793 * epsilon0 * r * r);
+    double beta_WED = 2.0;
+    double factor_WED = 1.0 - (dr * dr) / (c * c) + beta_WED * (r * d2r) / (c * c);
+    F_WED_mag *= factor_WED;
+    
+    double F_WED_x = F_WED_mag * (dx / r);   // abstoßend/anziehend je nach Vorzeichen
+    double F_WED_y = F_WED_mag * (dy / r);
+    
+    // ================================================================
+    // 3. GESAMTKRAFT (WG + WED)
+    // ================================================================
+    *Fx = F_WG_x + F_WED_x;
+    *Fy = F_WG_y + F_WED_y;
 }
 
 void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
@@ -435,7 +464,41 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
     double twoPI = 2.0 * PI;
     int grid_size = (int)sqrt(cfg->N);
 
-    // 1. Phasenverschiebung
+    // ================================================================
+    // 1. GESCHWINDIGKEITEN AUS WEBER-KRÄFTEN BERECHNEN
+    // ================================================================
+    for (size_t c = 0; c < rt->cluster_count; c++)
+    {
+        iwt_cluster_t cl = &rt->clusters[c];
+        if (!cl->is_active) continue;
+
+        double Fx = 0.0;
+        double Fy = 0.0;
+
+        // Summiere alle Kräfte von anderen Clustern
+        for (size_t d = 0; d < rt->cluster_count; d++)
+        {
+            if (c == d) continue;
+            iwt_cluster_t other = &rt->clusters[d];
+            if (!other->is_active) continue;
+
+            double Fx_ij, Fy_ij;
+            _iwt_compute_weber_force(cl, other, 1.0, 1.0, 1.0, &Fx_ij, &Fy_ij);
+            Fx += Fx_ij;
+            Fy += Fy_ij;
+        }
+
+        // Geschwindigkeit aktualisieren (Newton)
+        if (cl->mass > 1e-30)
+        {
+            cl->vx += (Fx / cl->mass) * dt;
+            cl->vy += (Fy / cl->mass) * dt;
+        }
+    }
+
+    // ================================================================
+    // 2. PHASENVERSCHIEBUNG (Bewegung durch Phasengradient)
+    // ================================================================
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
         iwt_cluster_t cl = &rt->clusters[c];
@@ -450,7 +513,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             size_t i = cl->node_indices[n];
 
             double kx = (double)(i % grid_size);
-            double ky = (double)i / (double)grid_size;   // KORREKT
+            double ky = (double)i / (double)grid_size;
 
             double dx = kx - cl->x;
             double dy = ky - cl->y;
@@ -464,7 +527,9 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         }
     }
 
-    // 2. I-Werte neu berechnen
+    // ================================================================
+    // 3. I-WERTE NEU BERECHNEN
+    // ================================================================
     for (size_t i = 0; i < cfg->N; i++)
     {
         double rho = rt->mass[i];
@@ -473,7 +538,9 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         rt->I_imag[i] = sqrt(fabs(rho)) * sin(phi);
     }
 
-    // 3. Schwerpunkt neu berechnen
+    // ================================================================
+    // 4. SCHWERPUNKT NEU BERECHNEN
+    // ================================================================
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
         iwt_cluster_t cl = &rt->clusters[c];
@@ -490,7 +557,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             double rho = rt->mass[i];
 
             new_x += rho * (double)(i % grid_size);
-            new_y += rho * ((double)i / (double)grid_size);   // KORREKT
+            new_y += rho * ((double)i / (double)grid_size);
             new_mass += rho;
         }
 
@@ -501,7 +568,9 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         }
     }
 
-    // 4. Knotenliste zurücksetzen
+    // ================================================================
+    // 5. KNOTENLISTE ZURÜCKSETZEN
+    // ================================================================
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
         iwt_cluster_t cl = &rt->clusters[c];
