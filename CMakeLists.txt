@@ -24,6 +24,7 @@ target_sources(iwt PRIVATE
 	src/iwt_kernel_frozen.c
 	src/iwt.c
 	src/init.c
+	src/dodecahedron.c
 )
 
 target_include_directories(iwt PRIVATE

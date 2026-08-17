@@ -1,5 +1,6 @@
 #include "init.h"
 #include "iwt.h"
+#include "dodecahedron.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
@@ -21,6 +22,11 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->K = malloc(cfg->N * cfg->N * sizeof(double));
     rt->sumJ = malloc(cfg->N * sizeof(double));
     rt->Q = calloc(cfg->N, sizeof(double));
+
+    // === Dodekaeder-Knotenpositionen (3D) ===
+    rt->pos_x = malloc(cfg->N * sizeof(double));
+    rt->pos_y = malloc(cfg->N * sizeof(double));
+    rt->pos_z = malloc(cfg->N * sizeof(double));
 
     // === Masse und Ladung ===
     rt->mass = calloc(cfg->N, sizeof(double));
@@ -46,57 +52,59 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         (rt->I_phase != NULL) && (rt->I_phase_prev != NULL) &&
         (rt->K != NULL) && (rt->sumJ != NULL) &&
         (rt->Q != NULL) &&
+        (rt->pos_x != NULL) && (rt->pos_y != NULL) && (rt->pos_z != NULL) &&
         (rt->mass != NULL) && (rt->charge != NULL) &&
         (rt->xi_real != NULL) && (rt->xi_imag != NULL) &&
         (rt->uncertainty != NULL) &&
         (rt->clusters != NULL))
     {
-        int grid_size = (int)sqrt(cfg->N);
-
         // ================================================================
-        // FRAKTALE KOPPLUNGSMATRIX (IWT-Kern)
+        // FRAKTALE DODEKAEDER-KNOTENPOSITIONEN
         // ================================================================
+        bool points_ok = dodecahedron_generate_points(rt->pos_x, rt->pos_y, rt->pos_z, cfg->N, cfg->l0);
 
-        double D = cfg->D;
-        double alpha = 3.0 - D;
-
-        // 1. Alle Kopplungen auf 0 setzen
-        for (size_t i = 0; i < cfg->N; i++)
+        if (points_ok)
         {
-            for (size_t j = 0; j < cfg->N; j++)
+            // ================================================================
+            // FRAKTALE KOPPLUNGSMATRIX (IWT-Kern)
+            // ================================================================
+
+            double D = cfg->D;
+            double alpha = 3.0 - D;
+
+            // 1. Alle Kopplungen auf 0 setzen
+            for (size_t i = 0; i < cfg->N; i++)
             {
-                rt->K[i * cfg->N + j] = 0.0;
+                for (size_t j = 0; j < cfg->N; j++)
+                {
+                    rt->K[i * cfg->N + j] = 0.0;
+                }
             }
-        }
 
-        // 2. Fraktale Kopplungen berechnen
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            int ix = i % grid_size;
-            int iy = i / grid_size;
-
-            for (size_t j = 0; j < cfg->N; j++)
+            // 2. Fraktale Kopplungen berechnen (3D-Dodekaeder-Abstaende)
+            for (size_t i = 0; i < cfg->N; i++)
             {
-                if (i == j) continue;
+                for (size_t j = 0; j < cfg->N; j++)
+                {
+                    if (i == j) continue;
 
-                int jx = j % grid_size;
-                int jy = j / grid_size;
+                    double dx = rt->pos_x[i] - rt->pos_x[j];
+                    double dy = rt->pos_y[i] - rt->pos_y[j];
+                    double dz = rt->pos_z[i] - rt->pos_z[j];
+                    double dist_3d = sqrt(dx * dx + dy * dy + dz * dz);
+                    if (dist_3d < 1e-9) dist_3d = 1e-9;
 
-                double dx = (double)(ix - jx);
-                double dy = (double)(iy - jy);
-                double dist_2d = sqrt(dx * dx + dy * dy);
-                if (dist_2d < 1.0) dist_2d = 1.0;
-
-                // Fraktale Distanz
-                double d_ij = pow(dist_2d, 1.0 / D);
-                rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
+                    // Fraktale Distanz
+                    double d_ij = pow(dist_3d, 1.0 / D);
+                    rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
+                }
             }
+
+            // 3. KEINE NORMIERUNG - die Kopplungsmatrix bleibt fraktal
+            //    (Die Normierung würde die fraktale Struktur zerstören)
+
+            retval = true;
         }
-
-        // 3. KEINE NORMIERUNG - die Kopplungsmatrix bleibt fraktal
-        //    (Die Normierung würde die fraktale Struktur zerstören)
-
-        retval = true;
     }
 
     return retval;
@@ -172,6 +180,11 @@ void deinitialize_host_data(const iwt_runtime_t rt)
     _free_memory((void**)&rt->K);
     _free_memory((void**)&rt->sumJ);
     _free_memory((void**)&rt->Q);
+
+    // === Dodekaeder-Knotenpositionen (3D) ===
+    _free_memory((void**)&rt->pos_x);
+    _free_memory((void**)&rt->pos_y);
+    _free_memory((void**)&rt->pos_z);
 
     // === Masse und Ladung ===
     _free_memory((void**)&rt->mass);

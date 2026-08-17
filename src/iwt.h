@@ -55,6 +55,11 @@ typedef struct iwt_runtime
     double *uncertainty;
     double *mass;
     double *charge;
+
+    // Dodekaeder-Knotenpositionen (3D)
+    double *pos_x;
+    double *pos_y;
+    double *pos_z;
     
     cl_mem mass_gpu;
     cl_mem charge_gpu;
