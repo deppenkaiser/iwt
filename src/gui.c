@@ -8,6 +8,13 @@
 #include <string.h>
 #include <time.h>
 
+enum
+{
+    IWT_CTRL_MOTION = 1,
+    IWT_CTRL_BETA,
+    IWT_CTRL_GAMMA
+};
+
 private GLuint _compile_shader(GLenum type, const char* source)
 {
     GLuint shader = glCreateShader(type);
@@ -139,9 +146,35 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
         {
             data->gl_area = gui_gl_create(data);
             GtkWidget* gl_frame = gui_frame_create("IWT Live View", data->gl_area);
+            gtk_widget_set_vexpand(gl_frame, TRUE);
+            gtk_widget_set_hexpand(gl_frame, TRUE);
+
+            struct gui_button_configuration motion_cfg = { .label = "Bewegung aktiv", .toggle = true };
+            data->toggle_motion = gui_button_create(IWT_CTRL_MOTION, &motion_cfg, data);
+            gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_motion), data->cfg.enable_motion);
+
+            struct gui_spin_button_configuration beta_cfg = { .alignment = 0.5f, .value = data->cfg.beta, .min = 0.0, .max = 10.0, .increment = 0.01, .digits = 3 };
+            data->spin_beta = gui_button_spin_create(IWT_CTRL_BETA, &beta_cfg, data);
+
+            struct gui_spin_button_configuration gamma_cfg = { .alignment = 0.5f, .value = data->cfg.gamma, .min = 0.0, .max = 10.0, .increment = 0.01, .digits = 3 };
+            data->spin_gamma = gui_button_spin_create(IWT_CTRL_GAMMA, &gamma_cfg, data);
+
+            GtkWidget* label_beta = gtk_label_new("beta:");
+            GtkWidget* label_gamma = gtk_label_new("gamma:");
+
+            GtkWidget* control_box = gui_box_horizontal_create(8);
+            gui_box_append_widget(control_box, data->toggle_motion);
+            gui_box_append_widget(control_box, label_beta);
+            gui_box_append_widget(control_box, data->spin_beta);
+            gui_box_append_widget(control_box, label_gamma);
+            gui_box_append_widget(control_box, data->spin_gamma);
+
+            GtkWidget* main_box = gui_box_vertical_create(4);
+            gui_box_append_widget(main_box, control_box);
+            gui_box_append_widget(main_box, gl_frame);
 
             data->window = gui_main_window_create(core->app, 800, 800, data, false, true);
-            gtk_window_set_child(GTK_WINDOW(data->window), gl_frame);
+            gtk_window_set_child(GTK_WINDOW(data->window), main_box);
 
             is_ok = true;
             break;
@@ -161,6 +194,35 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
     }
 
     return is_ok;
+}
+
+callback void gui_button(gui_button_t core, gui_event_t e)
+{
+    iwt_gui_data_t data = core->user_data;
+
+    switch (e->type)
+    {
+        case GE_B_TOGGLED:
+            if (core->id == IWT_CTRL_MOTION)
+            {
+                data->cfg.enable_motion = e->data.b_toggled.active;
+            }
+            break;
+
+        case GE_B_SELECTED:
+            if (core->id == IWT_CTRL_BETA)
+            {
+                data->cfg.beta = gui_button_spin_get_double(core->button);
+            }
+            else if (core->id == IWT_CTRL_GAMMA)
+            {
+                data->cfg.gamma = gui_button_spin_get_double(core->button);
+            }
+            break;
+
+        default:
+            break;
+    }
 }
 
 callback void gui_gl(gui_gl_t core, gui_event_t e)

@@ -8,6 +8,10 @@ typedef struct iwt_gui_data
     GtkWidget* gl_area;
     GtkWidget* window;
 
+    GtkWidget* toggle_motion;
+    GtkWidget* spin_beta;
+    GtkWidget* spin_gamma;
+
     struct iwt_config cfg;
     struct iwt_runtime rt;
 
