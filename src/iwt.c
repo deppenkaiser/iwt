@@ -287,11 +287,13 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
 private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, 
                          size_t idx, bool* visited, iwt_cluster_t c)
 {
-    // Stack für die iterative Tiefensuche
-	size_t* stack = malloc(cfg->N * sizeof(size_t));
-	if (!stack) return;
-	int stack_ptr = 0;
-	stack[stack_ptr++] = idx;
+    // Dynamischer Stack (wie von Dir bereits angepasst)
+    size_t* stack = malloc(cfg->N * sizeof(size_t));
+    if (!stack) return;
+    int stack_ptr = 0;
+    stack[stack_ptr++] = idx;
+    
+    int grid_size = (int)sqrt(cfg->N);
     
     while (stack_ptr > 0)
     {
@@ -308,47 +310,48 @@ private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg,
         // Masse und Schwerpunkt akkumulieren
         double m = rt->mass[i];
         c->mass += m;
-        c->x += m * (i % (int)sqrt(cfg->N));
-        c->y += m * (int) ((double) i / (int)sqrt(cfg->N));
+        c->x += m * (i % grid_size);
+        c->y += m * (i / grid_size);
         c->charge += rt->charge[i];
         c->phase += rt->I_phase[i];
         
-        // Nachbarn prüfen (4er-Nachbarschaft)
-        int grid_size = (int)sqrt(cfg->N);
+        // ================================================================
+        // NEU: Nachbarn in zufälliger Reihenfolge sammeln
+        // ================================================================
+        
         int ix = i % grid_size;
         int iy = i / grid_size;
         
-        // Linker Nachbar
-        if (ix > 0)
+        // Alle Nachbarn in ein Array sammeln
+        size_t neighbors[4];
+        int neighbor_count = 0;
+        
+        if (ix > 0) neighbors[neighbor_count++] = i - 1;
+        if (ix < grid_size - 1) neighbors[neighbor_count++] = i + 1;
+        if (iy > 0) neighbors[neighbor_count++] = i - grid_size;
+        if (iy < grid_size - 1) neighbors[neighbor_count++] = i + grid_size;
+        
+        // Nachbarn zufällig mischen (Fisher-Yates)
+        for (int n = neighbor_count - 1; n > 0; n--)
         {
-            size_t j = i - 1;
-            if (!visited[j] && rt->mass[j] > 1e-6)
-                stack[stack_ptr++] = j;
+            int j = rand() % (n + 1);
+            size_t temp = neighbors[n];
+            neighbors[n] = neighbors[j];
+            neighbors[j] = temp;
         }
-        // Rechter Nachbar
-        if (ix < grid_size - 1)
+        
+        // Nachbarn in zufälliger Reihenfolge auf den Stack legen
+        for (int n = 0; n < neighbor_count; n++)
         {
-            size_t j = i + 1;
+            size_t j = neighbors[n];
             if (!visited[j] && rt->mass[j] > 1e-6)
+            {
                 stack[stack_ptr++] = j;
-        }
-        // Oberer Nachbar
-        if (iy > 0)
-        {
-            size_t j = i - grid_size;
-            if (!visited[j] && rt->mass[j] > 1e-6)
-                stack[stack_ptr++] = j;
-        }
-        // Unterer Nachbar
-        if (iy < grid_size - 1)
-        {
-            size_t j = i + grid_size;
-            if (!visited[j] && rt->mass[j] > 1e-6)
-                stack[stack_ptr++] = j;
+            }
         }
     }
-
-	free(stack);
+    
+    free(stack);
 }
 
 void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -432,50 +435,36 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
     double twoPI = 2.0 * PI;
     int grid_size = (int)sqrt(cfg->N);
 
-    // ================================================================
-    // 1. PHASENVERSCHIEBUNG (Bewegung durch Phasengradient)
-    // ================================================================
-
+    // 1. Phasenverschiebung
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
         iwt_cluster_t cl = &rt->clusters[c];
         if (!cl->is_active) continue;
         if (cl->node_count == 0) continue;
 
-        // Geschwindigkeit (aktuell aus der Kraft, aber noch Null)
         double vx = cl->vx;
         double vy = cl->vy;
 
-        // Für jeden Knoten im Cluster die Phase anpassen
         for (size_t n = 0; n < cl->node_count; n++)
         {
             size_t i = cl->node_indices[n];
 
-            // Aktuelle Position des Knotens (Gitterkoordinaten)
             double kx = (double)(i % grid_size);
-            double ky = (double)(i / grid_size);
+            double ky = (double)i / (double)grid_size;   // KORREKT
 
-            // Abstand zum Schwerpunkt
             double dx = kx - cl->x;
             double dy = ky - cl->y;
 
-            // Phasenänderung: Δφ = (2π/λ) * (v · Δr) * dt
-            double lambda = 1.0;  // Wellenlänge (skaliert)
+            double lambda = 1.0;
             double dphi = (twoPI / lambda) * (vx * dx + vy * dy) * dt;
 
-            // Phase aktualisieren
             rt->I_phase[i] += dphi;
-
-            // Phase auf [-π, π] falten
             while (rt->I_phase[i] > PI) rt->I_phase[i] -= twoPI;
             while (rt->I_phase[i] < -PI) rt->I_phase[i] += twoPI;
         }
     }
 
-    // ================================================================
-    // 2. I-WERTE AUS DER NEUEN PHASE NEU BERECHNEN
-    // ================================================================
-
+    // 2. I-Werte neu berechnen
     for (size_t i = 0; i < cfg->N; i++)
     {
         double rho = rt->mass[i];
@@ -484,10 +473,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         rt->I_imag[i] = sqrt(fabs(rho)) * sin(phi);
     }
 
-    // ================================================================
-    // 3. SCHWERPUNKT NEU BERECHNEN (aus der verschobenen Struktur)
-    // ================================================================
-
+    // 3. Schwerpunkt neu berechnen
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
         iwt_cluster_t cl = &rt->clusters[c];
@@ -504,7 +490,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             double rho = rt->mass[i];
 
             new_x += rho * (double)(i % grid_size);
-            new_y += rho * (double)(i / grid_size);
+            new_y += rho * ((double)i / (double)grid_size);   // KORREKT
             new_mass += rho;
         }
 
@@ -515,13 +501,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         }
     }
 
-    // ================================================================
-    // 4. NEUE KNOTENLISTE AKTUALISIEREN (weil sich die Struktur verschoben hat)
-    // ================================================================
-
-    // Die Knotenindizes sind jetzt veraltet, weil sich die Struktur verschoben hat.
-    // Sie werden beim nächsten Durchlauf von iwt_detect_clusters() neu erstellt.
-    // Hier setzen wir sie nur zurück, damit keine veralteten Indizes verwendet werden.
+    // 4. Knotenliste zurücksetzen
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
         iwt_cluster_t cl = &rt->clusters[c];
