@@ -403,77 +403,130 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
     }
 }
 
+private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, 
+                             double G, double c, double* Fx, double* Fy)
+{
+    double dx = b->x - a->x;
+    double dy = b->y - a->y;
+    double r = sqrt(dx * dx + dy * dy);
+    if (r < 1e-30) { *Fx = 0.0; *Fy = 0.0; return; }
+    
+    double dvx = b->vx - a->vx;
+    double dvy = b->vy - a->vy;
+    double dr = (dx * dvx + dy * dvy) / r;  // radiale Geschwindigkeit
+    
+    double F_mag = G * a->mass * b->mass / (r * r);
+    double beta = 0.5;  // Weber-Gravitation
+    
+    // Weber-Kraft (Kapitel 8)
+    double factor = 1.0 - (dr * dr) / (c * c) + beta * (r * 0.0) / (c * c);
+    F_mag *= factor;
+    
+    *Fx = F_mag * dx / r;
+    *Fy = F_mag * dy / r;
+}
+
 void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
 {
-    // 1. Geschwindigkeiten aus den Kräften berechnen (hier simuliert)
-    //    In der WDBT+ würden hier die Weber-Kräfte stehen.
-    for (size_t c = 0; c < rt->cluster_count; c++)
-    {
-        iwt_cluster_t cl = &rt->clusters[c];
-        if (!cl->is_active) continue;
-        
-        // Simulierte Kraft: Einfache Bewegung nach rechts (Test)
-        double Fx = 0.1;
-        double Fy = 0.0;
-        
-        // Geschwindigkeit aktualisieren (Newton)
-        cl->vx += (Fx / cl->mass) * dt;
-        cl->vy += (Fy / cl->mass) * dt;
-        
-        // Position aktualisieren
-        cl->x += cl->vx * dt;
-        cl->y += cl->vy * dt;
-    }
-    
-    // 2. Phasenverschiebung für jeden Cluster
     double PI = 4.0 * atan(1.0);
     double twoPI = 2.0 * PI;
-    
+    int grid_size = (int)sqrt(cfg->N);
+
+    // ================================================================
+    // 1. PHASENVERSCHIEBUNG (Bewegung durch Phasengradient)
+    // ================================================================
+
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
         iwt_cluster_t cl = &rt->clusters[c];
         if (!cl->is_active) continue;
         if (cl->node_count == 0) continue;
-        
-        // Geschwindigkeit in Phase umrechnen
-        // p = ħ * ∇φ  →  ∇φ = v / (ħ/m)
+
+        // Geschwindigkeit (aktuell aus der Kraft, aber noch Null)
         double vx = cl->vx;
         double vy = cl->vy;
-        
+
         // Für jeden Knoten im Cluster die Phase anpassen
         for (size_t n = 0; n < cl->node_count; n++)
         {
             size_t i = cl->node_indices[n];
-            
+
             // Aktuelle Position des Knotens (Gitterkoordinaten)
-            int grid_size = (int)sqrt(cfg->N);
             double kx = (double)(i % grid_size);
-            double ky = (double)((double) i / grid_size);
-            
+            double ky = (double)(i / grid_size);
+
             // Abstand zum Schwerpunkt
             double dx = kx - cl->x;
             double dy = ky - cl->y;
-            
+
             // Phasenänderung: Δφ = (2π/λ) * (v · Δr) * dt
             double lambda = 1.0;  // Wellenlänge (skaliert)
             double dphi = (twoPI / lambda) * (vx * dx + vy * dy) * dt;
-            
+
             // Phase aktualisieren
             rt->I_phase[i] += dphi;
-            
+
             // Phase auf [-π, π] falten
             while (rt->I_phase[i] > PI) rt->I_phase[i] -= twoPI;
             while (rt->I_phase[i] < -PI) rt->I_phase[i] += twoPI;
         }
     }
-    
-    // 3. I-Werte aus der neuen Phase neu berechnen
+
+    // ================================================================
+    // 2. I-WERTE AUS DER NEUEN PHASE NEU BERECHNEN
+    // ================================================================
+
     for (size_t i = 0; i < cfg->N; i++)
     {
-        double rho = rt->mass[i];  // Masse = Dichte
+        double rho = rt->mass[i];
         double phi = rt->I_phase[i];
-        rt->I_real[i] = sqrt(rho) * cos(phi);
-        rt->I_imag[i] = sqrt(rho) * sin(phi);
+        rt->I_real[i] = sqrt(fabs(rho)) * cos(phi);
+        rt->I_imag[i] = sqrt(fabs(rho)) * sin(phi);
+    }
+
+    // ================================================================
+    // 3. SCHWERPUNKT NEU BERECHNEN (aus der verschobenen Struktur)
+    // ================================================================
+
+    for (size_t c = 0; c < rt->cluster_count; c++)
+    {
+        iwt_cluster_t cl = &rt->clusters[c];
+        if (!cl->is_active) continue;
+        if (cl->node_count == 0) continue;
+
+        double new_x = 0.0;
+        double new_y = 0.0;
+        double new_mass = 0.0;
+
+        for (size_t n = 0; n < cl->node_count; n++)
+        {
+            size_t i = cl->node_indices[n];
+            double rho = rt->mass[i];
+
+            new_x += rho * (double)(i % grid_size);
+            new_y += rho * (double)(i / grid_size);
+            new_mass += rho;
+        }
+
+        if (new_mass > 1e-30)
+        {
+            cl->x = new_x / new_mass;
+            cl->y = new_y / new_mass;
+        }
+    }
+
+    // ================================================================
+    // 4. NEUE KNOTENLISTE AKTUALISIEREN (weil sich die Struktur verschoben hat)
+    // ================================================================
+
+    // Die Knotenindizes sind jetzt veraltet, weil sich die Struktur verschoben hat.
+    // Sie werden beim nächsten Durchlauf von iwt_detect_clusters() neu erstellt.
+    // Hier setzen wir sie nur zurück, damit keine veralteten Indizes verwendet werden.
+    for (size_t c = 0; c < rt->cluster_count; c++)
+    {
+        iwt_cluster_t cl = &rt->clusters[c];
+        if (!cl->is_active) continue;
+        cl->node_count = 0;
     }
 }
 
