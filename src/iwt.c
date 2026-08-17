@@ -311,7 +311,7 @@ private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg,
         double m = rt->mass[i];
         c->mass += m;
         c->x += m * (i % grid_size);
-        c->y += m * (i / grid_size);
+        c->y += m * ((double) i / grid_size);
         c->charge += rt->charge[i];
         c->phase += rt->I_phase[i];
         

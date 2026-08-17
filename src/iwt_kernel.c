@@ -16,21 +16,45 @@
 #define DELTA 1.0
 #define GAMMA 1.0
 
-static double compute_mass(const iwt_runtime_t rt, size_t k, size_t N)
+private double _compute_mass(const iwt_runtime_t rt, size_t k, size_t N)
 {
     double mass = 0.0;
-    if (k > 0)
+    int grid_size = (int)sqrt(N);
+    int ix = k % grid_size;
+    int iy = k / grid_size;
+
+    // x-Richtung (links/rechts)
+    if (ix > 0)
     {
-        double dr = rt->I_real[k] - rt->I_real[k - 1];
-        double di = rt->I_imag[k] - rt->I_imag[k - 1];
+        size_t j = k - 1;
+        double dr = rt->I_real[k] - rt->I_real[j];
+        double di = rt->I_imag[k] - rt->I_imag[j];
         mass += dr * dr + di * di;
     }
-    if (k < N - 1)
+    if (ix < grid_size - 1)
     {
-        double dr = rt->I_real[k] - rt->I_real[k + 1];
-        double di = rt->I_imag[k] - rt->I_imag[k + 1];
+        size_t j = k + 1;
+        double dr = rt->I_real[k] - rt->I_real[j];
+        double di = rt->I_imag[k] - rt->I_imag[j];
         mass += dr * dr + di * di;
     }
+
+    // y-Richtung (oben/unten)
+    if (iy > 0)
+    {
+        size_t j = k - grid_size;
+        double dr = rt->I_real[k] - rt->I_real[j];
+        double di = rt->I_imag[k] - rt->I_imag[j];
+        mass += dr * dr + di * di;
+    }
+    if (iy < grid_size - 1)
+    {
+        size_t j = k + grid_size;
+        double dr = rt->I_real[k] - rt->I_real[j];
+        double di = rt->I_imag[k] - rt->I_imag[j];
+        mass += dr * dr + di * di;
+    }
+
     return DELTA * mass;
 }
 
@@ -271,7 +295,7 @@ bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg)
             double rho_i = abs_i * abs_i;
 
             sum_abs_sq += rho_i;
-            sum_mass += compute_mass(rt, i, cfg->N);
+            sum_mass += _compute_mass(rt, i, cfg->N);
             sum_E += rho_i;
 
             if (abs_i < I_min) I_min = abs_i;

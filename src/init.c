@@ -3,7 +3,6 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
-#include <stdio.h>
 #include <api/api.h>
 
 bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -32,83 +31,75 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->xi_imag = calloc(cfg->N, sizeof(double));
     rt->uncertainty = calloc(cfg->N, sizeof(double));
 
-	rt->cluster_capacity = 100;
-	rt->clusters = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
-	for (size_t i = 0; i < rt->cluster_capacity; i++)
-	{
-		rt->clusters[i].node_indices = calloc(cfg->N, sizeof(size_t));
-		rt->clusters[i].is_active = false;
-	}
+    // === Cluster-Verwaltung ===
+    rt->cluster_capacity = 100;
+    rt->clusters = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
+    for (size_t i = 0; i < rt->cluster_capacity; i++)
+    {
+        rt->clusters[i].node_indices = calloc(cfg->N, sizeof(size_t));
+        rt->clusters[i].is_active = false;
+    }
 
-	// === Prüfung aller Allokationen ===
+    // === Prüfung aller Allokationen ===
     if ((rt->I_real != NULL) && (rt->I_imag != NULL) &&
         (rt->I_prev_real != NULL) && (rt->I_prev_imag != NULL) &&
         (rt->I_phase != NULL) && (rt->I_phase_prev != NULL) &&
         (rt->K != NULL) && (rt->sumJ != NULL) &&
         (rt->Q != NULL) &&
         (rt->mass != NULL) && (rt->charge != NULL) &&
-        (rt->xi_real != NULL) && (rt->xi_imag != NULL) && (rt->uncertainty != NULL))
+        (rt->xi_real != NULL) && (rt->xi_imag != NULL) &&
+        (rt->uncertainty != NULL) &&
+        (rt->clusters != NULL))
     {
-        // === Kopplungsmatrix (fraktal) ===
-        // (I_real, I_imag, I_prev_real, I_prev_imag, I_phase, I_phase_prev,
-        //  Q, mass, charge, xi_real, xi_imag, uncertainty sind bereits
-        //  durch calloc() auf 0 initialisiert)
-        double D = cfg->D;
-        double alpha = 3.0 - D;
         int grid_size = (int)sqrt(cfg->N);
 
+        // ================================================================
+        // ISOTROPE KOPPLUNGSMATRIX (nächste Nachbarn, gleiche Gewichtung)
+        // ================================================================
+
+        // 1. Alle Kopplungen auf 0 setzen
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            for (size_t j = 0; j < cfg->N; j++)
+            {
+                rt->K[i * cfg->N + j] = 0.0;
+            }
+        }
+
+        // 2. Nur nächste Nachbarn (4er-Nachbarschaft) mit Gewicht 1.0
         for (size_t i = 0; i < cfg->N; i++)
         {
             int ix = i % grid_size;
             int iy = i / grid_size;
 
+            // Linker Nachbar
+            if (ix > 0) rt->K[i * cfg->N + (i - 1)] = 1.0;
+            // Rechter Nachbar
+            if (ix < grid_size - 1) rt->K[i * cfg->N + (i + 1)] = 1.0;
+            // Oberer Nachbar
+            if (iy > 0) rt->K[i * cfg->N + (i - grid_size)] = 1.0;
+            // Unterer Nachbar
+            if (iy < grid_size - 1) rt->K[i * cfg->N + (i + grid_size)] = 1.0;
+        }
+
+        // 3. Symmetrische Normierung (jede Zeile auf Summe 1)
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            double row_sum = 0.0;
             for (size_t j = 0; j < cfg->N; j++)
             {
-                int jx = j % grid_size;
-                int jy = j / grid_size;
-
-                double dx = (double)(ix - jx);
-                double dy = (double)(iy - jy);
-                double dist_2d = sqrt(dx * dx + dy * dy);
-                if (dist_2d < 1.0) dist_2d = 1.0;
-
-                double d_ij = pow(dist_2d, 1.0 / D);
-                rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
+                row_sum += rt->K[i * cfg->N + j];
             }
-        }
-
-        // === Symmetrische Normierung der Kopplungsmatrix ===
-        double *row_sum = calloc(cfg->N, sizeof(double));
-        if (row_sum != NULL)
-        {
-            for (size_t i = 0; i < cfg->N; i++)
+            if (row_sum > 1e-30)
             {
                 for (size_t j = 0; j < cfg->N; j++)
                 {
-                    row_sum[i] += rt->K[i * cfg->N + j];
+                    rt->K[i * cfg->N + j] /= row_sum;
                 }
             }
-
-            for (size_t i = 0; i < cfg->N; i++)
-            {
-                for (size_t j = 0; j < cfg->N; j++)
-                {
-                    double norm = sqrt(row_sum[i] * row_sum[j]);
-                    if (norm > 1e-30)
-                    {
-                        rt->K[i * cfg->N + j] /= norm;
-                    }
-                    else
-                    {
-                        rt->K[i * cfg->N + j] = 0.0;
-                    }
-                }
-            }
-
-            free(row_sum);
         }
 
-		retval = true;
+        retval = true;
     }
 
     return retval;
@@ -116,105 +107,116 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-	// === IWT-Kernfelder (komplex) ===
-	rt->I_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_prev_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_prev_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_phase_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_phase_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    // === IWT-Kernfelder (komplex) ===
+    rt->I_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->I_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->I_prev_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->I_prev_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->I_phase_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->I_phase_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
-	// === Kopplungsmatrix und Hilfsfelder ===
-	rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
-	rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
-	rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    // === Kopplungsmatrix und Hilfsfelder ===
+    rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
+    rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
+    rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
-	// === Masse und Ladung ===
-	rt->mass_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->charge_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    // === Masse und Ladung ===
+    rt->mass_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->charge_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
-	// === Quantenfluktuationen (Anhang O & P) ===
-	rt->xi_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->xi_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->uncertainty_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    // === Quantenfluktuationen (Anhang O & P) ===
+    rt->xi_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->xi_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+    rt->uncertainty_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
-	// === Prüfung aller GPU-Buffer ===
-	bool all_buffers_valid =
-		(rt->I_real_gpu != NULL) && (rt->I_imag_gpu != NULL) &&
-		(rt->I_prev_real_gpu != NULL) && (rt->I_prev_imag_gpu != NULL) &&
-		(rt->I_phase_gpu != NULL) && (rt->I_phase_prev_gpu != NULL) &&
-		(rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) &&
-		(rt->Q_gpu != NULL) &&
-		(rt->mass_gpu != NULL) && (rt->charge_gpu != NULL) &&
-		(rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) && (rt->uncertainty_gpu != NULL);
+    // === Prüfung aller GPU-Buffer ===
+    bool all_buffers_valid =
+        (rt->I_real_gpu != NULL) && (rt->I_imag_gpu != NULL) &&
+        (rt->I_prev_real_gpu != NULL) && (rt->I_prev_imag_gpu != NULL) &&
+        (rt->I_phase_gpu != NULL) && (rt->I_phase_prev_gpu != NULL) &&
+        (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) &&
+        (rt->Q_gpu != NULL) &&
+        (rt->mass_gpu != NULL) && (rt->charge_gpu != NULL) &&
+        (rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) &&
+        (rt->uncertainty_gpu != NULL);
 
-	return all_buffers_valid;
+    return all_buffers_valid;
 }
 
 private void _free_memory(void** pp)
 {
-	if (*pp != NULL)
-	{
-		free(*pp);
-		*pp = NULL;
-	}
+    if (*pp != NULL)
+    {
+        free(*pp);
+        *pp = NULL;
+    }
 }
 
 private void _free_gpu_memory(cl_mem* pp)
 {
-	if (*pp != NULL)
-	{
-		clReleaseMemObject(*pp);
-		*pp = NULL;
-	}
+    if (*pp != NULL)
+    {
+        clReleaseMemObject(*pp);
+        *pp = NULL;
+    }
 }
 
 void deinitialize_host_data(const iwt_runtime_t rt)
 {
-	// === IWT-Kernfelder (komplex) ===
-	_free_memory((void**)&rt->I_real);
-	_free_memory((void**)&rt->I_imag);
-	_free_memory((void**)&rt->I_prev_real);
-	_free_memory((void**)&rt->I_prev_imag);
-	_free_memory((void**)&rt->I_phase);
-	_free_memory((void**)&rt->I_phase_prev);
+    // === IWT-Kernfelder (komplex) ===
+    _free_memory((void**)&rt->I_real);
+    _free_memory((void**)&rt->I_imag);
+    _free_memory((void**)&rt->I_prev_real);
+    _free_memory((void**)&rt->I_prev_imag);
+    _free_memory((void**)&rt->I_phase);
+    _free_memory((void**)&rt->I_phase_prev);
 
-	// === Kopplungsmatrix und Hilfsfelder ===
-	_free_memory((void**)&rt->K);
-	_free_memory((void**)&rt->sumJ);
-	_free_memory((void**)&rt->Q);
+    // === Kopplungsmatrix und Hilfsfelder ===
+    _free_memory((void**)&rt->K);
+    _free_memory((void**)&rt->sumJ);
+    _free_memory((void**)&rt->Q);
 
-	// === Masse und Ladung ===
-	_free_memory((void**)&rt->mass);
-	_free_memory((void**)&rt->charge);
+    // === Masse und Ladung ===
+    _free_memory((void**)&rt->mass);
+    _free_memory((void**)&rt->charge);
 
-	// === Quantenfluktuationen (Anhang O & P) ===
-	_free_memory((void**)&rt->xi_real);
-	_free_memory((void**)&rt->xi_imag);
-	_free_memory((void**)&rt->uncertainty);
+    // === Quantenfluktuationen (Anhang O & P) ===
+    _free_memory((void**)&rt->xi_real);
+    _free_memory((void**)&rt->xi_imag);
+    _free_memory((void**)&rt->uncertainty);
+
+    // === Cluster ===
+    if (rt->clusters != NULL)
+    {
+        for (size_t i = 0; i < rt->cluster_capacity; i++)
+        {
+            _free_memory((void**)&rt->clusters[i].node_indices);
+        }
+        _free_memory((void**)&rt->clusters);
+    }
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)
 {
-	// === IWT-Kernfelder (komplex) ===
-	_free_gpu_memory(&rt->I_real_gpu);
-	_free_gpu_memory(&rt->I_imag_gpu);
-	_free_gpu_memory(&rt->I_prev_real_gpu);
-	_free_gpu_memory(&rt->I_prev_imag_gpu);
-	_free_gpu_memory(&rt->I_phase_gpu);
-	_free_gpu_memory(&rt->I_phase_prev_gpu);
+    // === IWT-Kernfelder (komplex) ===
+    _free_gpu_memory(&rt->I_real_gpu);
+    _free_gpu_memory(&rt->I_imag_gpu);
+    _free_gpu_memory(&rt->I_prev_real_gpu);
+    _free_gpu_memory(&rt->I_prev_imag_gpu);
+    _free_gpu_memory(&rt->I_phase_gpu);
+    _free_gpu_memory(&rt->I_phase_prev_gpu);
 
-	// === Kopplungsmatrix und Hilfsfelder ===
-	_free_gpu_memory(&rt->K_gpu);
-	_free_gpu_memory(&rt->sumJ_gpu);
-	_free_gpu_memory(&rt->Q_gpu);
+    // === Kopplungsmatrix und Hilfsfelder ===
+    _free_gpu_memory(&rt->K_gpu);
+    _free_gpu_memory(&rt->sumJ_gpu);
+    _free_gpu_memory(&rt->Q_gpu);
 
-	// === Masse und Ladung ===
-	_free_gpu_memory(&rt->mass_gpu);
-	_free_gpu_memory(&rt->charge_gpu);
+    // === Masse und Ladung ===
+    _free_gpu_memory(&rt->mass_gpu);
+    _free_gpu_memory(&rt->charge_gpu);
 
-	// === Quantenfluktuationen (Anhang O & P) ===
-	_free_gpu_memory(&rt->xi_real_gpu);
-	_free_gpu_memory(&rt->xi_imag_gpu);
-	_free_gpu_memory(&rt->uncertainty_gpu);
+    // === Quantenfluktuationen (Anhang O & P) ===
+    _free_gpu_memory(&rt->xi_real_gpu);
+    _free_gpu_memory(&rt->xi_imag_gpu);
+    _free_gpu_memory(&rt->uncertainty_gpu);
 }

@@ -51,25 +51,51 @@ static double box_muller(unsigned int *seed)
 
 bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-	double scale = SCALE;
-	unsigned int seed = cfg->seed;
+    double scale = SCALE;
+    unsigned int seed = cfg->seed;
 
-	for (size_t i = 0; i < cfg->N; i++)
-	{
-		double rho_i = rt->I_real[i] * rt->I_real[i] +
-					   rt->I_imag[i] * rt->I_imag[i] + 1e-30;
+    // ================================================================
+    // NEU: Knoten-Indizes in zufälliger Reihenfolge
+    // ================================================================
+    size_t* indices = malloc(cfg->N * sizeof(size_t));
+    if (!indices) return false;
 
-		// Fluktuation NUR im Vakuum
-		double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
+    for (size_t i = 0; i < cfg->N; i++)
+    {
+        indices[i] = i;
+    }
 
-		double delta = box_muller(&seed) * fluct_strength;
+    // Fisher-Yates Shuffle
+    for (size_t i = cfg->N - 1; i > 0; i--)
+    {
+        size_t j = rand_r(&seed) % (i + 1);
+        size_t temp = indices[i];
+        indices[i] = indices[j];
+        indices[j] = temp;
+    }
 
-		rt->xi_real[i] = delta;
-		rt->xi_imag[i] = delta;
-		rt->uncertainty[i] = 0.0;
-	}
+    // ================================================================
+    // Fluktuationen in zufälliger Reihenfolge erzeugen
+    // ================================================================
+    for (size_t n = 0; n < cfg->N; n++)
+    {
+        size_t i = indices[n];
 
-	return true;
+        double rho_i = rt->I_real[i] * rt->I_real[i] +
+                       rt->I_imag[i] * rt->I_imag[i] + 1e-30;
+
+        // Fluktuation NUR im Vakuum
+        double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
+
+        double delta = box_muller(&seed) * fluct_strength;
+
+        rt->xi_real[i] = delta;
+        rt->xi_imag[i] = delta;
+        rt->uncertainty[i] = 0.0;
+    }
+
+    free(indices);
+    return true;
 }
 
 bool frozen_upload_uncertainty_to_gpu(const iwt_runtime_t rt, const iwt_config_t cfg)
