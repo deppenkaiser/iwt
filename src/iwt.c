@@ -495,50 +495,60 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
     }
 
     // ================================================================
-    // 2. PHASENVERSCHIEBUNG (KORRIGIERT - ISOTROP)
+    // 2. PHASENVERSCHIEBUNG (NUR WENN enable_motion == true)
     // ================================================================
-    for (size_t c = 0; c < rt->cluster_count; c++)
+    if (cfg->enable_motion)
     {
-        iwt_cluster_t cl = &rt->clusters[c];
-        if (!cl->is_active) continue;
-        if (cl->node_count == 0) continue;
-
-        double vx = cl->vx;
-        double vy = cl->vy;
-
-        for (size_t n = 0; n < cl->node_count; n++)
+        for (size_t c = 0; c < rt->cluster_count; c++)
         {
-            size_t i = cl->node_indices[n];
+            iwt_cluster_t cl = &rt->clusters[c];
+            if (!cl->is_active) continue;
+            if (cl->node_count == 0) continue;
 
-            double kx = (double)(i % grid_size);
-            double ky = (double)i / (double)grid_size;
+            double vx = cl->vx;
+            double vy = cl->vy;
 
-            // ================================================================
-            // NEU: Phase wird durch die Geschwindigkeit selbst geändert
-            // NICHT durch die Projektion auf den Abstandsvektor
-            // ================================================================
-            double lambda = 1.0;
-            double dphi = (twoPI / lambda) * (vx + vy) * dt;
+            for (size_t n = 0; n < cl->node_count; n++)
+            {
+                size_t i = cl->node_indices[n];
 
-            rt->I_phase[i] += dphi;
-            while (rt->I_phase[i] > PI) rt->I_phase[i] -= twoPI;
-            while (rt->I_phase[i] < -PI) rt->I_phase[i] += twoPI;
+                double kx = (double)(i % grid_size);
+                double ky = (double)i / (double)grid_size;
+
+                double dx = kx - cl->x;
+                double dy = ky - cl->y;
+                double r = sqrt(dx * dx + dy * dy);
+                if (r < 1e-30) continue;
+
+                double v_rad = (vx * dx + vy * dy) / r;
+                double v_tan = (-vx * dy + vy * dx) / r;
+
+                double lambda_rad = 1.0;
+                double dphi_rad = (twoPI / lambda_rad) * v_rad * dt;
+
+                double lambda_tan = 1.0;
+                double dphi_tan = (twoPI / lambda_tan) * (v_tan / r) * dt;
+
+                double dphi = dphi_rad + dphi_tan;
+
+                rt->I_phase[i] += dphi;
+                while (rt->I_phase[i] > PI) rt->I_phase[i] -= twoPI;
+                while (rt->I_phase[i] < -PI) rt->I_phase[i] += twoPI;
+            }
+        }
+
+        // 3. I-Werte neu berechnen (nur wenn Bewegung aktiv)
+        for (size_t i = 0; i < cfg->N; i++)
+        {
+            double rho = rt->mass[i];
+            double phi = rt->I_phase[i];
+            rt->I_real[i] = sqrt(fabs(rho)) * cos(phi);
+            rt->I_imag[i] = sqrt(fabs(rho)) * sin(phi);
         }
     }
 
     // ================================================================
-    // 3. I-WERTE NEU BERECHNEN
-    // ================================================================
-    for (size_t i = 0; i < cfg->N; i++)
-    {
-        double rho = rt->mass[i];
-        double phi = rt->I_phase[i];
-        rt->I_real[i] = sqrt(fabs(rho)) * cos(phi);
-        rt->I_imag[i] = sqrt(fabs(rho)) * sin(phi);
-    }
-
-    // ================================================================
-    // 4. SCHWERPUNKT NEU BERECHNEN
+    // 4. SCHWERPUNKT NEU BERECHNEN (immer)
     // ================================================================
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
@@ -568,7 +578,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
     }
 
     // ================================================================
-    // 5. KNOTENLISTE ZURÜCKSETZEN
+    // 5. KNOTENLISTE ZURÜCKSETZEN (immer)
     // ================================================================
     for (size_t c = 0; c < rt->cluster_count; c++)
     {

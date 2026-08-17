@@ -86,6 +86,7 @@ typedef struct iwt_config
     int MAX_ITER;
     double hbar;
     unsigned int seed;
+	bool enable_motion;
 } *iwt_config_t;
 
 typedef struct iwt_spectrum
