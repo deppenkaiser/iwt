@@ -72,32 +72,15 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             int ix = i % grid_size;
             int iy = i / grid_size;
 
-            // Linker Nachbar
             if (ix > 0) rt->K[i * cfg->N + (i - 1)] = 1.0;
-            // Rechter Nachbar
             if (ix < grid_size - 1) rt->K[i * cfg->N + (i + 1)] = 1.0;
-            // Oberer Nachbar
             if (iy > 0) rt->K[i * cfg->N + (i - grid_size)] = 1.0;
-            // Unterer Nachbar
             if (iy < grid_size - 1) rt->K[i * cfg->N + (i + grid_size)] = 1.0;
         }
 
-        // 3. Symmetrische Normierung (jede Zeile auf Summe 1)
-        for (size_t i = 0; i < cfg->N; i++)
-        {
-            double row_sum = 0.0;
-            for (size_t j = 0; j < cfg->N; j++)
-            {
-                row_sum += rt->K[i * cfg->N + j];
-            }
-            if (row_sum > 1e-30)
-            {
-                for (size_t j = 0; j < cfg->N; j++)
-                {
-                    rt->K[i * cfg->N + j] /= row_sum;
-                }
-            }
-        }
+        // ================================================================
+        // KEINE NORMIERUNG - die Kopplungsmatrix bleibt exakt isotrop
+        // ================================================================
 
         retval = true;
     }
