@@ -32,7 +32,15 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->xi_imag = calloc(cfg->N, sizeof(double));
     rt->uncertainty = calloc(cfg->N, sizeof(double));
 
-    // === Prüfung aller Allokationen ===
+	rt->cluster_capacity = 100;
+	rt->clusters = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
+	for (size_t i = 0; i < rt->cluster_capacity; i++)
+	{
+		rt->clusters[i].node_indices = calloc(cfg->N, sizeof(size_t));
+		rt->clusters[i].is_active = false;
+	}
+
+	// === Prüfung aller Allokationen ===
     if ((rt->I_real != NULL) && (rt->I_imag != NULL) &&
         (rt->I_prev_real != NULL) && (rt->I_prev_imag != NULL) &&
         (rt->I_phase != NULL) && (rt->I_phase_prev != NULL) &&
@@ -100,7 +108,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             free(row_sum);
         }
 
-        retval = true;
+		retval = true;
     }
 
     return retval;

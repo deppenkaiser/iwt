@@ -8,9 +8,39 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <ocl/ocl.h>
+#include <stdint.h>
+
+typedef struct iwt_cluster
+{
+    int id;
+    int type;                   // 0 = Vakuum, 1 = Materie, 2 = Antimaterie, ...
+    
+    // Position (Schwerpunkt)
+    double x;
+    double y;
+    
+    // Physikalische Eigenschaften
+    double mass;
+    double charge;
+    double phase;
+    
+    // Geschwindigkeit
+    double vx;
+    double vy;
+    
+    // Knotenliste (für die Phasenverschiebung)
+    size_t node_count;
+    size_t* node_indices;
+    
+    bool is_active;
+} *iwt_cluster_t;
 
 typedef struct iwt_runtime
 {
+	uint32_t cluster_capacity;
+	uint32_t cluster_count;
+	iwt_cluster_t clusters;
+
     double *I_real;
     double *I_imag;
     double *I_prev_real;
@@ -75,6 +105,8 @@ double iwt_fractal_dimension(void);
 double iwt_alpha_IWT(void);
 double iwt_beta_IWT(void);
 
+void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg);
+void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt);
 void iwt_compute_spectrum(const double* I_real, const double* I_imag, size_t N, iwt_spectrum_t* spec);
 int iwt_classify(double Re, double Im);
 void iwt_save_heatmap_ppm(const double* data, size_t N, const char* filename, const char* type);

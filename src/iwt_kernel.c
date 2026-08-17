@@ -206,6 +206,9 @@ bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg)
     if (!run_q_calculation(rt, cfg)) return false;
     if (!run_update_info(rt, cfg)) return false;
     if (!run_compute_mass_charge(rt, cfg)) return false;
+	
+	iwt_detect_clusters(rt, cfg);
+	iwt_move_clusters(rt, cfg, cfg->DT);
 
     return true;
 }

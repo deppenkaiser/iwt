@@ -284,6 +284,199 @@ void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     fflush(stdout);
 }
 
+private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, 
+                         size_t idx, bool* visited, iwt_cluster_t c)
+{
+    // Stack für die iterative Tiefensuche
+	size_t* stack = malloc(cfg->N * sizeof(size_t));
+	if (!stack) return;
+	int stack_ptr = 0;
+	stack[stack_ptr++] = idx;
+    
+    while (stack_ptr > 0)
+    {
+        size_t i = stack[--stack_ptr];
+        if (visited[i]) continue;
+        if (rt->mass[i] < 1e-6) continue;
+        
+        visited[i] = true;
+        
+        // Knoten zum Cluster hinzufügen
+        c->node_indices[c->node_count] = i;
+        c->node_count++;
+        
+        // Masse und Schwerpunkt akkumulieren
+        double m = rt->mass[i];
+        c->mass += m;
+        c->x += m * (i % (int)sqrt(cfg->N));
+        c->y += m * (int) ((double) i / (int)sqrt(cfg->N));
+        c->charge += rt->charge[i];
+        c->phase += rt->I_phase[i];
+        
+        // Nachbarn prüfen (4er-Nachbarschaft)
+        int grid_size = (int)sqrt(cfg->N);
+        int ix = i % grid_size;
+        int iy = i / grid_size;
+        
+        // Linker Nachbar
+        if (ix > 0)
+        {
+            size_t j = i - 1;
+            if (!visited[j] && rt->mass[j] > 1e-6)
+                stack[stack_ptr++] = j;
+        }
+        // Rechter Nachbar
+        if (ix < grid_size - 1)
+        {
+            size_t j = i + 1;
+            if (!visited[j] && rt->mass[j] > 1e-6)
+                stack[stack_ptr++] = j;
+        }
+        // Oberer Nachbar
+        if (iy > 0)
+        {
+            size_t j = i - grid_size;
+            if (!visited[j] && rt->mass[j] > 1e-6)
+                stack[stack_ptr++] = j;
+        }
+        // Unterer Nachbar
+        if (iy < grid_size - 1)
+        {
+            size_t j = i + grid_size;
+            if (!visited[j] && rt->mass[j] > 1e-6)
+                stack[stack_ptr++] = j;
+        }
+    }
+
+	free(stack);
+}
+
+void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+    static bool* visited = NULL;
+    static size_t visited_size = 0;
+    
+    if (visited == NULL || visited_size != cfg->N)
+    {
+        if (visited != NULL) free(visited);
+        visited = calloc(cfg->N, sizeof(bool));
+        visited_size = cfg->N;
+    }
+    
+    // Alle Knoten als unbesucht markieren
+    memset(visited, 0, cfg->N * sizeof(bool));
+    
+    // Alte Cluster zurücksetzen
+    rt->cluster_count = 0;
+    
+    // Flood-Fill für jeden Knoten
+    for (size_t i = 0; i < cfg->N; i++)
+    {
+        if (visited[i]) continue;
+        if (rt->mass[i] < 1e-6) continue;  // Schwellwert für Masse
+        
+        // Neuen Cluster initialisieren
+        if (rt->cluster_count >= rt->cluster_capacity) break;
+        iwt_cluster_t c = &rt->clusters[rt->cluster_count];
+        c->id = rt->cluster_count;
+        c->node_count = 0;
+        c->mass = 0.0;
+        c->charge = 0.0;
+        c->phase = 0.0;
+        c->x = 0.0;
+        c->y = 0.0;
+        c->vx = 0.0;
+        c->vy = 0.0;
+        c->is_active = true;
+        
+        // Flood-Fill: Alle verbundenen Knoten sammeln
+        _flood_fill(rt, cfg, i, visited, c);
+        
+        // Schwerpunkt berechnen (gewichtet mit Masse)
+        if (c->node_count > 0)
+        {
+            c->x /= c->mass;
+            c->y /= c->mass;
+            c->phase /= c->node_count;
+            rt->cluster_count++;
+        }
+    }
+}
+
+void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
+{
+    // 1. Geschwindigkeiten aus den Kräften berechnen (hier simuliert)
+    //    In der WDBT+ würden hier die Weber-Kräfte stehen.
+    for (size_t c = 0; c < rt->cluster_count; c++)
+    {
+        iwt_cluster_t cl = &rt->clusters[c];
+        if (!cl->is_active) continue;
+        
+        // Simulierte Kraft: Einfache Bewegung nach rechts (Test)
+        double Fx = 0.1;
+        double Fy = 0.0;
+        
+        // Geschwindigkeit aktualisieren (Newton)
+        cl->vx += (Fx / cl->mass) * dt;
+        cl->vy += (Fy / cl->mass) * dt;
+        
+        // Position aktualisieren
+        cl->x += cl->vx * dt;
+        cl->y += cl->vy * dt;
+    }
+    
+    // 2. Phasenverschiebung für jeden Cluster
+    double PI = 4.0 * atan(1.0);
+    double twoPI = 2.0 * PI;
+    
+    for (size_t c = 0; c < rt->cluster_count; c++)
+    {
+        iwt_cluster_t cl = &rt->clusters[c];
+        if (!cl->is_active) continue;
+        if (cl->node_count == 0) continue;
+        
+        // Geschwindigkeit in Phase umrechnen
+        // p = ħ * ∇φ  →  ∇φ = v / (ħ/m)
+        double vx = cl->vx;
+        double vy = cl->vy;
+        
+        // Für jeden Knoten im Cluster die Phase anpassen
+        for (size_t n = 0; n < cl->node_count; n++)
+        {
+            size_t i = cl->node_indices[n];
+            
+            // Aktuelle Position des Knotens (Gitterkoordinaten)
+            int grid_size = (int)sqrt(cfg->N);
+            double kx = (double)(i % grid_size);
+            double ky = (double)((double) i / grid_size);
+            
+            // Abstand zum Schwerpunkt
+            double dx = kx - cl->x;
+            double dy = ky - cl->y;
+            
+            // Phasenänderung: Δφ = (2π/λ) * (v · Δr) * dt
+            double lambda = 1.0;  // Wellenlänge (skaliert)
+            double dphi = (twoPI / lambda) * (vx * dx + vy * dy) * dt;
+            
+            // Phase aktualisieren
+            rt->I_phase[i] += dphi;
+            
+            // Phase auf [-π, π] falten
+            while (rt->I_phase[i] > PI) rt->I_phase[i] -= twoPI;
+            while (rt->I_phase[i] < -PI) rt->I_phase[i] += twoPI;
+        }
+    }
+    
+    // 3. I-Werte aus der neuen Phase neu berechnen
+    for (size_t i = 0; i < cfg->N; i++)
+    {
+        double rho = rt->mass[i];  // Masse = Dichte
+        double phi = rt->I_phase[i];
+        rt->I_real[i] = sqrt(rho) * cos(phi);
+        rt->I_imag[i] = sqrt(rho) * sin(phi);
+    }
+}
+
 void iwt_save_heatmap_ppm(const double *data, size_t N, const char *filename, const char *type)
 {
     int width = 512;
