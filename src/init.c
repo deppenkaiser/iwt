@@ -54,8 +54,11 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         int grid_size = (int)sqrt(cfg->N);
 
         // ================================================================
-        // ISOTROPE KOPPLUNGSMATRIX (nächste Nachbarn, gleiche Gewichtung)
+        // FRAKTALE KOPPLUNGSMATRIX (IWT-Kern)
         // ================================================================
+
+        double D = cfg->D;
+        double alpha = 3.0 - D;
 
         // 1. Alle Kopplungen auf 0 setzen
         for (size_t i = 0; i < cfg->N; i++)
@@ -66,21 +69,32 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             }
         }
 
-        // 2. Nur nächste Nachbarn (4er-Nachbarschaft) mit Gewicht 1.0
+        // 2. Fraktale Kopplungen berechnen
         for (size_t i = 0; i < cfg->N; i++)
         {
             int ix = i % grid_size;
             int iy = i / grid_size;
 
-            if (ix > 0) rt->K[i * cfg->N + (i - 1)] = 1.0;
-            if (ix < grid_size - 1) rt->K[i * cfg->N + (i + 1)] = 1.0;
-            if (iy > 0) rt->K[i * cfg->N + (i - grid_size)] = 1.0;
-            if (iy < grid_size - 1) rt->K[i * cfg->N + (i + grid_size)] = 1.0;
+            for (size_t j = 0; j < cfg->N; j++)
+            {
+                if (i == j) continue;
+
+                int jx = j % grid_size;
+                int jy = j / grid_size;
+
+                double dx = (double)(ix - jx);
+                double dy = (double)(iy - jy);
+                double dist_2d = sqrt(dx * dx + dy * dy);
+                if (dist_2d < 1.0) dist_2d = 1.0;
+
+                // Fraktale Distanz
+                double d_ij = pow(dist_2d, 1.0 / D);
+                rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
+            }
         }
 
-        // ================================================================
-        // KEINE NORMIERUNG - die Kopplungsmatrix bleibt exakt isotrop
-        // ================================================================
+        // 3. KEINE NORMIERUNG - die Kopplungsmatrix bleibt fraktal
+        //    (Die Normierung würde die fraktale Struktur zerstören)
 
         retval = true;
     }

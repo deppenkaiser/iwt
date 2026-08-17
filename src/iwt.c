@@ -475,7 +475,6 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         double Fx = 0.0;
         double Fy = 0.0;
 
-        // Summiere alle Kräfte von anderen Clustern
         for (size_t d = 0; d < rt->cluster_count; d++)
         {
             if (c == d) continue;
@@ -488,7 +487,6 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             Fy += Fy_ij;
         }
 
-        // Geschwindigkeit aktualisieren (Newton)
         if (cl->mass > 1e-30)
         {
             cl->vx += (Fx / cl->mass) * dt;
@@ -497,7 +495,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
     }
 
     // ================================================================
-    // 2. PHASENVERSCHIEBUNG (Bewegung durch Phasengradient)
+    // 2. PHASENVERSCHIEBUNG (KORRIGIERT - ISOTROP)
     // ================================================================
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
@@ -515,11 +513,12 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             double kx = (double)(i % grid_size);
             double ky = (double)i / (double)grid_size;
 
-            double dx = kx - cl->x;
-            double dy = ky - cl->y;
-
+            // ================================================================
+            // NEU: Phase wird durch die Geschwindigkeit selbst geändert
+            // NICHT durch die Projektion auf den Abstandsvektor
+            // ================================================================
             double lambda = 1.0;
-            double dphi = (twoPI / lambda) * (vx * dx + vy * dy) * dt;
+            double dphi = (twoPI / lambda) * (vx + vy) * dt;
 
             rt->I_phase[i] += dphi;
             while (rt->I_phase[i] > PI) rt->I_phase[i] -= twoPI;
