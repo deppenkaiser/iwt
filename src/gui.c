@@ -33,27 +33,108 @@ private GLuint _compile_shader(GLenum type, const char* source)
     return shader;
 }
 
+private void _vec3_sub(float* out, const float* a, const float* b)
+{
+    out[0] = a[0] - b[0];
+    out[1] = a[1] - b[1];
+    out[2] = a[2] - b[2];
+}
+
+private void _vec3_cross(float* out, const float* a, const float* b)
+{
+    out[0] = a[1] * b[2] - a[2] * b[1];
+    out[1] = a[2] * b[0] - a[0] * b[2];
+    out[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+private float _vec3_dot(const float* a, const float* b)
+{
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+private void _vec3_normalize(float* v)
+{
+    float len = sqrtf(_vec3_dot(v, v));
+    if (len > 1e-8f)
+    {
+        v[0] /= len;
+        v[1] /= len;
+        v[2] /= len;
+    }
+}
+
+// Perspektivische Projektionsmatrix (spaltenweise, wie von GLSL erwartet)
+private void _mat4_perspective(float* m, float fovy_rad, float aspect, float znear, float zfar)
+{
+    float f = 1.0f / tanf(fovy_rad * 0.5f);
+    for (int i = 0; i < 16; i++) m[i] = 0.0f;
+    m[0] = f / aspect;
+    m[5] = f;
+    m[10] = (zfar + znear) / (znear - zfar);
+    m[11] = -1.0f;
+    m[14] = (2.0f * zfar * znear) / (znear - zfar);
+}
+
+// Kamera-View-Matrix (LookAt), spaltenweise
+private void _mat4_look_at(float* m, const float* eye, const float* center, const float* up)
+{
+    float f[3], s[3], u[3];
+    _vec3_sub(f, center, eye);
+    _vec3_normalize(f);
+    _vec3_cross(s, f, up);
+    _vec3_normalize(s);
+    _vec3_cross(u, s, f);
+
+    m[0] = s[0]; m[4] = s[1]; m[8]  = s[2];  m[12] = -_vec3_dot(s, eye);
+    m[1] = u[0]; m[5] = u[1]; m[9]  = u[2];  m[13] = -_vec3_dot(u, eye);
+    m[2] = -f[0]; m[6] = -f[1]; m[10] = -f[2]; m[14] = _vec3_dot(f, eye);
+    m[3] = 0.0f; m[7] = 0.0f; m[11] = 0.0f; m[15] = 1.0f;
+}
+
+private void _mat4_mul(float* out, const float* a, const float* b)
+{
+    float tmp[16];
+    for (int col = 0; col < 4; col++)
+    {
+        for (int row = 0; row < 4; row++)
+        {
+            float sum = 0.0f;
+            for (int k = 0; k < 4; k++)
+            {
+                sum += a[k * 4 + row] * b[col * 4 + k];
+            }
+            tmp[col * 4 + row] = sum;
+        }
+    }
+    memcpy(out, tmp, sizeof(tmp));
+}
+
 private GLuint _create_points_program(void)
 {
     static const char* vertex_source =
         "#version 150 core\n"
         "in vec3 pos;\n"
         "in vec3 color;\n"
+        "uniform mat4 u_mvp;\n"
         "out vec3 v_color;\n"
+        "out float v_depth;\n"
         "void main()\n"
         "{\n"
         "    v_color = color;\n"
-        "    gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);\n"
-        "    gl_PointSize = 4.0;\n"
+        "    gl_Position = u_mvp * vec4(pos, 1.0);\n"
+        "    v_depth = gl_Position.w;\n"
+        "    gl_PointSize = clamp(300.0 / v_depth, 1.0, 12.0);\n"
         "}\n";
 
     static const char* fragment_source =
         "#version 150 core\n"
         "in vec3 v_color;\n"
+        "in float v_depth;\n"
         "out vec4 frag_color;\n"
         "void main()\n"
         "{\n"
-        "    frag_color = vec4(v_color, 1.0);\n"
+        "    float fade = clamp(3.0 / v_depth, 0.3, 1.0);\n"
+        "    frag_color = vec4(v_color * fade, 1.0);\n"
         "}\n";
 
     GLuint vs = _compile_shader(GL_VERTEX_SHADER, vertex_source);
@@ -252,6 +333,8 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
             glBindVertexArray(0);
 
             glEnable(GL_PROGRAM_POINT_SIZE);
+
+            data->gl_u_mvp = glGetUniformLocation(data->gl_program, "u_mvp");
             break;
         }
 
@@ -279,6 +362,22 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
             glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)((size_t)data->cfg.N * 6 * sizeof(float)), data->points_buffer);
 
             glUseProgram(data->gl_program);
+
+            int width = gtk_widget_get_width(data->gl_area);
+            int height = gtk_widget_get_height(data->gl_area);
+            float aspect = (height > 0) ? (float)width / (float)height : 1.0f;
+
+            float eye[3]    = { 2.2f, 1.8f, 2.2f };
+            float center[3] = { 0.0f, 0.0f, 0.0f };
+            float up[3]     = { 0.0f, 1.0f, 0.0f };
+
+            float view[16], proj[16], mvp[16];
+            _mat4_look_at(view, eye, center, up);
+            _mat4_perspective(proj, 0.785398f, aspect, 0.1f, 10.0f);
+            _mat4_mul(mvp, proj, view);
+
+            glUniformMatrix4fv(data->gl_u_mvp, 1, GL_FALSE, mvp);
+
             glBindVertexArray(data->gl_vao);
             glDrawArrays(GL_POINTS, 0, (GLsizei)data->cfg.N);
             glBindVertexArray(0);

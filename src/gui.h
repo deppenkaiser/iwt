@@ -19,6 +19,7 @@ typedef struct iwt_gui_data
     float* points_buffer;
 
     GLuint gl_program;
+    GLint gl_u_mvp;
     GLuint gl_vao;
     GLuint gl_vbo;
 
