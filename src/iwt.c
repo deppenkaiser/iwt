@@ -292,9 +292,7 @@ private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg,
     if (!stack) return;
     int stack_ptr = 0;
     stack[stack_ptr++] = idx;
-    
-    int grid_size = (int)sqrt(cfg->N);
-    
+
     while (stack_ptr > 0)
     {
         size_t i = stack[--stack_ptr];
@@ -307,47 +305,50 @@ private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg,
         c->node_indices[c->node_count] = i;
         c->node_count++;
         
-        // Masse und Schwerpunkt akkumulieren
+        // Masse und Schwerpunkt akkumulieren (3D-Dodekaeder-Positionen)
         double m = rt->mass[i];
         c->mass += m;
-        c->x += m * (i % grid_size);
-        c->y += m * ((double) i / grid_size);
+        c->x += m * rt->pos_x[i];
+        c->y += m * rt->pos_y[i];
+        c->z += m * rt->pos_z[i];
         c->charge += rt->charge[i];
         c->phase += rt->I_phase[i];
         
         // ================================================================
-        // NEU: Nachbarn in zufälliger Reihenfolge sammeln
+        // Nachbarn ueber die vorberechnete K-Matrix-Adjazenz sammeln,
+        // in zufaelliger Reihenfolge (Fisher-Yates)
         // ================================================================
         
-        int ix = i % grid_size;
-        int iy = i / grid_size;
-        
-        // Alle Nachbarn in ein Array sammeln
-        size_t neighbors[4];
+        size_t* neighbors = malloc(cfg->N * sizeof(size_t));
         int neighbor_count = 0;
         
-        if (ix > 0) neighbors[neighbor_count++] = i - 1;
-        if (ix < grid_size - 1) neighbors[neighbor_count++] = i + 1;
-        if (iy > 0) neighbors[neighbor_count++] = i - grid_size;
-        if (iy < grid_size - 1) neighbors[neighbor_count++] = i + grid_size;
-        
-        // Nachbarn zufällig mischen (Fisher-Yates)
-        for (int n = neighbor_count - 1; n > 0; n--)
+        if (neighbors != NULL)
         {
-            int j = rand() % (n + 1);
-            size_t temp = neighbors[n];
-            neighbors[n] = neighbors[j];
-            neighbors[j] = temp;
-        }
-        
-        // Nachbarn in zufälliger Reihenfolge auf den Stack legen
-        for (int n = 0; n < neighbor_count; n++)
-        {
-            size_t j = neighbors[n];
-            if (!visited[j] && rt->mass[j] > 1e-6)
+            const bool* row = &rt->adjacency[i * cfg->N];
+            for (size_t j = 0; j < cfg->N; j++)
             {
-                stack[stack_ptr++] = j;
+                if (row[j] && !visited[j] && rt->mass[j] > 1e-6)
+                {
+                    neighbors[neighbor_count++] = j;
+                }
             }
+
+            // Nachbarn zufaellig mischen (Fisher-Yates)
+            for (int n = neighbor_count - 1; n > 0; n--)
+            {
+                int r = rand() % (n + 1);
+                size_t temp = neighbors[n];
+                neighbors[n] = neighbors[r];
+                neighbors[r] = temp;
+            }
+
+            // Nachbarn in zufaelliger Reihenfolge auf den Stack legen
+            for (int n = 0; n < neighbor_count; n++)
+            {
+                stack[stack_ptr++] = neighbors[n];
+            }
+
+            free(neighbors);
         }
     }
     
@@ -388,8 +389,10 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
         c->phase = 0.0;
         c->x = 0.0;
         c->y = 0.0;
+        c->z = 0.0;
         c->vx = 0.0;
         c->vy = 0.0;
+        c->vz = 0.0;
         c->is_active = true;
         
         // Flood-Fill: Alle verbundenen Knoten sammeln
@@ -400,6 +403,7 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
         {
             c->x /= c->mass;
             c->y /= c->mass;
+            c->z /= c->mass;
             c->phase /= c->node_count;
             rt->cluster_count++;
         }
@@ -408,24 +412,27 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, 
                              double G, double c, double epsilon0, 
-                             double* Fx, double* Fy)
+                             double* Fx, double* Fy, double* Fz)
 {
     double dx = b->x - a->x;
     double dy = b->y - a->y;
-    double r = sqrt(dx * dx + dy * dy);
-    if (r < 1e-30) { *Fx = 0.0; *Fy = 0.0; return; }
+    double dz = b->z - a->z;
+    double r = sqrt(dx * dx + dy * dy + dz * dz);
+    if (r < 1e-30) { *Fx = 0.0; *Fy = 0.0; *Fz = 0.0; return; }
     
     // ================================================================
     // Relativgeschwindigkeit und -beschleunigung (vereinfacht)
     // ================================================================
     double dvx = b->vx - a->vx;
     double dvy = b->vy - a->vy;
-    double dr = (dx * dvx + dy * dvy) / r;      // radiale Geschwindigkeit
+    double dvz = b->vz - a->vz;
+    double dr = (dx * dvx + dy * dvy + dz * dvz) / r;      // radiale Geschwindigkeit
     
     // Beschleunigung (Differenz der Geschwindigkeiten, vereinfacht)
     double dax = 0.0;  // müsste aus den Kräften berechnet werden
     double day = 0.0;
-    double d2r = (dx * dax + dy * day) / r;     // radiale Beschleunigung
+    double daz = 0.0;
+    double d2r = (dx * dax + dy * day + dz * daz) / r;     // radiale Beschleunigung
     
     // ================================================================
     // 1. WEBER-GRAVITATION (WG) - wirkt zwischen Massen
@@ -438,6 +445,7 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
     
     double F_WG_x = F_WG_mag * (-dx / r);  // anziehend (Minus-Zeichen)
     double F_WG_y = F_WG_mag * (-dy / r);
+    double F_WG_z = F_WG_mag * (-dz / r);
     
     // ================================================================
     // 2. WEBER-ELEKTRODYNAMIK (WED) - wirkt zwischen Ladungen
@@ -450,22 +458,23 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
     
     double F_WED_x = F_WED_mag * (dx / r);   // abstoßend/anziehend je nach Vorzeichen
     double F_WED_y = F_WED_mag * (dy / r);
+    double F_WED_z = F_WED_mag * (dz / r);
     
     // ================================================================
     // 3. GESAMTKRAFT (WG + WED)
     // ================================================================
     *Fx = F_WG_x + F_WED_x;
     *Fy = F_WG_y + F_WED_y;
+    *Fz = F_WG_z + F_WED_z;
 }
 
 void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
 {
     double PI = 4.0 * atan(1.0);
     double twoPI = 2.0 * PI;
-    int grid_size = (int)sqrt(cfg->N);
 
     // ================================================================
-    // 1. GESCHWINDIGKEITEN AUS WEBER-KRÄFTEN BERECHNEN
+    // 1. GESCHWINDIGKEITEN AUS WEBER-KRÄFTEN BERECHNEN (3D)
     // ================================================================
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
@@ -474,6 +483,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 
         double Fx = 0.0;
         double Fy = 0.0;
+        double Fz = 0.0;
 
         for (size_t d = 0; d < rt->cluster_count; d++)
         {
@@ -481,21 +491,26 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             iwt_cluster_t other = &rt->clusters[d];
             if (!other->is_active) continue;
 
-            double Fx_ij, Fy_ij;
-            _iwt_compute_weber_force(cl, other, 1.0, 1.0, 1.0, &Fx_ij, &Fy_ij);
+            double Fx_ij, Fy_ij, Fz_ij;
+            _iwt_compute_weber_force(cl, other, 1.0, 1.0, 1.0, &Fx_ij, &Fy_ij, &Fz_ij);
             Fx += Fx_ij;
             Fy += Fy_ij;
+            Fz += Fz_ij;
         }
 
         if (cl->mass > 1e-30)
         {
             cl->vx += (Fx / cl->mass) * dt;
             cl->vy += (Fy / cl->mass) * dt;
+            cl->vz += (Fz / cl->mass) * dt;
         }
     }
 
     // ================================================================
     // 2. PHASENVERSCHIEBUNG (NUR WENN enable_motion == true)
+    //    Radial = entlang der Knoten-Zentrum-Achse (wie bisher, jetzt 3D)
+    //    Tangential = Anteil von v senkrecht zu v_rad (Ebene senkrecht
+    //    zum Cluster-Impuls), unsigniert (Pythagoras)
     // ================================================================
     if (cfg->enable_motion)
     {
@@ -507,21 +522,22 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 
             double vx = cl->vx;
             double vy = cl->vy;
+            double vz = cl->vz;
+            double v_speed_sq = vx * vx + vy * vy + vz * vz;
 
             for (size_t n = 0; n < cl->node_count; n++)
             {
                 size_t i = cl->node_indices[n];
 
-                double kx = (double)(i % grid_size);
-                double ky = (double)i / (double)grid_size;
-
-                double dx = kx - cl->x;
-                double dy = ky - cl->y;
-                double r = sqrt(dx * dx + dy * dy);
+                double dx = rt->pos_x[i] - cl->x;
+                double dy = rt->pos_y[i] - cl->y;
+                double dz = rt->pos_z[i] - cl->z;
+                double r = sqrt(dx * dx + dy * dy + dz * dz);
                 if (r < 1e-30) continue;
 
-                double v_rad = (vx * dx + vy * dy) / r;
-                double v_tan = (-vx * dy + vy * dx) / r;
+                double v_rad = (vx * dx + vy * dy + vz * dz) / r;
+                double v_tan_sq = v_speed_sq - v_rad * v_rad;
+                double v_tan = v_tan_sq > 0.0 ? sqrt(v_tan_sq) : 0.0;
 
                 double lambda_rad = 1.0;
                 double dphi_rad = (twoPI / lambda_rad) * v_rad * dt;
@@ -548,7 +564,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
     }
 
     // ================================================================
-    // 4. SCHWERPUNKT NEU BERECHNEN (immer)
+    // 4. SCHWERPUNKT NEU BERECHNEN (immer, 3D)
     // ================================================================
     for (size_t c = 0; c < rt->cluster_count; c++)
     {
@@ -558,6 +574,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 
         double new_x = 0.0;
         double new_y = 0.0;
+        double new_z = 0.0;
         double new_mass = 0.0;
 
         for (size_t n = 0; n < cl->node_count; n++)
@@ -565,8 +582,9 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             size_t i = cl->node_indices[n];
             double rho = rt->mass[i];
 
-            new_x += rho * (double)(i % grid_size);
-            new_y += rho * ((double)i / (double)grid_size);
+            new_x += rho * rt->pos_x[i];
+            new_y += rho * rt->pos_y[i];
+            new_z += rho * rt->pos_z[i];
             new_mass += rho;
         }
 
@@ -574,6 +592,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         {
             cl->x = new_x / new_mass;
             cl->y = new_y / new_mass;
+            cl->z = new_z / new_mass;
         }
     }
 

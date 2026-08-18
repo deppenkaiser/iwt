@@ -103,6 +103,7 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             data->cfg.l0 = 1.0;
             data->cfg.MAX_ITER = 500;
             data->cfg.seed = (unsigned int)time(NULL);
+            data->cfg.cluster_threshold = 1.5;
 			data->cfg.enable_motion = false;
 
             printf("=== IWT Parameter (aus Theorie) ===\n");
