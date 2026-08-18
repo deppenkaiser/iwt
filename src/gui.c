@@ -2,7 +2,6 @@
 #include "init.h"
 #include "iwt_kernel.h"
 #include <api/api.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
