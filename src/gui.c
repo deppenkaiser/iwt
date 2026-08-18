@@ -34,27 +34,27 @@ private GLuint _compile_shader(GLenum type, const char* source)
     return shader;
 }
 
-private GLuint _create_overlay_program(void)
+private GLuint _create_points_program(void)
 {
     static const char* vertex_source =
         "#version 150 core\n"
-        "in vec2 pos;\n"
-        "in vec2 uv;\n"
-        "out vec2 v_uv;\n"
+        "in vec3 pos;\n"
+        "in vec3 color;\n"
+        "out vec3 v_color;\n"
         "void main()\n"
         "{\n"
-        "    v_uv = uv;\n"
-        "    gl_Position = vec4(pos, 0.0, 1.0);\n"
+        "    v_color = color;\n"
+        "    gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);\n"
+        "    gl_PointSize = 4.0;\n"
         "}\n";
 
     static const char* fragment_source =
         "#version 150 core\n"
-        "in vec2 v_uv;\n"
+        "in vec3 v_color;\n"
         "out vec4 frag_color;\n"
-        "uniform sampler2D tex;\n"
         "void main()\n"
         "{\n"
-        "    frag_color = texture(tex, v_uv);\n"
+        "    frag_color = vec4(v_color, 1.0);\n"
         "}\n";
 
     GLuint vs = _compile_shader(GL_VERTEX_SHADER, vertex_source);
@@ -65,7 +65,7 @@ private GLuint _create_overlay_program(void)
     glAttachShader(program, vs);
     glAttachShader(program, fs);
     glBindAttribLocation(program, 0, "pos");
-    glBindAttribLocation(program, 1, "uv");
+    glBindAttribLocation(program, 1, "color");
     glLinkProgram(program);
 
     GLint status = GL_FALSE;
@@ -185,8 +185,10 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             deinitialize_gpu_data(&data->rt);
             deinitialize_host_data(&data->rt);
             ocl_deinitialize(&data->rt.ocl);
-            free(data->overlay_rgb);
-            data->overlay_rgb = NULL;
+            free(data->node_colors);
+            data->node_colors = NULL;
+            free(data->points_buffer);
+            data->points_buffer = NULL;
             is_ok = true;
             break;
 
@@ -234,41 +236,23 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
     {
         case GE_GL_REALIZE:
         {
-            data->overlay_width = (int)sqrt((double)data->cfg.N);
-            data->overlay_height = data->overlay_width;
-            data->overlay_rgb = calloc((size_t)data->overlay_width * data->overlay_height * 3, sizeof(unsigned char));
+            data->node_colors = malloc((size_t)data->cfg.N * 3 * sizeof(float));
+            data->points_buffer = malloc((size_t)data->cfg.N * 6 * sizeof(float));
 
-            glGenTextures(1, &data->gl_texture);
-            glBindTexture(GL_TEXTURE_2D, data->gl_texture);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, data->overlay_width, data->overlay_height, 0,
-                GL_RGB, GL_UNSIGNED_BYTE, data->overlay_rgb);
-
-            data->gl_program = _create_overlay_program();
-
-            static const float quad_vertices[] = {
-                // pos          // uv
-                -1.0f, -1.0f,   0.0f, 1.0f,
-                 1.0f, -1.0f,   1.0f, 1.0f,
-                 1.0f,  1.0f,   1.0f, 0.0f,
-                -1.0f, -1.0f,   0.0f, 1.0f,
-                 1.0f,  1.0f,   1.0f, 0.0f,
-                -1.0f,  1.0f,   0.0f, 0.0f,
-            };
+            data->gl_program = _create_points_program();
 
             glGenVertexArrays(1, &data->gl_vao);
             glGenBuffers(1, &data->gl_vbo);
             glBindVertexArray(data->gl_vao);
             glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)data->cfg.N * 6 * sizeof(float)), NULL, GL_DYNAMIC_DRAW);
             glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
             glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
             glBindVertexArray(0);
+
+            glEnable(GL_PROGRAM_POINT_SIZE);
             break;
         }
 
@@ -277,20 +261,27 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
             run_simulation_step(&data->rt, &data->cfg);
             data->iter++;
 
-            iwt_build_overlay_rgb(data->rt.mass, data->rt.charge, data->cfg.N,
-                data->overlay_rgb, data->overlay_width, data->overlay_height);
+            iwt_compute_node_colors(data->rt.mass, data->rt.charge, data->cfg.N, data->node_colors);
+
+            for (size_t i = 0; i < data->cfg.N; i++)
+            {
+                data->points_buffer[i * 6 + 0] = (float)data->rt.pos_x[i];
+                data->points_buffer[i * 6 + 1] = (float)data->rt.pos_y[i];
+                data->points_buffer[i * 6 + 2] = (float)data->rt.pos_z[i];
+                data->points_buffer[i * 6 + 3] = data->node_colors[i * 3 + 0];
+                data->points_buffer[i * 6 + 4] = data->node_colors[i * 3 + 1];
+                data->points_buffer[i * 6 + 5] = data->node_colors[i * 3 + 2];
+            }
 
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
 
-            glBindTexture(GL_TEXTURE_2D, data->gl_texture);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, data->overlay_width, data->overlay_height,
-                GL_RGB, GL_UNSIGNED_BYTE, data->overlay_rgb);
+            glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)((size_t)data->cfg.N * 6 * sizeof(float)), data->points_buffer);
 
             glUseProgram(data->gl_program);
-            glUniform1i(glGetUniformLocation(data->gl_program, "tex"), 0);
             glBindVertexArray(data->gl_vao);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glDrawArrays(GL_POINTS, 0, (GLsizei)data->cfg.N);
             glBindVertexArray(0);
             break;
         }

@@ -123,7 +123,7 @@ void iwt_compute_spectrum(const double* I_real, const double* I_imag, size_t N, 
 int iwt_classify(double Re, double Im);
 void iwt_save_heatmap_ppm(const double* data, size_t N, const char* filename, const char* type);
 void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filename);
-void iwt_build_overlay_rgb(const double *mass, const double *charge, size_t N, unsigned char *out_rgb, int width, int height);
+void iwt_compute_node_colors(const double *mass, const double *charge, size_t N, float *out_rgb);
 void iwt_print_status(const iwt_runtime_t rt, const iwt_config_t cfg, int iter,
     double max_q, double I_total, double I_min, double I_max, double sum_I_sq);
 

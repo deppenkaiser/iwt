@@ -15,11 +15,9 @@ typedef struct iwt_gui_data
     struct iwt_config cfg;
     struct iwt_runtime rt;
 
-    unsigned char* overlay_rgb;
-    int overlay_width;
-    int overlay_height;
+    float* node_colors;
+    float* points_buffer;
 
-    GLuint gl_texture;
     GLuint gl_program;
     GLuint gl_vao;
     GLuint gl_vbo;

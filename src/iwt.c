@@ -714,10 +714,8 @@ void iwt_save_charge_heatmap(const double *charge, size_t N, const char *filenam
     free(image);
 }
 
-void iwt_build_overlay_rgb(const double *mass, const double *charge, size_t N, unsigned char *out_rgb, int width, int height)
+void iwt_compute_node_colors(const double *mass, const double *charge, size_t N, float *out_rgb)
 {
-    memset(out_rgb, 0, (size_t)width * height * 3);
-
     double mass_min = 1e30;
     double mass_max = -1e30;
     for (size_t i = 0; i < N; i++)
@@ -735,15 +733,10 @@ void iwt_build_overlay_rgb(const double *mass, const double *charge, size_t N, u
     }
     if (max_abs < 1e-30) max_abs = 1.0;
 
-    // Helligkeit = Masse, Farbrichtung (Rot/Blau) = Ladung, analog zu
-    // iwt_save_heatmap_ppm() und iwt_save_charge_heatmap(), aber kombiniert.
-    int grid_size = (int)sqrt(N);
+    // Helligkeit = Masse, Farbrichtung (Rot/Blau) = Ladung - gleiches Schema
+    // wie iwt_build_overlay_rgb(), aber pro Knoten statt pro Pixel.
     for (size_t i = 0; i < N; i++)
     {
-        int x = i % grid_size;
-        int y = i / grid_size;
-        if (x >= width || y >= height) continue;
-
         double brightness = (mass[i] - mass_min) / mass_range;
         double charge_norm = charge[i] / max_abs;
         double abs_charge = fabs(charge_norm);
@@ -752,10 +745,9 @@ void iwt_build_overlay_rgb(const double *mass, const double *charge, size_t N, u
         double g = brightness * (1.0 - abs_charge);
         double b = brightness * (charge_norm > 0.0 ? charge_norm : (1.0 - abs_charge));
 
-        size_t idx = ((size_t)y * width + x) * 3;
-        out_rgb[idx + 0] = (unsigned char)(r * 255.0);
-        out_rgb[idx + 1] = (unsigned char)(g * 255.0);
-        out_rgb[idx + 2] = (unsigned char)(b * 255.0);
+        out_rgb[i * 3 + 0] = (float)r;
+        out_rgb[i * 3 + 1] = (float)g;
+        out_rgb[i * 3 + 2] = (float)b;
     }
 }
 
