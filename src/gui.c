@@ -182,7 +182,7 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             data->cfg.D = iwt_fractal_dimension();
             data->cfg.l0 = 1.0;
             data->cfg.seed = (unsigned int)time(NULL);
-            data->cfg.cluster_threshold = 0.1;
+            data->cfg.cluster_threshold = 1.1; // [1.0, 1.5]
 			data->cfg.enable_motion = false;
 
             printf("=== IWT Parameter (aus Theorie) ===\n");
@@ -337,51 +337,68 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
             break;
         }
 
-        case GE_GL_RENDER:
-        {
-            run_simulation_step(&data->rt, &data->cfg);
-            data->iter++;
+		case GE_GL_RENDER:
+		{
+			run_simulation_step(&data->rt, &data->cfg);
+			data->iter++;
 
-            iwt_compute_node_colors(data->rt.mass, data->rt.charge, data->cfg.N, data->node_colors);
+			// Cluster-Schwerpunkte in den Buffer schreiben
+			for (size_t c = 0; c < data->rt.cluster_count; c++)
+			{
+				iwt_cluster_t cl = &data->rt.clusters[c];
+				if (!cl->is_active) continue;
+				
+				// Position = Schwerpunkt des Clusters
+				data->points_buffer[c * 6 + 0] = (float)cl->x;
+				data->points_buffer[c * 6 + 1] = (float)cl->y;
+				data->points_buffer[c * 6 + 2] = (float)cl->z;
+				
+				// Farbe: Rot = positive Ladung, Blau = negative Ladung
+				float charge_norm = (float)(cl->charge / (fabs(cl->charge) + 1.0));
+				float brightness = (float)(cl->mass / (cl->mass + 1.0));
+				
+				if (charge_norm > 0.0) {
+					data->points_buffer[c * 6 + 3] = brightness;      // R
+					data->points_buffer[c * 6 + 4] = 0.0f;            // G
+					data->points_buffer[c * 6 + 5] = 0.0f;            // B
+				} else {
+					data->points_buffer[c * 6 + 3] = 0.0f;            // R
+					data->points_buffer[c * 6 + 4] = 0.0f;            // G
+					data->points_buffer[c * 6 + 5] = brightness;      // B
+				}
+			}
 
-            for (size_t i = 0; i < data->cfg.N; i++)
-            {
-                data->points_buffer[i * 6 + 0] = (float)data->rt.pos_x[i];
-                data->points_buffer[i * 6 + 1] = (float)data->rt.pos_y[i];
-                data->points_buffer[i * 6 + 2] = (float)data->rt.pos_z[i];
-                data->points_buffer[i * 6 + 3] = data->node_colors[i * 3 + 0];
-                data->points_buffer[i * 6 + 4] = data->node_colors[i * 3 + 1];
-                data->points_buffer[i * 6 + 5] = data->node_colors[i * 3 + 2];
-            }
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
 
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
+			// Nur Cluster zeichnen, nicht alle Knoten
+			glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, 
+							(GLsizeiptr)(data->rt.cluster_count * 6 * sizeof(float)), 
+							data->points_buffer);
 
-            glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)((size_t)data->cfg.N * 6 * sizeof(float)), data->points_buffer);
+			glUseProgram(data->gl_program);
 
-            glUseProgram(data->gl_program);
+			int width = gtk_widget_get_width(data->gl_area);
+			int height = gtk_widget_get_height(data->gl_area);
+			float aspect = (height > 0) ? (float)width / (float)height : 1.0f;
 
-            int width = gtk_widget_get_width(data->gl_area);
-            int height = gtk_widget_get_height(data->gl_area);
-            float aspect = (height > 0) ? (float)width / (float)height : 1.0f;
+			float eye[3]    = { 2.2f, 1.8f, 2.2f };
+			float center[3] = { 0.0f, 0.0f, 0.0f };
+			float up[3]     = { 0.0f, 1.0f, 0.0f };
 
-            float eye[3]    = { 2.2f, 1.8f, 2.2f };
-            float center[3] = { 0.0f, 0.0f, 0.0f };
-            float up[3]     = { 0.0f, 1.0f, 0.0f };
+			float view[16], proj[16], mvp[16];
+			_mat4_look_at(view, eye, center, up);
+			_mat4_perspective(proj, 0.785398f, aspect, 0.1f, 10.0f);
+			_mat4_mul(mvp, proj, view);
 
-            float view[16], proj[16], mvp[16];
-            _mat4_look_at(view, eye, center, up);
-            _mat4_perspective(proj, 0.785398f, aspect, 0.1f, 10.0f);
-            _mat4_mul(mvp, proj, view);
+			glUniformMatrix4fv(data->gl_u_mvp, 1, GL_FALSE, mvp);
 
-            glUniformMatrix4fv(data->gl_u_mvp, 1, GL_FALSE, mvp);
-
-            glBindVertexArray(data->gl_vao);
-            glDrawArrays(GL_POINTS, 0, (GLsizei)data->cfg.N);
-            glBindVertexArray(0);
-            break;
-        }
+			glBindVertexArray(data->gl_vao);
+			glDrawArrays(GL_POINTS, 0, (GLsizei)data->rt.cluster_count);  // <- cluster_count statt N
+			glBindVertexArray(0);
+			break;
+		}
 
         default:
             break;

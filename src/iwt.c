@@ -6,6 +6,7 @@
 #include <api/api.h>
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 #include <string/string.h>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -122,6 +123,8 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
             rt->cluster_count++;
         }
     }
+	
+	printf("Gefundene Cluster: %d\n", rt->cluster_count);
 }
 
 private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, 
