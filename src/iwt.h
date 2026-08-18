@@ -94,7 +94,6 @@ typedef struct iwt_config
     double l0;
     double T;
     double DT;
-    int MAX_ITER;
     double hbar;
     unsigned int seed;
 	bool enable_motion;
