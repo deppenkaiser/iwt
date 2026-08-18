@@ -42,6 +42,7 @@ typedef struct iwt_runtime
 	uint32_t cluster_capacity;
 	uint32_t cluster_count;
 	iwt_cluster_t clusters;
+    bool* visited;
 
     double *I_real;
     double *I_imag;

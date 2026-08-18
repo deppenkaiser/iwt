@@ -47,90 +47,44 @@ double iwt_alpha_IWT(void) { return 1; }
 double iwt_beta_IWT(void) { return 1; }
 
 private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, 
-                         size_t idx, bool* visited, iwt_cluster_t c)
+                         size_t idx, iwt_cluster_t c)
 {
-    // Dynamischer Stack (wie von Dir bereits angepasst)
-    size_t* stack = malloc(cfg->N * sizeof(size_t));
-    if (!stack) return;
-    int stack_ptr = 0;
+    size_t stack[cfg->N];  // VLA - geht weil cfg->N bekannt ist
+    size_t stack_ptr = 0;
     stack[stack_ptr++] = idx;
 
     while (stack_ptr > 0)
     {
         size_t i = stack[--stack_ptr];
-        if (visited[i]) continue;
+        if (rt->visited[i]) continue;
         if (rt->mass[i] < 1e-6) continue;
         
-        visited[i] = true;
+        rt->visited[i] = true;
+        c->node_indices[c->node_count++] = i;
         
-        // Knoten zum Cluster hinzufügen
-        c->node_indices[c->node_count] = i;
-        c->node_count++;
-        
-        // Masse und Schwerpunkt akkumulieren (3D-Dodekaeder-Positionen)
-        double m = rt->mass[i];
-        c->mass += m;
-        c->x += m * rt->pos_x[i];
-        c->y += m * rt->pos_y[i];
-        c->z += m * rt->pos_z[i];
+        c->mass += rt->mass[i];
+        c->x += rt->mass[i] * rt->pos_x[i];
+        c->y += rt->mass[i] * rt->pos_y[i];
+        c->z += rt->mass[i] * rt->pos_z[i];
         c->charge += rt->charge[i];
         c->phase += rt->I_phase[i];
         
-        // ================================================================
-        // Nachbarn ueber die vorberechnete K-Matrix-Adjazenz sammeln,
-        // in zufaelliger Reihenfolge (Fisher-Yates)
-        // ================================================================
-        
-        size_t* neighbors = malloc(cfg->N * sizeof(size_t));
-        int neighbor_count = 0;
-        
-        if (neighbors != NULL)
+        const bool* row = &rt->adjacency[i * cfg->N];
+        for (size_t j = 0; j < cfg->N; j++)
         {
-            const bool* row = &rt->adjacency[i * cfg->N];
-            for (size_t j = 0; j < cfg->N; j++)
+            if (row[j] && !rt->visited[j] && rt->mass[j] > 1e-6)
             {
-                if (row[j] && !visited[j] && rt->mass[j] > 1e-6)
-                {
-                    neighbors[neighbor_count++] = j;
-                }
+                if (stack_ptr >= cfg->N) break;
+                stack[stack_ptr++] = j;
             }
-
-            // Nachbarn zufaellig mischen (Fisher-Yates)
-            for (int n = neighbor_count - 1; n > 0; n--)
-            {
-                int r = rand() % (n + 1);
-                size_t temp = neighbors[n];
-                neighbors[n] = neighbors[r];
-                neighbors[r] = temp;
-            }
-
-            // Nachbarn in zufaelliger Reihenfolge auf den Stack legen
-            for (int n = 0; n < neighbor_count; n++)
-            {
-                stack[stack_ptr++] = neighbors[n];
-            }
-
-            free(neighbors);
         }
     }
-    
-    free(stack);
 }
 
 void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-    static bool* visited = NULL;
-    static size_t visited_size = 0;
-    
-    if (visited == NULL || visited_size != cfg->N)
-    {
-        if (visited != NULL) free(visited);
-        visited = calloc(cfg->N, sizeof(bool));
-        visited_size = cfg->N;
-    }
-    
+{   
     // Alle Knoten als unbesucht markieren
-    memset(visited, 0, cfg->N * sizeof(bool));
+    memset(rt->visited, 0, cfg->N * sizeof(bool));
     
     // Alte Cluster zurücksetzen
     rt->cluster_count = 0;
@@ -138,7 +92,7 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
     // Flood-Fill für jeden Knoten
     for (size_t i = 0; i < cfg->N; i++)
     {
-        if (visited[i]) continue;
+        if (rt->visited[i]) continue;
         if (rt->mass[i] < 1e-6) continue;  // Schwellwert für Masse
         
         // Neuen Cluster initialisieren
@@ -158,7 +112,7 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
         c->is_active = true;
         
         // Flood-Fill: Alle verbundenen Knoten sammeln
-        _flood_fill(rt, cfg, i, visited, c);
+        _flood_fill(rt, cfg, i, c);
         
         // Schwerpunkt berechnen (gewichtet mit Masse)
         if (c->node_count > 0)

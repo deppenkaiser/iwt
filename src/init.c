@@ -43,6 +43,8 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     // === Cluster-Verwaltung ===
     rt->cluster_capacity = 100;
     rt->clusters = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
+	rt->visited = calloc(cfg->N, sizeof(bool));
+
     for (size_t i = 0; i < rt->cluster_capacity; i++)
     {
         rt->clusters[i].node_indices = calloc(cfg->N, sizeof(size_t));
@@ -59,8 +61,8 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         (rt->adjacency != NULL) &&
         (rt->mass != NULL) && (rt->charge != NULL) &&
         (rt->xi_real != NULL) && (rt->xi_imag != NULL) &&
-        (rt->uncertainty != NULL) &&
-        (rt->clusters != NULL))
+        (rt->uncertainty != NULL) && (rt->clusters != NULL) &&
+		(rt->visited != NULL))
     {
         // ================================================================
         // FRAKTALE DODEKAEDER-KNOTENPOSITIONEN
@@ -214,6 +216,8 @@ void deinitialize_host_data(const iwt_runtime_t rt)
     _free_memory((void**)&rt->uncertainty);
 
     // === Cluster ===
+	_free_memory((void**)&rt->visited);
+
     if (rt->clusters != NULL)
     {
         for (size_t i = 0; i < rt->cluster_capacity; i++)
