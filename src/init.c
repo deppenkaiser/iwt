@@ -65,9 +65,11 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 		(rt->visited != NULL))
     {
         // ================================================================
-        // FRAKTALE DODEKAEDER-KNOTENPOSITIONEN
+        // FRAKTALE DODEKAEDER-KNOTENPOSITIONEN (mehrere Wurzeln im Gitter)
         // ================================================================
-        bool points_ok = dodecahedron_generate_points(rt->pos_x, rt->pos_y, rt->pos_z, cfg->N, cfg->l0);
+        bool points_ok = dodecahedron_generate_multi_root_points(
+            rt->pos_x, rt->pos_y, rt->pos_z, cfg->N, cfg->l0,
+            2, 2, 1, 3.0);
 
         if (points_ok)
         {

@@ -11,7 +11,8 @@ enum
 {
     IWT_CTRL_MOTION = 1,
     IWT_CTRL_BETA,
-    IWT_CTRL_GAMMA
+    IWT_CTRL_GAMMA,
+    IWT_CTRL_CLUSTER_THRESHOLD
 };
 
 private GLuint _compile_shader(GLenum type, const char* source)
@@ -116,6 +117,7 @@ private GLuint _create_points_program(void)
         "in vec3 pos;\n"
         "in vec3 color;\n"
         "uniform mat4 u_mvp;\n"
+        "uniform float u_size_scale;\n"
         "out vec3 v_color;\n"
         "out float v_depth;\n"
         "void main()\n"
@@ -123,7 +125,7 @@ private GLuint _create_points_program(void)
         "    v_color = color;\n"
         "    gl_Position = u_mvp * vec4(pos, 1.0);\n"
         "    v_depth = gl_Position.w;\n"
-        "    gl_PointSize = clamp(300.0 / v_depth, 1.0, 12.0);\n"
+        "    gl_PointSize = clamp((300.0 / v_depth) * u_size_scale, 1.0, 40.0);\n"
         "}\n";
 
     static const char* fragment_source =
@@ -239,8 +241,12 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             struct gui_spin_button_configuration gamma_cfg = { .alignment = 0.5f, .value = data->cfg.gamma, .min = 0.0, .max = 10.0, .increment = 0.01, .digits = 3 };
             data->spin_gamma = gui_button_spin_create(IWT_CTRL_GAMMA, &gamma_cfg, data);
 
+            struct gui_spin_button_configuration threshold_cfg = { .alignment = 0.5f, .value = data->cfg.cluster_threshold, .min = 0.0, .max = 5.0, .increment = 0.01, .digits = 3 };
+            data->spin_cluster_threshold = gui_button_spin_create(IWT_CTRL_CLUSTER_THRESHOLD, &threshold_cfg, data);
+
             GtkWidget* label_beta = gtk_label_new("beta:");
             GtkWidget* label_gamma = gtk_label_new("gamma:");
+            GtkWidget* label_threshold = gtk_label_new("cluster_threshold:");
 
             GtkWidget* control_box = gui_box_horizontal_create(8);
             gui_box_append_widget(control_box, data->toggle_motion);
@@ -248,6 +254,8 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             gui_box_append_widget(control_box, data->spin_beta);
             gui_box_append_widget(control_box, label_gamma);
             gui_box_append_widget(control_box, data->spin_gamma);
+            gui_box_append_widget(control_box, label_threshold);
+            gui_box_append_widget(control_box, data->spin_cluster_threshold);
 
             GtkWidget* main_box = gui_box_vertical_create(4);
             gui_box_append_widget(main_box, control_box);
@@ -268,6 +276,8 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             data->node_colors = NULL;
             free(data->points_buffer);
             data->points_buffer = NULL;
+            free(data->cluster_points_buffer);
+            data->cluster_points_buffer = NULL;
             is_ok = true;
             break;
 
@@ -300,6 +310,11 @@ callback void gui_button(gui_button_t core, gui_event_t e)
             {
                 data->cfg.gamma = gui_button_spin_get_double(core->button);
             }
+            else if (core->id == IWT_CTRL_CLUSTER_THRESHOLD)
+            {
+                data->cfg.cluster_threshold = gui_button_spin_get_double(core->button);
+                iwt_recompute_adjacency(&data->rt, &data->cfg);
+            }
             break;
 
         default:
@@ -317,6 +332,7 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
         {
             data->node_colors = malloc((size_t)data->cfg.N * 3 * sizeof(float));
             data->points_buffer = malloc((size_t)data->cfg.N * 6 * sizeof(float));
+            data->cluster_points_buffer = malloc((size_t)data->rt.cluster_capacity * 6 * sizeof(float));
 
             data->gl_program = _create_points_program();
 
@@ -331,9 +347,21 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
             glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
             glBindVertexArray(0);
 
+            glGenVertexArrays(1, &data->gl_vao_clusters);
+            glGenBuffers(1, &data->gl_vbo_clusters);
+            glBindVertexArray(data->gl_vao_clusters);
+            glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo_clusters);
+            glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)data->rt.cluster_capacity * 6 * sizeof(float)), NULL, GL_DYNAMIC_DRAW);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+            glBindVertexArray(0);
+
             glEnable(GL_PROGRAM_POINT_SIZE);
 
             data->gl_u_mvp = glGetUniformLocation(data->gl_program, "u_mvp");
+            data->gl_u_size_scale = glGetUniformLocation(data->gl_program, "u_size_scale");
             break;
         }
 
@@ -342,40 +370,48 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			run_simulation_step(&data->rt, &data->cfg);
 			data->iter++;
 
-			// Cluster-Schwerpunkte in den Buffer schreiben
+			// --- Knotenwolke (alle N Knoten) ---
+			iwt_compute_node_colors(data->rt.mass, data->rt.charge, data->cfg.N, data->node_colors);
+			for (size_t i = 0; i < data->cfg.N; i++)
+			{
+				data->points_buffer[i * 6 + 0] = (float)data->rt.pos_x[i];
+				data->points_buffer[i * 6 + 1] = (float)data->rt.pos_y[i];
+				data->points_buffer[i * 6 + 2] = (float)data->rt.pos_z[i];
+				data->points_buffer[i * 6 + 3] = data->node_colors[i * 3 + 0];
+				data->points_buffer[i * 6 + 4] = data->node_colors[i * 3 + 1];
+				data->points_buffer[i * 6 + 5] = data->node_colors[i * 3 + 2];
+			}
+
+			// --- Cluster-Schwerpunkte ---
+			size_t cluster_draw_count = 0;
 			for (size_t c = 0; c < data->rt.cluster_count; c++)
 			{
 				iwt_cluster_t cl = &data->rt.clusters[c];
 				if (!cl->is_active) continue;
-				
-				// Position = Schwerpunkt des Clusters
-				data->points_buffer[c * 6 + 0] = (float)cl->x;
-				data->points_buffer[c * 6 + 1] = (float)cl->y;
-				data->points_buffer[c * 6 + 2] = (float)cl->z;
-				
+
+				data->cluster_points_buffer[cluster_draw_count * 6 + 0] = (float)cl->x;
+				data->cluster_points_buffer[cluster_draw_count * 6 + 1] = (float)cl->y;
+				data->cluster_points_buffer[cluster_draw_count * 6 + 2] = (float)cl->z;
+
 				// Farbe: Rot = positive Ladung, Blau = negative Ladung
 				float charge_norm = (float)(cl->charge / (fabs(cl->charge) + 1.0));
 				float brightness = (float)(cl->mass / (cl->mass + 1.0));
-				
-				if (charge_norm > 0.0) {
-					data->points_buffer[c * 6 + 3] = brightness;      // R
-					data->points_buffer[c * 6 + 4] = 0.0f;            // G
-					data->points_buffer[c * 6 + 5] = 0.0f;            // B
+
+				if (charge_norm > 0.0f) {
+					data->cluster_points_buffer[cluster_draw_count * 6 + 3] = brightness;      // R
+					data->cluster_points_buffer[cluster_draw_count * 6 + 4] = 0.0f;            // G
+					data->cluster_points_buffer[cluster_draw_count * 6 + 5] = 0.0f;            // B
 				} else {
-					data->points_buffer[c * 6 + 3] = 0.0f;            // R
-					data->points_buffer[c * 6 + 4] = 0.0f;            // G
-					data->points_buffer[c * 6 + 5] = brightness;      // B
+					data->cluster_points_buffer[cluster_draw_count * 6 + 3] = 0.0f;            // R
+					data->cluster_points_buffer[cluster_draw_count * 6 + 4] = 0.0f;            // G
+					data->cluster_points_buffer[cluster_draw_count * 6 + 5] = brightness;      // B
 				}
+
+				cluster_draw_count++;
 			}
 
 			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
-
-			// Nur Cluster zeichnen, nicht alle Knoten
-			glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
-			glBufferSubData(GL_ARRAY_BUFFER, 0, 
-							(GLsizeiptr)(data->rt.cluster_count * 6 * sizeof(float)), 
-							data->points_buffer);
 
 			glUseProgram(data->gl_program);
 
@@ -394,8 +430,22 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 
 			glUniformMatrix4fv(data->gl_u_mvp, 1, GL_FALSE, mvp);
 
+			// 1. Knotenwolke zeichnen (klein)
+			glUniform1f(data->gl_u_size_scale, 1.0f);
+			glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
+			glBufferSubData(GL_ARRAY_BUFFER, 0,
+				(GLsizeiptr)((size_t)data->cfg.N * 6 * sizeof(float)), data->points_buffer);
 			glBindVertexArray(data->gl_vao);
-			glDrawArrays(GL_POINTS, 0, (GLsizei)data->rt.cluster_count);  // <- cluster_count statt N
+			glDrawArrays(GL_POINTS, 0, (GLsizei)data->cfg.N);
+
+			// 2. Cluster-Schwerpunkte darueber zeichnen (gross/hell)
+			glUniform1f(data->gl_u_size_scale, 3.0f);
+			glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo_clusters);
+			glBufferSubData(GL_ARRAY_BUFFER, 0,
+				(GLsizeiptr)(cluster_draw_count * 6 * sizeof(float)), data->cluster_points_buffer);
+			glBindVertexArray(data->gl_vao_clusters);
+			glDrawArrays(GL_POINTS, 0, (GLsizei)cluster_draw_count);
+
 			glBindVertexArray(0);
 			break;
 		}
