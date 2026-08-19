@@ -6,3 +6,8 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg);
 void deinitialize_host_data(const iwt_runtime_t rt);
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg);
 void deinitialize_gpu_data(const iwt_runtime_t rt);
+
+// Berechnet rt->adjacency aus der (bereits vorhandenen) K-Matrix und
+// cfg->cluster_threshold neu. Positionen/K sind statisch, nur der
+// Schwellwert kann sich (z.B. live per Spinbox) ändern.
+void iwt_recompute_adjacency(const iwt_runtime_t rt, const iwt_config_t cfg);

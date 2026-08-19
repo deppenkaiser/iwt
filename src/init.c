@@ -110,21 +110,27 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
             //    (Die Normierung würde die fraktale Struktur zerstören)
 
             // 4. Nachbarschafts-Adjazenz aus K-Matrix-Schwellwert ableiten
-            //    (einmalig, da Positionen und damit K statisch sind)
-            for (size_t i = 0; i < cfg->N; i++)
-            {
-                for (size_t j = 0; j < cfg->N; j++)
-                {
-                    rt->adjacency[i * cfg->N + j] =
-                        (i != j) && (rt->K[i * cfg->N + j] > cfg->cluster_threshold);
-                }
-            }
+            //    (kann später jederzeit per iwt_recompute_adjacency() neu
+            //    berechnet werden, z.B. wenn der Schwellwert live geändert wird)
+            iwt_recompute_adjacency(rt, cfg);
 
             retval = true;
         }
     }
 
     return retval;
+}
+
+void iwt_recompute_adjacency(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+    for (size_t i = 0; i < cfg->N; i++)
+    {
+        for (size_t j = 0; j < cfg->N; j++)
+        {
+            rt->adjacency[i * cfg->N + j] =
+                (i != j) && (rt->K[i * cfg->N + j] > cfg->cluster_threshold);
+        }
+    }
 }
 
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
