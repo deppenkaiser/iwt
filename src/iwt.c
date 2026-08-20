@@ -103,8 +103,8 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
         c->mass = 0.0;
         c->charge = 0.0;
         c->phase = 0.0;
-        c->pos.x = 0.0L; c->pos.y = 0.0L; c->pos.z = 0.0L;
-        c->vel.x = 0.0L; c->vel.y = 0.0L; c->vel.z = 0.0L;
+		vector_clear(&c->pos);
+		vector_clear(&c->vel);
         c->is_active = true;
         
         // Flood-Fill: Alle verbundenen Knoten sammeln
@@ -282,7 +282,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         if (!cl->is_active) continue;
         if (cl->node_count == 0) continue;
 
-        struct vector_3d new_pos = {0};
+        struct vector_3d new_pos = vector_clear(NULL);
         double new_mass = 0.0;
 
         for (size_t n = 0; n < cl->node_count; n++)
