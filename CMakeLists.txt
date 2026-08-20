@@ -24,6 +24,7 @@ target_sources(iwt PRIVATE
 	src/iwt_kernel.c
 	src/iwt_kernel_frozen.c
 	src/iwt_detect_cluster.c
+	src/iwt_move_cluster.c
 	src/iwt.c
 	src/init.c
 	src/dodecahedron.c
