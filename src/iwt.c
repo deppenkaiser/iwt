@@ -250,13 +250,16 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             {
                 size_t i = cl->node_indices[n];
 
-                double dx = rt->pos_x[i] - cl->x;
-                double dy = rt->pos_y[i] - cl->y;
-                double dz = rt->pos_z[i] - cl->z;
-                double r = sqrt(dx * dx + dy * dy + dz * dz);
+                struct vector_3d node_pos = {(ld)rt->pos_x[i], (ld)rt->pos_y[i], (ld)rt->pos_z[i]};
+                struct vector_3d cl_pos   = {(ld)cl->x, (ld)cl->y, (ld)cl->z};
+                struct vector_3d r_vec = vector_sub(&node_pos, &cl_pos);
+                ld r_ld = vector_norm(&r_vec);
+                double r = (double)r_ld;
                 if (r < 1e-30) continue;
 
-                double v_rad = (vx * dx + vy * dy + vz * dz) / r;
+                struct vector_3d v_vec = {(ld)vx, (ld)vy, (ld)vz};
+                ld v_rad_ld = vector_dot(&r_vec, &v_vec) / r_ld;
+                double v_rad = (double)v_rad_ld;
                 double v_tan_sq = v_speed_sq - v_rad * v_rad;
                 double v_tan = v_tan_sq > 0.0 ? sqrt(v_tan_sq) : 0.0;
 
