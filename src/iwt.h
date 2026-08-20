@@ -112,7 +112,6 @@ double iwt_fractal_dimension(void);
 double iwt_alpha_IWT(void);
 double iwt_beta_IWT(void);
 
-void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg);
 void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt);
 void iwt_compute_node_colors(const double* mass, const double* charge, size_t N, float* out_rgb);
 

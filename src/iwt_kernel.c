@@ -5,6 +5,7 @@
 #include "iwt_kernel.h"
 #include "iwt.h"
 #include "iwt_kernel_frozen.h"
+#include "iwt_detect_cluster.h"
 #include <api/api.h>
 #include <math.h>
 #include <ocl/ocl.h>
