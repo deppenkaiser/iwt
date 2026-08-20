@@ -184,7 +184,7 @@ private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const i
 	// 2. WEBER-ELEKTRODYNAMIK (WED) - wirkt zwischen Ladungen
 	//    β = 2 für elektrische Ladungen
 	// ================================================================
-	double F_WED_mag = (a->charge * b->charge) / (4.0 * 3.141592653589793 * epsilon0 * r * r);
+	double F_WED_mag = (a->charge * b->charge) / (4.0 * iwt_pi() * epsilon0 * r * r);
 	double beta_WED = 2.0;
 	double factor_WED = 1.0 - (dr * dr) / (c * c) + beta_WED * (r * d2r) / (c * c);
 	F_WED_mag *= factor_WED;
