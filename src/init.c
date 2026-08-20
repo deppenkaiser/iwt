@@ -39,7 +39,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->uncertainty = calloc(cfg->N, sizeof(double));
 
     // === Cluster-Verwaltung ===
-    rt->cluster_capacity = 100;
+    rt->cluster_capacity = 400;
     rt->clusters = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
 	rt->visited = calloc(cfg->N, sizeof(bool));
 
