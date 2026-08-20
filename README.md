@@ -44,4 +44,4 @@ SortIncludes: true
 Standard: c++20
 
 ## Pattern:
-ALle bestehenden Pattern sind immer einzuhalten.
+Alle bestehenden Pattern sind immer einzuhalten.
