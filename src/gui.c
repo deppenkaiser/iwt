@@ -469,9 +469,9 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			iwt_compute_node_colors(data->rt.mass, data->rt.charge, data->cfg.N, data->node_colors);
 			for (size_t i = 0; i < data->cfg.N; i++)
 			{
-				data->points_buffer[i * 6 + 0] = (float)data->rt.pos_x[i];
-				data->points_buffer[i * 6 + 1] = (float)data->rt.pos_y[i];
-				data->points_buffer[i * 6 + 2] = (float)data->rt.pos_z[i];
+				data->points_buffer[i * 6 + 0] = (float)data->rt.pos[i].x;
+				data->points_buffer[i * 6 + 1] = (float)data->rt.pos[i].y;
+				data->points_buffer[i * 6 + 2] = (float)data->rt.pos[i].z;
 				data->points_buffer[i * 6 + 3] = data->node_colors[i * 3 + 0];
 				data->points_buffer[i * 6 + 4] = data->node_colors[i * 3 + 1];
 				data->points_buffer[i * 6 + 5] = data->node_colors[i * 3 + 2];
@@ -484,9 +484,9 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				iwt_cluster_t cl = &data->rt.clusters[c];
 				if (!cl->is_active) continue;
 
-				data->cluster_points_buffer[cluster_draw_count * 6 + 0] = (float)cl->x;
-				data->cluster_points_buffer[cluster_draw_count * 6 + 1] = (float)cl->y;
-				data->cluster_points_buffer[cluster_draw_count * 6 + 2] = (float)cl->z;
+				data->cluster_points_buffer[cluster_draw_count * 6 + 0] = (float)cl->pos.x;
+				data->cluster_points_buffer[cluster_draw_count * 6 + 1] = (float)cl->pos.y;
+				data->cluster_points_buffer[cluster_draw_count * 6 + 2] = (float)cl->pos.z;
 
 				// Farbe: Rot = positive Ladung, Blau = negative Ladung
 				float charge_norm = (float)(cl->charge / (fabs(cl->charge) + 1.0));

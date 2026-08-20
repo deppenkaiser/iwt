@@ -24,9 +24,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
     rt->Q = calloc(cfg->N, sizeof(double));
 
     // === Dodekaeder-Knotenpositionen (3D) ===
-    rt->pos_x = malloc(cfg->N * sizeof(double));
-    rt->pos_y = malloc(cfg->N * sizeof(double));
-    rt->pos_z = malloc(cfg->N * sizeof(double));
+    rt->pos = calloc(cfg->N, sizeof(struct vector_3d));
 
     // === Nachbarschafts-Adjazenz (statisch, wird einmalig berechnet) ===
     rt->adjacency = malloc(cfg->N * cfg->N * sizeof(bool));
@@ -57,7 +55,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         (rt->I_phase != NULL) && (rt->I_phase_prev != NULL) &&
         (rt->K != NULL) && (rt->sumJ != NULL) &&
         (rt->Q != NULL) &&
-        (rt->pos_x != NULL) && (rt->pos_y != NULL) && (rt->pos_z != NULL) &&
+        (rt->pos != NULL) &&
         (rt->adjacency != NULL) &&
         (rt->mass != NULL) && (rt->charge != NULL) &&
         (rt->xi_real != NULL) && (rt->xi_imag != NULL) &&
@@ -67,9 +65,28 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
         // ================================================================
         // FRAKTALE DODEKAEDER-KNOTENPOSITIONEN (mehrere Wurzeln im Gitter)
         // ================================================================
-        bool points_ok = dodecahedron_generate_multi_root_points(
-            rt->pos_x, rt->pos_y, rt->pos_z, cfg->N, cfg->l0,
-            2, 2, 1, 3.0);
+        double *tmp_x = malloc(cfg->N * sizeof(double));
+        double *tmp_y = malloc(cfg->N * sizeof(double));
+        double *tmp_z = malloc(cfg->N * sizeof(double));
+        bool points_ok = false;
+        if (tmp_x && tmp_y && tmp_z)
+        {
+            points_ok = dodecahedron_generate_multi_root_points(
+                tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0,
+                2, 2, 1, 3.0);
+            if (points_ok)
+            {
+                for (size_t i = 0; i < cfg->N; i++)
+                {
+                    rt->pos[i].x = (ld)tmp_x[i];
+                    rt->pos[i].y = (ld)tmp_y[i];
+                    rt->pos[i].z = (ld)tmp_z[i];
+                }
+            }
+            free(tmp_x);
+            free(tmp_y);
+            free(tmp_z);
+        }
 
         if (points_ok)
         {
@@ -96,10 +113,11 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
                 {
                     if (i == j) continue;
 
-                    double dx = rt->pos_x[i] - rt->pos_x[j];
-                    double dy = rt->pos_y[i] - rt->pos_y[j];
-                    double dz = rt->pos_z[i] - rt->pos_z[j];
-                    double dist_3d = sqrt(dx * dx + dy * dy + dz * dz);
+                    struct vector_3d vi = rt->pos[i];
+                    struct vector_3d vj = rt->pos[j];
+                    struct vector_3d dvec = vector_sub(&vi, &vj);
+                    ld dist_ld = vector_norm(&dvec);
+                    double dist_3d = (double)dist_ld;
                     if (dist_3d < 1e-9) dist_3d = 1e-9;
 
                     // Fraktale Distanz
@@ -207,9 +225,7 @@ void deinitialize_host_data(const iwt_runtime_t rt)
     _free_memory((void**)&rt->Q);
 
     // === Dodekaeder-Knotenpositionen (3D) ===
-    _free_memory((void**)&rt->pos_x);
-    _free_memory((void**)&rt->pos_y);
-    _free_memory((void**)&rt->pos_z);
+    _free_memory((void**)&rt->pos);
 
     // === Nachbarschafts-Adjazenz ===
     _free_memory((void**)&rt->adjacency);

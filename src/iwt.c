@@ -63,9 +63,12 @@ private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg,
         c->node_indices[c->node_count++] = i;
         
         c->mass += rt->mass[i];
-        c->x += rt->mass[i] * rt->pos_x[i];
-        c->y += rt->mass[i] * rt->pos_y[i];
-        c->z += rt->mass[i] * rt->pos_z[i];
+        // Schwerpunkt akkumulieren mit Vector-Bibliothek
+        struct vector_3d p = rt->pos[i];
+        struct vector_3d weighted = vector_multiply_scalar(&p, (cld)rt->mass[i]);
+        c->pos.x += (double)weighted.x;
+        c->pos.y += (double)weighted.y;
+        c->pos.z += (double)weighted.z;
         c->charge += rt->charge[i];
         c->phase += rt->I_phase[i];
         
@@ -103,12 +106,8 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
         c->mass = 0.0;
         c->charge = 0.0;
         c->phase = 0.0;
-        c->x = 0.0;
-        c->y = 0.0;
-        c->z = 0.0;
-        c->vx = 0.0;
-        c->vy = 0.0;
-        c->vz = 0.0;
+        c->pos.x = 0.0L; c->pos.y = 0.0L; c->pos.z = 0.0L;
+        c->vel.x = 0.0L; c->vel.y = 0.0L; c->vel.z = 0.0L;
         c->is_active = true;
         
         // Flood-Fill: Alle verbundenen Knoten sammeln
@@ -117,9 +116,9 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
         // Schwerpunkt berechnen (gewichtet mit Masse)
         if (c->node_count > 0)
         {
-            c->x /= c->mass;
-            c->y /= c->mass;
-            c->z /= c->mass;
+            c->pos.x = (double)(c->pos.x / (ld)c->mass);
+            c->pos.y = (double)(c->pos.y / (ld)c->mass);
+            c->pos.z = (double)(c->pos.z / (ld)c->mass);
             c->phase /= c->node_count;
             rt->cluster_count++;
         }
@@ -132,8 +131,8 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
                              double G, double c, double epsilon0, 
                              double* Fx, double* Fy, double* Fz)
 {
-    struct vector_3d a_pos = {(ld)a->x, (ld)a->y, (ld)a->z};
-    struct vector_3d b_pos = {(ld)b->x, (ld)b->y, (ld)b->z};
+    struct vector_3d a_pos = a->pos;
+    struct vector_3d b_pos = b->pos;
     struct vector_3d r_vec = vector_sub(&b_pos, &a_pos);
     ld r_ld = vector_norm(&r_vec);
     double r = (double)r_ld;
@@ -142,8 +141,8 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
     // ================================================================
     // Relativgeschwindigkeit und -beschleunigung (vereinfacht)
     // ================================================================
-    struct vector_3d a_vel = {(ld)a->vx, (ld)a->vy, (ld)a->vz};
-    struct vector_3d b_vel = {(ld)b->vx, (ld)b->vy, (ld)b->vz};
+    struct vector_3d a_vel = a->vel;
+    struct vector_3d b_vel = b->vel;
     struct vector_3d dv = vector_sub(&b_vel, &a_vel);
     ld dr_ld = vector_dot(&r_vec, &dv) / r_ld;
     double dr = (double)dr_ld;
@@ -221,9 +220,10 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 
         if (cl->mass > 1e-30)
         {
-            cl->vx += (Fx / cl->mass) * dt;
-            cl->vy += (Fy / cl->mass) * dt;
-            cl->vz += (Fz / cl->mass) * dt;
+            double dv = dt / cl->mass;
+            cl->vel.x += (ld)(Fx * dv);
+            cl->vel.y += (ld)(Fy * dv);
+            cl->vel.z += (ld)(Fz * dv);
         }
     }
 
@@ -241,17 +241,17 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             if (!cl->is_active) continue;
             if (cl->node_count == 0) continue;
 
-            double vx = cl->vx;
-            double vy = cl->vy;
-            double vz = cl->vz;
+            double vx = (double)cl->vel.x;
+            double vy = (double)cl->vel.y;
+            double vz = (double)cl->vel.z;
             double v_speed_sq = vx * vx + vy * vy + vz * vz;
 
             for (size_t n = 0; n < cl->node_count; n++)
             {
                 size_t i = cl->node_indices[n];
 
-                struct vector_3d node_pos = {(ld)rt->pos_x[i], (ld)rt->pos_y[i], (ld)rt->pos_z[i]};
-                struct vector_3d cl_pos   = {(ld)cl->x, (ld)cl->y, (ld)cl->z};
+                struct vector_3d node_pos = rt->pos[i];
+                struct vector_3d cl_pos   = cl->pos;
                 struct vector_3d r_vec = vector_sub(&node_pos, &cl_pos);
                 ld r_ld = vector_norm(&r_vec);
                 double r = (double)r_ld;
@@ -296,27 +296,23 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
         if (!cl->is_active) continue;
         if (cl->node_count == 0) continue;
 
-        double new_x = 0.0;
-        double new_y = 0.0;
-        double new_z = 0.0;
+        struct vector_3d new_pos = {0};
         double new_mass = 0.0;
 
         for (size_t n = 0; n < cl->node_count; n++)
         {
             size_t i = cl->node_indices[n];
             double rho = rt->mass[i];
-
-            new_x += rho * rt->pos_x[i];
-            new_y += rho * rt->pos_y[i];
-            new_z += rho * rt->pos_z[i];
+            struct vector_3d weighted = vector_multiply_scalar(&rt->pos[i], (cld)rho);
+            new_pos.x += weighted.x;
+            new_pos.y += weighted.y;
+            new_pos.z += weighted.z;
             new_mass += rho;
         }
 
         if (new_mass > 1e-30)
         {
-            cl->x = new_x / new_mass;
-            cl->y = new_y / new_mass;
-            cl->z = new_z / new_mass;
+            cl->pos = vector_divide_scalar(&new_pos, (cld)new_mass);
         }
     }
 

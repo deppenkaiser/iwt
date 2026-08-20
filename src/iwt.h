@@ -9,26 +9,23 @@
 #include <stdbool.h>
 #include <ocl/ocl.h>
 #include <stdint.h>
+#include <vector/vector.h>
 
 typedef struct iwt_cluster
 {
     int id;
     int type;                   // 0 = Vakuum, 1 = Materie, 2 = Antimaterie, ...
     
-    // Position (Schwerpunkt)
-    double x;
-    double y;
-    double z;
+    // Position (Schwerpunkt) – vector Bibliothek
+    struct vector_3d pos;
 
     // Physikalische Eigenschaften
     double mass;
     double charge;
     double phase;
 
-    // Geschwindigkeit
-    double vx;
-    double vy;
-    double vz;
+    // Geschwindigkeit – vector Bibliothek
+    struct vector_3d vel;
     
     // Knotenliste (für die Phasenverschiebung)
     size_t node_count;
@@ -59,10 +56,8 @@ typedef struct iwt_runtime
     double *mass;
     double *charge;
 
-    // Dodekaeder-Knotenpositionen (3D)
-    double *pos_x;
-    double *pos_y;
-    double *pos_z;
+    // Dodekaeder-Knotenpositionen (3D) – vector Bibliothek
+    struct vector_3d *pos;
 
     // Nachbarschafts-Adjazenz (K-Matrix-Schwellwert), N*N, statisch
     bool *adjacency;
