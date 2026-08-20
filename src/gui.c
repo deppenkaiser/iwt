@@ -16,8 +16,7 @@ enum
 	IWT_CTRL_CLUSTER_THRESHOLD
 };
 
-private
-GLuint _compile_shader(GLenum type, const char* source)
+private GLuint _compile_shader(GLenum type, const char* source)
 {
 	GLuint shader = glCreateShader(type);
 	glShaderSource(shader, 1, &source, NULL);
@@ -36,8 +35,7 @@ GLuint _compile_shader(GLenum type, const char* source)
 	return shader;
 }
 
-private
-void _vec3_sub(float* out, const float* a, const float* b)
+private void _vec3_sub(float* out, const float* a, const float* b)
 {
 	struct vector_3d va = {(ld) a[0], (ld) a[1], (ld) a[2]};
 	struct vector_3d vb = {(ld) b[0], (ld) b[1], (ld) b[2]};
@@ -47,8 +45,7 @@ void _vec3_sub(float* out, const float* a, const float* b)
 	out[2] = (float) v.z;
 }
 
-private
-void _vec3_cross(float* out, const float* a, const float* b)
+private void _vec3_cross(float* out, const float* a, const float* b)
 {
 	struct vector_3d va = {(ld) a[0], (ld) a[1], (ld) a[2]};
 	struct vector_3d vb = {(ld) b[0], (ld) b[1], (ld) b[2]};
@@ -58,8 +55,7 @@ void _vec3_cross(float* out, const float* a, const float* b)
 	out[2] = (float) v.z;
 }
 
-private
-float _vec3_dot(const float* a, const float* b)
+private float _vec3_dot(const float* a, const float* b)
 {
 	struct vector_3d va = {(ld) a[0], (ld) a[1], (ld) a[2]};
 	struct vector_3d vb = {(ld) b[0], (ld) b[1], (ld) b[2]};
@@ -67,8 +63,7 @@ float _vec3_dot(const float* a, const float* b)
 	return (float) d;
 }
 
-private
-void _vec3_normalize(float* v)
+private void _vec3_normalize(float* v)
 {
 	struct vector_3d vv = {(ld) v[0], (ld) v[1], (ld) v[2]};
 	struct vector_3d n = vector_normalize(&vv);
@@ -78,8 +73,7 @@ void _vec3_normalize(float* v)
 }
 
 // Perspektivische Projektionsmatrix (spaltenweise, wie von GLSL erwartet)
-private
-void _mat4_perspective(float* m, float fovy_rad, float aspect, float znear, float zfar)
+private void _mat4_perspective(float* m, float fovy_rad, float aspect, float znear, float zfar)
 {
 	float f = 1.0f / tanf(fovy_rad * 0.5f);
 	for (int i = 0; i < 16; i++)
@@ -94,8 +88,7 @@ void _mat4_perspective(float* m, float fovy_rad, float aspect, float znear, floa
 }
 
 // Kamera-View-Matrix (LookAt), spaltenweise
-private
-void _mat4_look_at(float* m, const float* eye, const float* center, const float* up)
+private void _mat4_look_at(float* m, const float* eye, const float* center, const float* up)
 {
 	float f[3], s[3], u[3];
 	_vec3_sub(f, center, eye);
@@ -122,8 +115,7 @@ void _mat4_look_at(float* m, const float* eye, const float* center, const float*
 	m[15] = 1.0f;
 }
 
-private
-void _mat4_mul(float* out, const float* a, const float* b)
+private void _mat4_mul(float* out, const float* a, const float* b)
 {
 	float tmp[16];
 	for (int col = 0; col < 4; col++)
@@ -142,8 +134,7 @@ void _mat4_mul(float* out, const float* a, const float* b)
 }
 
 // Mausrad-Zoom: dy>0 = nach unten scrollen = rauszoomen (Kamera weiter weg)
-private
-gboolean _on_scroll(GtkEventControllerScroll* controller, double dx, double dy, gpointer user_data)
+private gboolean _on_scroll(GtkEventControllerScroll* controller, double dx, double dy, gpointer user_data)
 {
 	(void) controller;
 	(void) dx;
@@ -163,8 +154,7 @@ gboolean _on_scroll(GtkEventControllerScroll* controller, double dx, double dy, 
 }
 
 // Maus-Drag: Kamera per Klick+Ziehen um die Szene rotieren (Orbit)
-private
-void _on_drag_begin(GtkGestureDrag* gesture, double start_x, double start_y, gpointer user_data)
+private void _on_drag_begin(GtkGestureDrag* gesture, double start_x, double start_y, gpointer user_data)
 {
 	(void) gesture;
 	(void) start_x;
@@ -174,8 +164,7 @@ void _on_drag_begin(GtkGestureDrag* gesture, double start_x, double start_y, gpo
 	data->drag_last_y = 0.0;
 }
 
-private
-void _on_drag_update(GtkGestureDrag* gesture, double offset_x, double offset_y, gpointer user_data)
+private void _on_drag_update(GtkGestureDrag* gesture, double offset_x, double offset_y, gpointer user_data)
 {
 	(void) gesture;
 	iwt_gui_data_t data = user_data;
@@ -198,8 +187,7 @@ void _on_drag_update(GtkGestureDrag* gesture, double offset_x, double offset_y, 
 	data->drag_last_y = offset_y;
 }
 
-private
-GLuint _create_points_program(void)
+private GLuint _create_points_program(void)
 {
 	static const char* vertex_source =
 		"#version 150 core\n"
