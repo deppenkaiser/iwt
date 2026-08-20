@@ -16,6 +16,7 @@ add_executable(iwt)
 add_subdirectory(../../libraries/ocl ${CMAKE_BINARY_DIR}/ocl)
 add_subdirectory(../../libraries/string ${CMAKE_BINARY_DIR}/string)
 add_subdirectory(../../libraries/gui ${CMAKE_BINARY_DIR}/gui)
+add_subdirectory(../../libraries/vector ${CMAKE_BINARY_DIR}/vector)
 
 target_sources(iwt PRIVATE
 	src/main.c
@@ -35,5 +36,6 @@ target_link_libraries(iwt
 	ocl
 	string
 	gui
+	vector
 	m
 )
