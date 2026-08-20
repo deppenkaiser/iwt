@@ -13,7 +13,10 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-double iwt_pi(void) { return 4.0 * atan(1.0); }
+double iwt_pi(void)
+{
+	return 4.0 * atan(1.0);
+}
 
 double iwt_fundamental_length(void)
 {
@@ -52,7 +55,8 @@ double iwt_beta_IWT(void)
 	return 1;
 }
 
-private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, size_t idx, iwt_cluster_t c)
+private
+void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, size_t idx, iwt_cluster_t c)
 {
 	size_t stack[cfg->N]; // VLA - geht weil cfg->N bekannt ist
 	size_t stack_ptr = 0;
@@ -62,27 +66,33 @@ private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, size_t 
 	{
 		size_t i = stack[--stack_ptr];
 		if (rt->visited[i])
+		{
 			continue;
+		}
 		if (rt->mass[i] < 1e-6)
+		{
 			continue;
+		}
 
 		rt->visited[i] = true;
 		c->node_indices[c->node_count++] = i;
 
 		c->mass += rt->mass[i];
 		// Schwerpunkt akkumulieren mit Vector-Bibliothek
-		struct vector_3d weighted = vector_multiply_scalar(&rt->pos[i], (cld)rt->mass[i]);
+		struct vector_3d weighted = vector_multiply_scalar(&rt->pos[i], (cld) rt->mass[i]);
 		c->pos = vector_add(&c->pos, &weighted);
 		c->charge += rt->charge[i];
 		c->phase += rt->I_phase[i];
 
-		const bool *row = &rt->adjacency[i * cfg->N];
+		const bool* row = &rt->adjacency[i * cfg->N];
 		for (size_t j = 0; j < cfg->N; j++)
 		{
 			if (row[j] && !rt->visited[j] && rt->mass[j] > 1e-6)
 			{
 				if (stack_ptr >= cfg->N)
+				{
 					break;
+				}
 				stack[stack_ptr++] = j;
 			}
 		}
@@ -101,13 +111,19 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 	for (size_t i = 0; i < cfg->N; i++)
 	{
 		if (rt->visited[i])
+		{
 			continue;
+		}
 		if (rt->mass[i] < 1e-6)
+		{
 			continue; // Schwellwert für Masse
+		}
 
 		// Neuen Cluster initialisieren
 		if (rt->cluster_count >= rt->cluster_capacity)
+		{
 			break;
+		}
 		iwt_cluster_t c = &rt->clusters[rt->cluster_count];
 		c->id = rt->cluster_count;
 		c->node_count = 0;
@@ -124,7 +140,7 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 		// Schwerpunkt berechnen (gewichtet mit Masse)
 		if (c->node_count > 0)
 		{
-			c->pos = vector_divide_scalar(&c->pos, (cld)c->mass);
+			c->pos = vector_divide_scalar(&c->pos, (cld) c->mass);
 			c->phase /= c->node_count;
 			rt->cluster_count++;
 		}
@@ -133,11 +149,12 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 	printf("Gefundene Cluster: %d\n", rt->cluster_count);
 }
 
-private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, double G, double c, double epsilon0)
+private
+struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, double G, double c, double epsilon0)
 {
 	struct vector_3d r_vec = vector_sub(&b->pos, &a->pos);
 	ld r_ld = vector_norm(&r_vec);
-	double r = (double)r_ld;
+	double r = (double) r_ld;
 	if (r < 1e-30)
 	{
 		return vector_clear(NULL);
@@ -148,7 +165,7 @@ private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const i
 	// ================================================================
 	struct vector_3d dv = vector_sub(&b->vel, &a->vel);
 	ld dr_ld = vector_dot(&r_vec, &dv) / r_ld;
-	double dr = (double)dr_ld;
+	double dr = (double) dr_ld;
 
 	// Beschleunigung (Differenz der Geschwindigkeiten, vereinfacht)
 	double d2r = 0.0;
@@ -163,7 +180,7 @@ private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const i
 	F_WG_mag *= factor_WG;
 
 	struct vector_3d r_unit = vector_normalize(&r_vec);
-	struct vector_3d F_WG_vec = vector_multiply_scalar(&r_unit, (cld)(-F_WG_mag));
+	struct vector_3d F_WG_vec = vector_multiply_scalar(&r_unit, (cld) (-F_WG_mag));
 
 	// ================================================================
 	// 2. WEBER-ELEKTRODYNAMIK (WED) - wirkt zwischen Ladungen
@@ -174,7 +191,7 @@ private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const i
 	double factor_WED = 1.0 - (dr * dr) / (c * c) + beta_WED * (r * d2r) / (c * c);
 	F_WED_mag *= factor_WED;
 
-	struct vector_3d F_WED_vec = vector_multiply_scalar(&r_unit, (cld)F_WED_mag);
+	struct vector_3d F_WED_vec = vector_multiply_scalar(&r_unit, (cld) F_WED_mag);
 
 	// ================================================================
 	// 3. GESAMTKRAFT (WG + WED)
@@ -195,31 +212,31 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 	{
 		iwt_cluster_t cl = &rt->clusters[c];
 		if (!cl->is_active)
+		{
 			continue;
+		}
 
-		double Fx = 0.0;
-		double Fy = 0.0;
-		double Fz = 0.0;
+		struct vector_3d force = vector_clear(NULL);
 
 		for (size_t d = 0; d < rt->cluster_count; d++)
 		{
 			if (c == d)
+			{
 				continue;
+			}
 			iwt_cluster_t other = &rt->clusters[d];
 			if (!other->is_active)
+			{
 				continue;
+			}
 
-			double Fx_ij, Fy_ij, Fz_ij;
-			_iwt_compute_weber_force(cl, other, 1.0, 1.0, 1.0, &Fx_ij, &Fy_ij, &Fz_ij);
-			Fx += Fx_ij;
-			Fy += Fy_ij;
-			Fz += Fz_ij;
+			struct vector_3d f_ij = _iwt_compute_weber_force(cl, other, 1.0, 1.0, 1.0);
+			force = vector_add(&force, &f_ij);
 		}
 
 		if (cl->mass > 1e-30)
 		{
-			struct vector_3d force = {(ld)Fx, (ld)Fy, (ld)Fz};
-			struct vector_3d dv = vector_multiply_scalar(&force, (cld)(dt / cl->mass));
+			struct vector_3d dv = vector_multiply_scalar(&force, (cld) (dt / cl->mass));
 			cl->vel = vector_add(&cl->vel, &dv);
 		}
 	}
@@ -236,12 +253,16 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 		{
 			iwt_cluster_t cl = &rt->clusters[c];
 			if (!cl->is_active)
+			{
 				continue;
+			}
 			if (cl->node_count == 0)
+			{
 				continue;
+			}
 
 			ld v_speed_ld = vector_norm(&cl->vel);
-			double v_speed_sq = (double)(v_speed_ld * v_speed_ld);
+			double v_speed_sq = (double) (v_speed_ld * v_speed_ld);
 
 			for (size_t n = 0; n < cl->node_count; n++)
 			{
@@ -249,13 +270,15 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 
 				struct vector_3d r_vec = vector_sub(&rt->pos[i], &cl->pos);
 				ld r_ld = vector_norm(&r_vec);
-				double r = (double)r_ld;
+				double r = (double) r_ld;
 				if (r < 1e-30)
+				{
 					continue;
+				}
 
 				struct vector_3d v_vec = cl->vel;
 				ld v_rad_ld = vector_dot(&r_vec, &v_vec) / r_ld;
-				double v_rad = (double)v_rad_ld;
+				double v_rad = (double) v_rad_ld;
 				double v_tan_sq = v_speed_sq - v_rad * v_rad;
 				double v_tan = v_tan_sq > 0.0 ? sqrt(v_tan_sq) : 0.0;
 
@@ -269,9 +292,13 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 
 				rt->I_phase[i] += dphi;
 				while (rt->I_phase[i] > PI)
+				{
 					rt->I_phase[i] -= twoPI;
+				}
 				while (rt->I_phase[i] < -PI)
+				{
 					rt->I_phase[i] += twoPI;
+				}
 			}
 		}
 
@@ -292,9 +319,13 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 	{
 		iwt_cluster_t cl = &rt->clusters[c];
 		if (!cl->is_active)
+		{
 			continue;
+		}
 		if (cl->node_count == 0)
+		{
 			continue;
+		}
 
 		struct vector_3d new_pos = vector_clear(NULL);
 		double new_mass = 0.0;
@@ -303,7 +334,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 		{
 			size_t i = cl->node_indices[n];
 			double rho = rt->mass[i];
-			struct vector_3d weighted = vector_multiply_scalar(&rt->pos[i], (cld)rho);
+			struct vector_3d weighted = vector_multiply_scalar(&rt->pos[i], (cld) rho);
 			new_pos.x += weighted.x;
 			new_pos.y += weighted.y;
 			new_pos.z += weighted.z;
@@ -312,7 +343,7 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 
 		if (new_mass > 1e-30)
 		{
-			cl->pos = vector_divide_scalar(&new_pos, (cld)new_mass);
+			cl->pos = vector_divide_scalar(&new_pos, (cld) new_mass);
 		}
 	}
 
@@ -323,12 +354,14 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 	{
 		iwt_cluster_t cl = &rt->clusters[c];
 		if (!cl->is_active)
+		{
 			continue;
+		}
 		cl->node_count = 0;
 	}
 }
 
-void iwt_compute_node_colors(const double *mass, const double *charge, size_t N, float *out_rgb)
+void iwt_compute_node_colors(const double* mass, const double* charge, size_t N, float* out_rgb)
 {
 	double mass_min = 1e30;
 	double mass_max = -1e30;
@@ -339,7 +372,9 @@ void iwt_compute_node_colors(const double *mass, const double *charge, size_t N,
 	}
 	double mass_range = mass_max - mass_min;
 	if (mass_range < 1e-30)
+	{
 		mass_range = 1.0;
+	}
 
 	double max_abs = 0.0;
 	for (size_t i = 0; i < N; i++)
@@ -347,7 +382,9 @@ void iwt_compute_node_colors(const double *mass, const double *charge, size_t N,
 		max_abs = MAX(max_abs, fabs(charge[i]));
 	}
 	if (max_abs < 1e-30)
+	{
 		max_abs = 1.0;
+	}
 
 	// Helligkeit = Masse, Farbrichtung (Rot/Blau) = Ladung - gleiches Schema
 	// wie iwt_build_overlay_rgb(), aber pro Knoten statt pro Pixel.
@@ -361,8 +398,8 @@ void iwt_compute_node_colors(const double *mass, const double *charge, size_t N,
 		double g = brightness * (1.0 - abs_charge);
 		double b = brightness * (charge_norm > 0.0 ? charge_norm : (1.0 - abs_charge));
 
-		out_rgb[i * 3 + 0] = (float)r;
-		out_rgb[i * 3 + 1] = (float)g;
-		out_rgb[i * 3 + 2] = (float)b;
+		out_rgb[i * 3 + 0] = (float) r;
+		out_rgb[i * 3 + 1] = (float) g;
+		out_rgb[i * 3 + 2] = (float) b;
 	}
 }
