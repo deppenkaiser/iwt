@@ -132,25 +132,27 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
                              double G, double c, double epsilon0, 
                              double* Fx, double* Fy, double* Fz)
 {
-    double dx = b->x - a->x;
-    double dy = b->y - a->y;
-    double dz = b->z - a->z;
-    double r = sqrt(dx * dx + dy * dy + dz * dz);
+    struct vector_3d a_pos = {(ld)a->x, (ld)a->y, (ld)a->z};
+    struct vector_3d b_pos = {(ld)b->x, (ld)b->y, (ld)b->z};
+    struct vector_3d r_vec = vector_sub(&b_pos, &a_pos);
+    ld r_ld = vector_norm(&r_vec);
+    double r = (double)r_ld;
     if (r < 1e-30) { *Fx = 0.0; *Fy = 0.0; *Fz = 0.0; return; }
     
     // ================================================================
     // Relativgeschwindigkeit und -beschleunigung (vereinfacht)
     // ================================================================
-    double dvx = b->vx - a->vx;
-    double dvy = b->vy - a->vy;
-    double dvz = b->vz - a->vz;
-    double dr = (dx * dvx + dy * dvy + dz * dvz) / r;      // radiale Geschwindigkeit
+    struct vector_3d a_vel = {(ld)a->vx, (ld)a->vy, (ld)a->vz};
+    struct vector_3d b_vel = {(ld)b->vx, (ld)b->vy, (ld)b->vz};
+    struct vector_3d dv = vector_sub(&b_vel, &a_vel);
+    ld dr_ld = vector_dot(&r_vec, &dv) / r_ld;
+    double dr = (double)dr_ld;
     
     // Beschleunigung (Differenz der Geschwindigkeiten, vereinfacht)
-    double dax = 0.0;  // müsste aus den Kräften berechnet werden
+    double dax = 0.0;
     double day = 0.0;
     double daz = 0.0;
-    double d2r = (dx * dax + dy * day + dz * daz) / r;     // radiale Beschleunigung
+    double d2r = 0.0;
     
     // ================================================================
     // 1. WEBER-GRAVITATION (WG) - wirkt zwischen Massen
@@ -161,9 +163,10 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
     double factor_WG = 1.0 - (dr * dr) / (c * c) + beta_WG * (r * d2r) / (c * c);
     F_WG_mag *= factor_WG;
     
-    double F_WG_x = F_WG_mag * (-dx / r);  // anziehend (Minus-Zeichen)
-    double F_WG_y = F_WG_mag * (-dy / r);
-    double F_WG_z = F_WG_mag * (-dz / r);
+    struct vector_3d r_unit = vector_normalize(&r_vec);
+    double F_WG_x = F_WG_mag * (-(double)r_unit.x);
+    double F_WG_y = F_WG_mag * (-(double)r_unit.y);
+    double F_WG_z = F_WG_mag * (-(double)r_unit.z);
     
     // ================================================================
     // 2. WEBER-ELEKTRODYNAMIK (WED) - wirkt zwischen Ladungen
@@ -174,9 +177,9 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
     double factor_WED = 1.0 - (dr * dr) / (c * c) + beta_WED * (r * d2r) / (c * c);
     F_WED_mag *= factor_WED;
     
-    double F_WED_x = F_WED_mag * (dx / r);   // abstoßend/anziehend je nach Vorzeichen
-    double F_WED_y = F_WED_mag * (dy / r);
-    double F_WED_z = F_WED_mag * (dz / r);
+    double F_WED_x = F_WED_mag * (double)r_unit.x;
+    double F_WED_y = F_WED_mag * (double)r_unit.y;
+    double F_WED_z = F_WED_mag * (double)r_unit.z;
     
     // ================================================================
     // 3. GESAMTKRAFT (WG + WED)
