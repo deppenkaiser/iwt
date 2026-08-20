@@ -5,3 +5,23 @@ TabWidth: 4
 IndentWidth: 4
 ColumnLimit: 0
 AlignAfterOpenBracket: Align
+
+# Zusätzliche nützliche Einstellungen:
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: AfterColon
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+PointerAlignment: Left
+SpaceAfterCStyleCast: true
+SpaceAfterLogicalNot: false
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeCtorInitializerColon: true

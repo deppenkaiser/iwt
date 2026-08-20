@@ -16,8 +16,8 @@
 #ifndef IWT_KERNEL_H
 #define IWT_KERNEL_H
 
-#include <stdbool.h>
 #include "iwt.h"
+#include <stdbool.h>
 
 // ============================================================================
 // BOHM-POTENTIAL (Strukturbildung)

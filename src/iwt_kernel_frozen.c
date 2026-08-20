@@ -34,13 +34,13 @@
 // HILFSFUNKTIONEN (eingefroren)
 // ============================================================================
 
-static double box_muller(unsigned int *seed)
+static double box_muller(unsigned int* seed)
 {
 	double u1, u2;
 	do
 	{
-		u1 = (double)rand_r(seed) / (double)RAND_MAX;
-		u2 = (double)rand_r(seed) / (double)RAND_MAX;
+		u1 = (double) rand_r(seed) / (double) RAND_MAX;
+		u2 = (double) rand_r(seed) / (double) RAND_MAX;
 	} while (u1 < 1e-30 || u2 < 1e-30);
 	return sqrt(-2.0 * log(u1)) * cos(2.0 * iwt_pi() * u2);
 }
@@ -51,51 +51,52 @@ static double box_muller(unsigned int *seed)
 
 bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-    double scale = SCALE;
-    unsigned int seed = cfg->seed;
+	double scale = SCALE;
+	unsigned int seed = cfg->seed;
 
-    // ================================================================
-    // NEU: Knoten-Indizes in zufälliger Reihenfolge
-    // ================================================================
-    size_t* indices = malloc(cfg->N * sizeof(size_t));
-    if (!indices) return false;
+	// ================================================================
+	// NEU: Knoten-Indizes in zufälliger Reihenfolge
+	// ================================================================
+	size_t* indices = malloc(cfg->N * sizeof(size_t));
+	if (!indices)
+		return false;
 
-    for (size_t i = 0; i < cfg->N; i++)
-    {
-        indices[i] = i;
-    }
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		indices[i] = i;
+	}
 
-    // Fisher-Yates Shuffle
-    for (size_t i = cfg->N - 1; i > 0; i--)
-    {
-        size_t j = rand_r(&seed) % (i + 1);
-        size_t temp = indices[i];
-        indices[i] = indices[j];
-        indices[j] = temp;
-    }
+	// Fisher-Yates Shuffle
+	for (size_t i = cfg->N - 1; i > 0; i--)
+	{
+		size_t j = rand_r(&seed) % (i + 1);
+		size_t temp = indices[i];
+		indices[i] = indices[j];
+		indices[j] = temp;
+	}
 
-    // ================================================================
-    // Fluktuationen in zufälliger Reihenfolge erzeugen
-    // ================================================================
-    for (size_t n = 0; n < cfg->N; n++)
-    {
-        size_t i = indices[n];
+	// ================================================================
+	// Fluktuationen in zufälliger Reihenfolge erzeugen
+	// ================================================================
+	for (size_t n = 0; n < cfg->N; n++)
+	{
+		size_t i = indices[n];
 
-        double rho_i = rt->I_real[i] * rt->I_real[i] +
-                       rt->I_imag[i] * rt->I_imag[i] + 1e-30;
+		double rho_i = rt->I_real[i] * rt->I_real[i] +
+					   rt->I_imag[i] * rt->I_imag[i] + 1e-30;
 
-        // Fluktuation NUR im Vakuum
-        double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
+		// Fluktuation NUR im Vakuum
+		double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
 
-        double delta = box_muller(&seed) * fluct_strength;
+		double delta = box_muller(&seed) * fluct_strength;
 
-        rt->xi_real[i] = delta;
-        rt->xi_imag[i] = delta;
-        rt->uncertainty[i] = 0.0;
-    }
+		rt->xi_real[i] = delta;
+		rt->xi_imag[i] = delta;
+		rt->uncertainty[i] = 0.0;
+	}
 
-    free(indices);
-    return true;
+	free(indices);
+	return true;
 }
 
 bool frozen_upload_uncertainty_to_gpu(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -123,7 +124,7 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 	if (!frozen_upload_uncertainty_to_gpu(rt, cfg))
 		return false;
 
-	int N = (int)cfg->N;
+	int N = (int) cfg->N;
 
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);

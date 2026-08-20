@@ -15,8 +15,8 @@
 #ifndef IWT_KERNEL_FROZEN_H
 #define IWT_KERNEL_FROZEN_H
 
-#include <stdbool.h>
 #include "iwt.h"
+#include <stdbool.h>
 
 // ============================================================================
 // 1. FLUKTUATIONEN (Vakuumfluktuation)

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 // Erzeugt N Knotenpositionen nach dem fraktalen Dodekaeder-Verfahren:
 // Level 0 = ein Dodekaeder (Radius R0) im Ursprung. Jede VOLLSTAENDIG
