@@ -28,5 +28,11 @@ typedef struct iwt_gui_data
     GLuint gl_vao_clusters;
     GLuint gl_vbo_clusters;
 
+    float zoom;
+    float cam_yaw;
+    float cam_pitch;
+    double drag_last_x;
+    double drag_last_y;
+
     int iter;
 } *iwt_gui_data_t;

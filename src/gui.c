@@ -110,6 +110,48 @@ private void _mat4_mul(float* out, const float* a, const float* b)
     memcpy(out, tmp, sizeof(tmp));
 }
 
+// Mausrad-Zoom: dy>0 = nach unten scrollen = rauszoomen (Kamera weiter weg)
+private gboolean _on_scroll(GtkEventControllerScroll* controller, double dx, double dy, gpointer user_data)
+{
+    (void)controller;
+    (void)dx;
+    iwt_gui_data_t data = user_data;
+
+    data->zoom *= (dy > 0.0) ? 1.1f : 0.9f;
+    if (data->zoom < 0.1f) data->zoom = 0.1f;
+    if (data->zoom > 10.0f) data->zoom = 10.0f;
+
+    return TRUE;
+}
+
+// Maus-Drag: Kamera per Klick+Ziehen um die Szene rotieren (Orbit)
+private void _on_drag_begin(GtkGestureDrag* gesture, double start_x, double start_y, gpointer user_data)
+{
+    (void)gesture;
+    (void)start_x;
+    (void)start_y;
+    iwt_gui_data_t data = user_data;
+    data->drag_last_x = 0.0;
+    data->drag_last_y = 0.0;
+}
+
+private void _on_drag_update(GtkGestureDrag* gesture, double offset_x, double offset_y, gpointer user_data)
+{
+    (void)gesture;
+    iwt_gui_data_t data = user_data;
+
+    double delta_x = offset_x - data->drag_last_x;
+    double delta_y = offset_y - data->drag_last_y;
+
+    data->cam_yaw   += (float)delta_x * 0.005f;
+    data->cam_pitch += (float)delta_y * 0.005f;
+    if (data->cam_pitch > 1.5f) data->cam_pitch = 1.5f;
+    if (data->cam_pitch < -1.5f) data->cam_pitch = -1.5f;
+
+    data->drag_last_x = offset_x;
+    data->drag_last_y = offset_y;
+}
+
 private GLuint _create_points_program(void)
 {
     static const char* vertex_source =
@@ -186,6 +228,9 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             data->cfg.seed = (unsigned int)time(NULL);
             data->cfg.cluster_threshold = 1.2; // [1.0, 1.5]
 			data->cfg.enable_motion = false;
+            data->zoom = 1.0f;
+            data->cam_yaw = 0.785398f;
+            data->cam_pitch = 0.5236f;
 
             printf("=== IWT Parameter (aus Theorie) ===\n");
             printf("D               = %.12f\n", data->cfg.D);
@@ -230,6 +275,15 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
             GtkWidget* gl_frame = gui_frame_create("IWT Live View", data->gl_area);
             gtk_widget_set_vexpand(gl_frame, TRUE);
             gtk_widget_set_hexpand(gl_frame, TRUE);
+
+            GtkEventController* scroll_controller = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
+            g_signal_connect(scroll_controller, "scroll", G_CALLBACK(_on_scroll), data);
+            gtk_widget_add_controller(data->gl_area, scroll_controller);
+
+            GtkGesture* drag_gesture = gtk_gesture_drag_new();
+            g_signal_connect(drag_gesture, "drag-begin", G_CALLBACK(_on_drag_begin), data);
+            g_signal_connect(drag_gesture, "drag-update", G_CALLBACK(_on_drag_update), data);
+            gtk_widget_add_controller(data->gl_area, GTK_EVENT_CONTROLLER(drag_gesture));
 
             struct gui_button_configuration motion_cfg = { .label = "Bewegung aktiv", .toggle = true };
             data->toggle_motion = gui_button_create(IWT_CTRL_MOTION, &motion_cfg, data);
@@ -286,6 +340,39 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
     }
 
     return is_ok;
+}
+
+callback void gui_main_window(gui_main_window_t core, gui_event_t e)
+{
+    iwt_gui_data_t data = core->user_data;
+
+    if (e->type == GE_KEY_PRESSED)
+    {
+        const float step = 0.05f;
+        switch (e->data.key_pressed.keyval)
+        {
+            case GDK_KEY_Left:
+                data->cam_yaw -= step;
+                e->data.key_pressed.handled = true;
+                break;
+            case GDK_KEY_Right:
+                data->cam_yaw += step;
+                e->data.key_pressed.handled = true;
+                break;
+            case GDK_KEY_Up:
+                data->cam_pitch += step;
+                if (data->cam_pitch > 1.5f) data->cam_pitch = 1.5f;
+                e->data.key_pressed.handled = true;
+                break;
+            case GDK_KEY_Down:
+                data->cam_pitch -= step;
+                if (data->cam_pitch < -1.5f) data->cam_pitch = -1.5f;
+                e->data.key_pressed.handled = true;
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 callback void gui_button(gui_button_t core, gui_event_t e)
@@ -419,13 +506,18 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			int height = gtk_widget_get_height(data->gl_area);
 			float aspect = (height > 0) ? (float)width / (float)height : 1.0f;
 
-			float eye[3]    = { 2.2f, 1.8f, 2.2f };
+			float radius = 3.6f * data->zoom;
+			float eye[3] = {
+				radius * cosf(data->cam_pitch) * cosf(data->cam_yaw),
+				radius * sinf(data->cam_pitch),
+				radius * cosf(data->cam_pitch) * sinf(data->cam_yaw)
+			};
 			float center[3] = { 0.0f, 0.0f, 0.0f };
 			float up[3]     = { 0.0f, 1.0f, 0.0f };
 
 			float view[16], proj[16], mvp[16];
 			_mat4_look_at(view, eye, center, up);
-			_mat4_perspective(proj, 0.785398f, aspect, 0.1f, 10.0f);
+			_mat4_perspective(proj, 0.785398f, aspect, 0.1f, 200.0f);
 			_mat4_mul(mvp, proj, view);
 
 			glUniformMatrix4fv(data->gl_u_mvp, 1, GL_FALSE, mvp);
