@@ -232,7 +232,7 @@ private void _iwt_update_cluster_velocities(const iwt_runtime_t rt, double dt)
 
 private void _iwt_update_cluster_phases(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
 {
-	double PI = 4.0 * atan(1.0);
+	double PI = iwt_pi();
 	double twoPI = 2.0 * PI;
 	for (size_t c = 0; c < rt->cluster_count; c++)
 	{
@@ -338,9 +338,6 @@ private void _iwt_reset_cluster_node_counts(const iwt_runtime_t rt)
 
 void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
 {
-	double PI = 4.0 * atan(1.0);
-	double twoPI = 2.0 * PI;
-
 	// 1. GESCHWINDIGKEITEN AUS WEBER-KRÄFTEN BERECHNEN
 	_iwt_update_cluster_velocities(rt, dt);
 
