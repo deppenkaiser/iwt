@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <vector/vector.h>
 
 enum
 {
@@ -36,32 +37,39 @@ private GLuint _compile_shader(GLenum type, const char* source)
 
 private void _vec3_sub(float* out, const float* a, const float* b)
 {
-    out[0] = a[0] - b[0];
-    out[1] = a[1] - b[1];
-    out[2] = a[2] - b[2];
+    struct vector_3d va = {(ld)a[0], (ld)a[1], (ld)a[2]};
+    struct vector_3d vb = {(ld)b[0], (ld)b[1], (ld)b[2]};
+    struct vector_3d v = vector_sub(&va, &vb);
+    out[0] = (float)v.x;
+    out[1] = (float)v.y;
+    out[2] = (float)v.z;
 }
 
 private void _vec3_cross(float* out, const float* a, const float* b)
 {
-    out[0] = a[1] * b[2] - a[2] * b[1];
-    out[1] = a[2] * b[0] - a[0] * b[2];
-    out[2] = a[0] * b[1] - a[1] * b[0];
+    struct vector_3d va = {(ld)a[0], (ld)a[1], (ld)a[2]};
+    struct vector_3d vb = {(ld)b[0], (ld)b[1], (ld)b[2]};
+    struct vector_3d v = vector_cross(&va, &vb);
+    out[0] = (float)v.x;
+    out[1] = (float)v.y;
+    out[2] = (float)v.z;
 }
 
 private float _vec3_dot(const float* a, const float* b)
 {
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    struct vector_3d va = {(ld)a[0], (ld)a[1], (ld)a[2]};
+    struct vector_3d vb = {(ld)b[0], (ld)b[1], (ld)b[2]};
+    ld d = vector_dot(&va, &vb);
+    return (float)d;
 }
 
 private void _vec3_normalize(float* v)
 {
-    float len = sqrtf(_vec3_dot(v, v));
-    if (len > 1e-8f)
-    {
-        v[0] /= len;
-        v[1] /= len;
-        v[2] /= len;
-    }
+    struct vector_3d vv = {(ld)v[0], (ld)v[1], (ld)v[2]};
+    struct vector_3d n = vector_normalize(&vv);
+    v[0] = (float)n.x;
+    v[1] = (float)n.y;
+    v[2] = (float)n.z;
 }
 
 // Perspektivische Projektionsmatrix (spaltenweise, wie von GLSL erwartet)
