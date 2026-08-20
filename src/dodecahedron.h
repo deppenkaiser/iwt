@@ -18,5 +18,4 @@ bool dodecahedron_generate_points(double* pos_x, double* pos_y, double* pos_z, s
 // zwischen den Zentren). N wird gleichmäßig auf alle Wurzeln aufgeteilt
 // (Rest geht an die ersten Wurzeln), jede Wurzel bildet ihr eigenes
 // vollständiges Fraktal.
-bool dodecahedron_generate_multi_root_points(double* pos_x, double* pos_y, double* pos_z, size_t N,
-    double R0, int nx, int ny, int nz, double spacing);
+bool dodecahedron_generate_multi_root_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int nx, int ny, int nz, double spacing);

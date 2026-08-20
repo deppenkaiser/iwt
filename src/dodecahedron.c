@@ -110,8 +110,7 @@ private void _base_face_centers(const double v[20][3], double c[12][3])
 // Fraktale Punkterzeugung (Breadth-First) ausgehend von einem beliebigen
 // Wurzel-Zentrum `center` statt fest (0,0,0) - Kern von
 // dodecahedron_generate_points() und dodecahedron_generate_multi_root_points()
-private bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* pos_z, size_t N,
-    double R0, const double center[3])
+private bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, const double center[3])
 {
     const double phi = (1.0 + sqrt(5.0)) / 2.0;
     const double s = 2.0 + phi;                                    // Skalierungsfaktor
@@ -220,8 +219,7 @@ bool dodecahedron_generate_points(double* pos_x, double* pos_y, double* pos_z, s
     return _dodecahedron_generate_from_center(pos_x, pos_y, pos_z, N, R0, center);
 }
 
-bool dodecahedron_generate_multi_root_points(double* pos_x, double* pos_y, double* pos_z, size_t N,
-    double R0, int nx, int ny, int nz, double spacing)
+bool dodecahedron_generate_multi_root_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int nx, int ny, int nz, double spacing)
 {
     int root_count = nx * ny * nz;
     if (root_count <= 0) return false;
