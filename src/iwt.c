@@ -55,8 +55,7 @@ double iwt_beta_IWT(void)
 	return 1;
 }
 
-private
-void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, size_t idx, iwt_cluster_t c)
+private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, size_t idx, iwt_cluster_t c)
 {
 	size_t stack[cfg->N]; // VLA - geht weil cfg->N bekannt ist
 	size_t stack_ptr = 0;
@@ -149,8 +148,7 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 	printf("Gefundene Cluster: %d\n", rt->cluster_count);
 }
 
-private
-struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, double G, double c, double epsilon0)
+private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, double G, double c, double epsilon0)
 {
 	struct vector_3d r_vec = vector_sub(&b->pos, &a->pos);
 	ld r_ld = vector_norm(&r_vec);
