@@ -83,7 +83,9 @@ void _mat4_perspective(float* m, float fovy_rad, float aspect, float znear, floa
 {
 	float f = 1.0f / tanf(fovy_rad * 0.5f);
 	for (int i = 0; i < 16; i++)
+	{
 		m[i] = 0.0f;
+	}
 	m[0] = f / aspect;
 	m[5] = f;
 	m[10] = (zfar + znear) / (znear - zfar);
@@ -149,9 +151,13 @@ gboolean _on_scroll(GtkEventControllerScroll* controller, double dx, double dy, 
 
 	data->zoom *= (dy > 0.0) ? 1.1f : 0.9f;
 	if (data->zoom < 0.1f)
+	{
 		data->zoom = 0.1f;
+	}
 	if (data->zoom > 10.0f)
+	{
 		data->zoom = 10.0f;
+	}
 
 	return TRUE;
 }
@@ -180,9 +186,13 @@ void _on_drag_update(GtkGestureDrag* gesture, double offset_x, double offset_y, 
 	data->cam_yaw += (float) delta_x * 0.005f;
 	data->cam_pitch += (float) delta_y * 0.005f;
 	if (data->cam_pitch > 1.5f)
+	{
 		data->cam_pitch = 1.5f;
+	}
 	if (data->cam_pitch < -1.5f)
+	{
 		data->cam_pitch = -1.5f;
+	}
 
 	data->drag_last_x = offset_x;
 	data->drag_last_y = offset_y;
@@ -221,7 +231,9 @@ GLuint _create_points_program(void)
 	GLuint vs = _compile_shader(GL_VERTEX_SHADER, vertex_source);
 	GLuint fs = _compile_shader(GL_FRAGMENT_SHADER, fragment_source);
 	if (vs == 0 || fs == 0)
+	{
 		return 0;
+	}
 
 	GLuint program = glCreateProgram();
 	glAttachShader(program, vs);
@@ -396,13 +408,17 @@ callback void gui_main_window(gui_main_window_t core, gui_event_t e)
 			case GDK_KEY_Up:
 				data->cam_pitch += step;
 				if (data->cam_pitch > 1.5f)
+				{
 					data->cam_pitch = 1.5f;
+				}
 				e->data.key_pressed.handled = true;
 				break;
 			case GDK_KEY_Down:
 				data->cam_pitch -= step;
 				if (data->cam_pitch < -1.5f)
+				{
 					data->cam_pitch = -1.5f;
+				}
 				e->data.key_pressed.handled = true;
 				break;
 			default:
@@ -511,7 +527,9 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			{
 				iwt_cluster_t cl = &data->rt.clusters[c];
 				if (!cl->is_active)
+				{
 					continue;
+				}
 
 				data->cluster_points_buffer[cluster_draw_count * 6 + 0] = (float) cl->pos.x;
 				data->cluster_points_buffer[cluster_draw_count * 6 + 1] = (float) cl->pos.y;

@@ -149,7 +149,9 @@ bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* po
 	size_t queue_cap = 64;
 	_dodeca_cell_t* queue = malloc(queue_cap * sizeof(_dodeca_cell_t));
 	if (!queue)
+	{
 		return false;
+	}
 
 	size_t queue_head = 0;
 	size_t queue_tail = 0;
@@ -236,7 +238,9 @@ bool dodecahedron_generate_multi_root_points(double* pos_x, double* pos_y, doubl
 {
 	int root_count = nx * ny * nz;
 	if (root_count <= 0)
+	{
 		return false;
+	}
 
 	size_t base_n = N / (size_t) root_count;
 	size_t remainder = N % (size_t) root_count;

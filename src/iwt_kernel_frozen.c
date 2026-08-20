@@ -59,7 +59,9 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 	// ================================================================
 	size_t* indices = malloc(cfg->N * sizeof(size_t));
 	if (!indices)
+	{
 		return false;
+	}
 
 	for (size_t i = 0; i < cfg->N; i++)
 	{
@@ -82,8 +84,7 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 	{
 		size_t i = indices[n];
 
-		double rho_i = rt->I_real[i] * rt->I_real[i] +
-					   rt->I_imag[i] * rt->I_imag[i] + 1e-30;
+		double rho_i = rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i] + 1e-30;
 
 		// Fluktuation NUR im Vakuum
 		double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
@@ -102,11 +103,17 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 bool frozen_upload_uncertainty_to_gpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	if (clEnqueueWriteBuffer(rt->ocl.queue, rt->xi_real_gpu, CL_TRUE, 0,
-							 cfg->N * sizeof(double), rt->xi_real, 0, NULL, NULL) != CL_SUCCESS)
+							 cfg->N * sizeof(double), rt->xi_real, 0, NULL, NULL)
+		!= CL_SUCCESS)
+	{
 		return false;
+	}
 	if (clEnqueueWriteBuffer(rt->ocl.queue, rt->xi_imag_gpu, CL_TRUE, 0,
-							 cfg->N * sizeof(double), rt->xi_imag, 0, NULL, NULL) != CL_SUCCESS)
+							 cfg->N * sizeof(double), rt->xi_imag, 0, NULL, NULL)
+		!= CL_SUCCESS)
+	{
 		return false;
+	}
 	return true;
 }
 
@@ -114,7 +121,9 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 {
 	cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_APPLY_FLUCTUATIONS);
 	if (!kernel)
+	{
 		return false;
+	}
 
 	clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
 						 cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
@@ -122,7 +131,9 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 						 cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
 
 	if (!frozen_upload_uncertainty_to_gpu(rt, cfg))
+	{
 		return false;
+	}
 
 	int N = (int) cfg->N;
 
@@ -135,10 +146,14 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 	size_t global = cfg->N;
 	size_t local = 64;
 	if (local > global)
+	{
 		local = global;
+	}
 
 	if (!ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
+	{
 		return false;
+	}
 
 	clEnqueueReadBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE,
 						0, cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
@@ -159,8 +174,7 @@ bool frozen_run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_
 
 	for (size_t i = 0; i < cfg->N; i++)
 	{
-		double rho_i = rt->I_real[i] * rt->I_real[i] +
-					   rt->I_imag[i] * rt->I_imag[i] + 1e-30;
+		double rho_i = rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i] + 1e-30;
 
 		double anti_rho = 1.0 / rho_i;
 

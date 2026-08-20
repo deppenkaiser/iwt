@@ -50,17 +50,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 	}
 
 	// === Prüfung aller Allokationen ===
-	if ((rt->I_real != NULL) && (rt->I_imag != NULL) &&
-		(rt->I_prev_real != NULL) && (rt->I_prev_imag != NULL) &&
-		(rt->I_phase != NULL) && (rt->I_phase_prev != NULL) &&
-		(rt->K != NULL) && (rt->sumJ != NULL) &&
-		(rt->Q != NULL) &&
-		(rt->pos != NULL) &&
-		(rt->adjacency != NULL) &&
-		(rt->mass != NULL) && (rt->charge != NULL) &&
-		(rt->xi_real != NULL) && (rt->xi_imag != NULL) &&
-		(rt->uncertainty != NULL) && (rt->clusters != NULL) &&
-		(rt->visited != NULL))
+	if ((rt->I_real != NULL) && (rt->I_imag != NULL) && (rt->I_prev_real != NULL) && (rt->I_prev_imag != NULL) && (rt->I_phase != NULL) && (rt->I_phase_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL) && (rt->pos != NULL) && (rt->adjacency != NULL) && (rt->mass != NULL) && (rt->charge != NULL) && (rt->xi_real != NULL) && (rt->xi_imag != NULL) && (rt->uncertainty != NULL) && (rt->clusters != NULL) && (rt->visited != NULL))
 	{
 		// ================================================================
 		// FRAKTALE DODEKAEDER-KNOTENPOSITIONEN (mehrere Wurzeln im Gitter)
@@ -112,7 +102,9 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 				for (size_t j = 0; j < cfg->N; j++)
 				{
 					if (i == j)
+					{
 						continue;
+					}
 
 					struct vector_3d vi = rt->pos[i];
 					struct vector_3d vj = rt->pos[j];
@@ -120,7 +112,9 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 					ld dist_ld = vector_norm(&dvec);
 					double dist_3d = (double) dist_ld;
 					if (dist_3d < 1e-9)
+					{
 						dist_3d = 1e-9;
+					}
 
 					// Fraktale Distanz
 					double d_ij = pow(dist_3d, 1.0 / D);
@@ -181,14 +175,7 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 	// === Prüfung aller GPU-Buffer ===
 	bool all_buffers_valid =
-		(rt->I_real_gpu != NULL) && (rt->I_imag_gpu != NULL) &&
-		(rt->I_prev_real_gpu != NULL) && (rt->I_prev_imag_gpu != NULL) &&
-		(rt->I_phase_gpu != NULL) && (rt->I_phase_prev_gpu != NULL) &&
-		(rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) &&
-		(rt->Q_gpu != NULL) &&
-		(rt->mass_gpu != NULL) && (rt->charge_gpu != NULL) &&
-		(rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) &&
-		(rt->uncertainty_gpu != NULL);
+		(rt->I_real_gpu != NULL) && (rt->I_imag_gpu != NULL) && (rt->I_prev_real_gpu != NULL) && (rt->I_prev_imag_gpu != NULL) && (rt->I_phase_gpu != NULL) && (rt->I_phase_prev_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) && (rt->Q_gpu != NULL) && (rt->mass_gpu != NULL) && (rt->charge_gpu != NULL) && (rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) && (rt->uncertainty_gpu != NULL);
 
 	return all_buffers_valid;
 }

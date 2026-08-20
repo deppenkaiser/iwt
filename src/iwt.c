@@ -140,10 +140,7 @@ private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const i
 	double r = (double)r_ld;
 	if (r < 1e-30)
 	{
-		*Fx = 0.0;
-		*Fy = 0.0;
-		*Fz = 0.0;
-		return;
+		return vector_clear(NULL);
 	}
 
 	// ================================================================
@@ -154,9 +151,6 @@ private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const i
 	double dr = (double)dr_ld;
 
 	// Beschleunigung (Differenz der Geschwindigkeiten, vereinfacht)
-	double dax = 0.0;
-	double day = 0.0;
-	double daz = 0.0;
 	double d2r = 0.0;
 
 	// ================================================================
@@ -169,9 +163,7 @@ private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const i
 	F_WG_mag *= factor_WG;
 
 	struct vector_3d r_unit = vector_normalize(&r_vec);
-	double F_WG_x = F_WG_mag * (-(double)r_unit.x);
-	double F_WG_y = F_WG_mag * (-(double)r_unit.y);
-	double F_WG_z = F_WG_mag * (-(double)r_unit.z);
+	struct vector_3d F_WG_vec = vector_multiply_scalar(&r_unit, (cld)(-F_WG_mag));
 
 	// ================================================================
 	// 2. WEBER-ELEKTRODYNAMIK (WED) - wirkt zwischen Ladungen
@@ -182,16 +174,13 @@ private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const i
 	double factor_WED = 1.0 - (dr * dr) / (c * c) + beta_WED * (r * d2r) / (c * c);
 	F_WED_mag *= factor_WED;
 
-	double F_WED_x = F_WED_mag * (double)r_unit.x;
-	double F_WED_y = F_WED_mag * (double)r_unit.y;
-	double F_WED_z = F_WED_mag * (double)r_unit.z;
+	struct vector_3d F_WED_vec = vector_multiply_scalar(&r_unit, (cld)F_WED_mag);
 
 	// ================================================================
 	// 3. GESAMTKRAFT (WG + WED)
 	// ================================================================
-	*Fx = F_WG_x + F_WED_x;
-	*Fy = F_WG_y + F_WED_y;
-	*Fz = F_WG_z + F_WED_z;
+	struct vector_3d force = vector_add(&F_WG_vec, &F_WED_vec);
+	return force;
 }
 
 void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
