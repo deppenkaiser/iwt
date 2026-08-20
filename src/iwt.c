@@ -64,11 +64,8 @@ private void _flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg,
         
         c->mass += rt->mass[i];
         // Schwerpunkt akkumulieren mit Vector-Bibliothek
-        struct vector_3d p = rt->pos[i];
-        struct vector_3d weighted = vector_multiply_scalar(&p, (cld)rt->mass[i]);
-        c->pos.x += (double)weighted.x;
-        c->pos.y += (double)weighted.y;
-        c->pos.z += (double)weighted.z;
+        struct vector_3d weighted = vector_multiply_scalar(&rt->pos[i], (cld)rt->mass[i]);
+        c->pos = vector_add(&c->pos, &weighted);
         c->charge += rt->charge[i];
         c->phase += rt->I_phase[i];
         
@@ -116,9 +113,7 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
         // Schwerpunkt berechnen (gewichtet mit Masse)
         if (c->node_count > 0)
         {
-            c->pos.x = (double)(c->pos.x / (ld)c->mass);
-            c->pos.y = (double)(c->pos.y / (ld)c->mass);
-            c->pos.z = (double)(c->pos.z / (ld)c->mass);
+            c->pos = vector_divide_scalar(&c->pos, (cld)c->mass);
             c->phase /= c->node_count;
             rt->cluster_count++;
         }
@@ -131,9 +126,7 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
                              double G, double c, double epsilon0, 
                              double* Fx, double* Fy, double* Fz)
 {
-    struct vector_3d a_pos = a->pos;
-    struct vector_3d b_pos = b->pos;
-    struct vector_3d r_vec = vector_sub(&b_pos, &a_pos);
+    struct vector_3d r_vec = vector_sub(&b->pos, &a->pos);
     ld r_ld = vector_norm(&r_vec);
     double r = (double)r_ld;
     if (r < 1e-30) { *Fx = 0.0; *Fy = 0.0; *Fz = 0.0; return; }
@@ -141,9 +134,7 @@ private void _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t
     // ================================================================
     // Relativgeschwindigkeit und -beschleunigung (vereinfacht)
     // ================================================================
-    struct vector_3d a_vel = a->vel;
-    struct vector_3d b_vel = b->vel;
-    struct vector_3d dv = vector_sub(&b_vel, &a_vel);
+    struct vector_3d dv = vector_sub(&b->vel, &a->vel);
     ld dr_ld = vector_dot(&r_vec, &dv) / r_ld;
     double dr = (double)dr_ld;
     
@@ -220,10 +211,9 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 
         if (cl->mass > 1e-30)
         {
-            double dv = dt / cl->mass;
-            cl->vel.x += (ld)(Fx * dv);
-            cl->vel.y += (ld)(Fy * dv);
-            cl->vel.z += (ld)(Fz * dv);
+            struct vector_3d force = {(ld)Fx, (ld)Fy, (ld)Fz};
+            struct vector_3d dv = vector_multiply_scalar(&force, (cld)(dt / cl->mass));
+            cl->vel = vector_add(&cl->vel, &dv);
         }
     }
 
@@ -241,23 +231,19 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
             if (!cl->is_active) continue;
             if (cl->node_count == 0) continue;
 
-            double vx = (double)cl->vel.x;
-            double vy = (double)cl->vel.y;
-            double vz = (double)cl->vel.z;
-            double v_speed_sq = vx * vx + vy * vy + vz * vz;
+            ld v_speed_ld = vector_norm(&cl->vel);
+            double v_speed_sq = (double)(v_speed_ld * v_speed_ld);
 
             for (size_t n = 0; n < cl->node_count; n++)
             {
                 size_t i = cl->node_indices[n];
 
-                struct vector_3d node_pos = rt->pos[i];
-                struct vector_3d cl_pos   = cl->pos;
-                struct vector_3d r_vec = vector_sub(&node_pos, &cl_pos);
+                struct vector_3d r_vec = vector_sub(&rt->pos[i], &cl->pos);
                 ld r_ld = vector_norm(&r_vec);
                 double r = (double)r_ld;
                 if (r < 1e-30) continue;
 
-                struct vector_3d v_vec = {(ld)vx, (ld)vy, (ld)vz};
+                struct vector_3d v_vec = cl->vel;
                 ld v_rad_ld = vector_dot(&r_vec, &v_vec) / r_ld;
                 double v_rad = (double)v_rad_ld;
                 double v_tan_sq = v_speed_sq - v_rad * v_rad;
