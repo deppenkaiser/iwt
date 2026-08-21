@@ -38,9 +38,10 @@ target_include_directories(iwt PRIVATE
 )
 
 target_link_libraries(iwt
-	ocl
-	string
-	gui
-	vector
-	m
+	PUBLIC
+		ocl
+		string
+		gui
+		vector
+		m
 )
