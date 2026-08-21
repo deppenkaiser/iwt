@@ -230,50 +230,20 @@ bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* po
 
 bool dodecahedron_generate_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0)
 {
-	const double center[3] = {0.0, 0.0, 0.0};
-	return _dodecahedron_generate_from_center(pos_x, pos_y, pos_z, N, R0, center);
+	return dodecahedron_generate_points_ex(pos_x, pos_y, pos_z, N, R0, 0);
 }
 
-bool dodecahedron_generate_multi_root_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int nx, int ny, int nz, double spacing)
+bool dodecahedron_generate_points_ex(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int extra_levels)
 {
-	int root_count = nx * ny * nz;
-	if (root_count <= 0)
+	const double phi = (1.0 + sqrt(5.0)) / 2.0;
+	const double s = 2.0 + phi;
+
+	double R0_effective = R0;
+	for (int i = 0; i < extra_levels; i++)
 	{
-		return false;
+		R0_effective *= s;
 	}
 
-	size_t base_n = N / (size_t) root_count;
-	size_t remainder = N % (size_t) root_count;
-
-	size_t offset = 0;
-	int root_index = 0;
-	bool all_ok = true;
-
-	for (int ix = 0; ix < nx; ix++)
-	{
-		for (int iy = 0; iy < ny; iy++)
-		{
-			for (int iz = 0; iz < nz; iz++)
-			{
-				size_t n_this_root = base_n + ((size_t) root_index < remainder ? 1 : 0);
-
-				double center[3] = {
-					((double) ix - (nx - 1) / 2.0) * spacing,
-					((double) iy - (ny - 1) / 2.0) * spacing,
-					((double) iz - (nz - 1) / 2.0) * spacing};
-
-				if (!_dodecahedron_generate_from_center(
-						pos_x + offset, pos_y + offset, pos_z + offset,
-						n_this_root, R0, center))
-				{
-					all_ok = false;
-				}
-
-				offset += n_this_root;
-				root_index++;
-			}
-		}
-	}
-
-	return all_ok && (offset == N);
+	const double center[3] = {0.0, 0.0, 0.0};
+	return _dodecahedron_generate_from_center(pos_x, pos_y, pos_z, N, R0_effective, center);
 }

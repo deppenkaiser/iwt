@@ -13,9 +13,10 @@
 // unvollstaendig und wird deterministisch angeschnitten).
 bool dodecahedron_generate_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0);
 
-// Wie dodecahedron_generate_points(), aber mit mehreren Wurzel-Dodekaedern,
-// angeordnet in einem regelmäßigen nx*ny*nz-Gitter (Abstand `spacing`
-// zwischen den Zentren). N wird gleichmäßig auf alle Wurzeln aufgeteilt
-// (Rest geht an die ersten Wurzeln), jede Wurzel bildet ihr eigenes
-// vollständiges Fraktal.
-bool dodecahedron_generate_multi_root_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int nx, int ny, int nz, double spacing);
+// Anzahl der "Ueberstufen" (extra_levels): jede zusaetzliche Stufe skaliert
+// R0 um den Faktor s (=2+phi) nach oben, wodurch die bisherige "eine
+// Wurzel" automatisch zu einer von 12 Kind-Ebenen eines (unsichtbaren)
+// groesseren Eltern-Dodekaeders wird - dieselbe Rekursionsregel wie überall
+// sonst, kein separates Gitter noetig. extra_levels=1 -> 12 sichtbare
+// "Wurzeln", extra_levels=2 -> 12*12=144, usw.
+bool dodecahedron_generate_points_ex(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int extra_levels);

@@ -53,7 +53,9 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 	if ((rt->I_real != NULL) && (rt->I_imag != NULL) && (rt->I_prev_real != NULL) && (rt->I_prev_imag != NULL) && (rt->I_phase != NULL) && (rt->I_phase_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL) && (rt->pos != NULL) && (rt->adjacency != NULL) && (rt->mass != NULL) && (rt->charge != NULL) && (rt->xi_real != NULL) && (rt->xi_imag != NULL) && (rt->uncertainty != NULL) && (rt->clusters != NULL) && (rt->visited != NULL))
 	{
 		// ================================================================
-		// FRAKTALE DODEKAEDER-KNOTENPOSITIONEN (mehrere Wurzeln im Gitter)
+		// FRAKTALE DODEKAEDER-KNOTENPOSITIONEN (eine Ueberstufe -> 12
+		// sichtbare "Wurzeln", entstanden aus derselben Rekursionsregel
+		// wie alle anderen Ebenen, kein separates Gitter)
 		// ================================================================
 		double* tmp_x = malloc(cfg->N * sizeof(double));
 		double* tmp_y = malloc(cfg->N * sizeof(double));
@@ -61,9 +63,8 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 		bool points_ok = false;
 		if (tmp_x && tmp_y && tmp_z)
 		{
-			points_ok = dodecahedron_generate_multi_root_points(
-				tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0,
-				2, 2, 1, 3.0);
+			points_ok = dodecahedron_generate_points_ex(
+				tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0, 1);
 			if (points_ok)
 			{
 				for (size_t i = 0; i < cfg->N; i++)
@@ -180,8 +181,7 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 	return all_buffers_valid;
 }
 
-private
-void _free_memory(void** pp)
+private void _free_memory(void** pp)
 {
 	if (*pp != NULL)
 	{
@@ -190,8 +190,7 @@ void _free_memory(void** pp)
 	}
 }
 
-private
-void _free_gpu_memory(cl_mem* pp)
+private void _free_gpu_memory(cl_mem* pp)
 {
 	if (*pp != NULL)
 	{
