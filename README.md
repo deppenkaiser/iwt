@@ -151,6 +151,7 @@ Jede Abweichung von der globalen Theorie wird im Code wie folgt markiert:
  * Siehe README.md, Abschnitt "Numerische Skalierung".
  */
  
+---
 
 ## 2. Dokumentationsstandard für den Code
 
