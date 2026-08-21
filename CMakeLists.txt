@@ -21,6 +21,9 @@ add_subdirectory(../../libraries/vector ${CMAKE_BINARY_DIR}/vector)
 target_sources(iwt PRIVATE
 	src/main.c
 	src/gui.c
+	src/gui_math.c
+	src/gui_shader.c
+	src/gui_input.c
 	src/iwt_kernel.c
 	src/iwt_kernel_frozen.c
 	src/iwt_detect_cluster.c

@@ -1,6 +1,9 @@
 #include "gui.h"
 #include "init.h"
 #include "iwt_kernel.h"
+#include "gui_math.h"
+#include "gui_shader.h"
+#include "gui_input.h"
 #include <api/api.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,236 +19,6 @@ enum
 	IWT_CTRL_CLUSTER_THRESHOLD
 };
 
-private GLuint _compile_shader(GLenum type, const char* source)
-{
-	GLuint shader = glCreateShader(type);
-	glShaderSource(shader, 1, &source, NULL);
-	glCompileShader(shader);
-
-	GLint status = GL_FALSE;
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-	if (status == GL_FALSE)
-	{
-		char log[512] = {0};
-		glGetShaderInfoLog(shader, sizeof(log), NULL, log);
-		fprintf(stderr, "IWT: Shader-Fehler: %s\n", log);
-		glDeleteShader(shader);
-		return 0;
-	}
-	return shader;
-}
-
-private void _vec3_sub(float* out, const float* a, const float* b)
-{
-	struct vector_3d va = {(ld) a[0], (ld) a[1], (ld) a[2]};
-	struct vector_3d vb = {(ld) b[0], (ld) b[1], (ld) b[2]};
-	struct vector_3d v = vector_sub(&va, &vb);
-	out[0] = (float) v.x;
-	out[1] = (float) v.y;
-	out[2] = (float) v.z;
-}
-
-private void _vec3_cross(float* out, const float* a, const float* b)
-{
-	struct vector_3d va = {(ld) a[0], (ld) a[1], (ld) a[2]};
-	struct vector_3d vb = {(ld) b[0], (ld) b[1], (ld) b[2]};
-	struct vector_3d v = vector_cross(&va, &vb);
-	out[0] = (float) v.x;
-	out[1] = (float) v.y;
-	out[2] = (float) v.z;
-}
-
-private float _vec3_dot(const float* a, const float* b)
-{
-	struct vector_3d va = {(ld) a[0], (ld) a[1], (ld) a[2]};
-	struct vector_3d vb = {(ld) b[0], (ld) b[1], (ld) b[2]};
-	ld d = vector_dot(&va, &vb);
-	return (float) d;
-}
-
-private void _vec3_normalize(float* v)
-{
-	struct vector_3d vv = {(ld) v[0], (ld) v[1], (ld) v[2]};
-	struct vector_3d n = vector_normalize(&vv);
-	v[0] = (float) n.x;
-	v[1] = (float) n.y;
-	v[2] = (float) n.z;
-}
-
-// Perspektivische Projektionsmatrix (spaltenweise, wie von GLSL erwartet)
-private void _mat4_perspective(float* m, float fovy_rad, float aspect, float znear, float zfar)
-{
-	float f = 1.0f / tanf(fovy_rad * 0.5f);
-	for (int i = 0; i < 16; i++)
-	{
-		m[i] = 0.0f;
-	}
-	m[0] = f / aspect;
-	m[5] = f;
-	m[10] = (zfar + znear) / (znear - zfar);
-	m[11] = -1.0f;
-	m[14] = (2.0f * zfar * znear) / (znear - zfar);
-}
-
-// Kamera-View-Matrix (LookAt), spaltenweise
-private void _mat4_look_at(float* m, const float* eye, const float* center, const float* up)
-{
-	float f[3], s[3], u[3];
-	_vec3_sub(f, center, eye);
-	_vec3_normalize(f);
-	_vec3_cross(s, f, up);
-	_vec3_normalize(s);
-	_vec3_cross(u, s, f);
-
-	m[0] = s[0];
-	m[4] = s[1];
-	m[8] = s[2];
-	m[12] = -_vec3_dot(s, eye);
-	m[1] = u[0];
-	m[5] = u[1];
-	m[9] = u[2];
-	m[13] = -_vec3_dot(u, eye);
-	m[2] = -f[0];
-	m[6] = -f[1];
-	m[10] = -f[2];
-	m[14] = _vec3_dot(f, eye);
-	m[3] = 0.0f;
-	m[7] = 0.0f;
-	m[11] = 0.0f;
-	m[15] = 1.0f;
-}
-
-private void _mat4_mul(float* out, const float* a, const float* b)
-{
-	float tmp[16];
-	for (int col = 0; col < 4; col++)
-	{
-		for (int row = 0; row < 4; row++)
-		{
-			float sum = 0.0f;
-			for (int k = 0; k < 4; k++)
-			{
-				sum += a[k * 4 + row] * b[col * 4 + k];
-			}
-			tmp[col * 4 + row] = sum;
-		}
-	}
-	memcpy(out, tmp, sizeof(tmp));
-}
-
-// Mausrad-Zoom: dy>0 = nach unten scrollen = rauszoomen (Kamera weiter weg)
-private gboolean _on_scroll(GtkEventControllerScroll* controller, double dx, double dy, gpointer user_data)
-{
-	(void) controller;
-	(void) dx;
-	iwt_gui_data_t data = user_data;
-
-	data->zoom *= (dy > 0.0) ? 1.1f : 0.9f;
-	if (data->zoom < 0.1f)
-	{
-		data->zoom = 0.1f;
-	}
-	if (data->zoom > 10.0f)
-	{
-		data->zoom = 10.0f;
-	}
-
-	return TRUE;
-}
-
-// Maus-Drag: Kamera per Klick+Ziehen um die Szene rotieren (Orbit)
-private void _on_drag_begin(GtkGestureDrag* gesture, double start_x, double start_y, gpointer user_data)
-{
-	(void) gesture;
-	(void) start_x;
-	(void) start_y;
-	iwt_gui_data_t data = user_data;
-	data->drag_last_x = 0.0;
-	data->drag_last_y = 0.0;
-}
-
-private void _on_drag_update(GtkGestureDrag* gesture, double offset_x, double offset_y, gpointer user_data)
-{
-	(void) gesture;
-	iwt_gui_data_t data = user_data;
-
-	double delta_x = offset_x - data->drag_last_x;
-	double delta_y = offset_y - data->drag_last_y;
-
-	data->cam_yaw += (float) delta_x * 0.005f;
-	data->cam_pitch += (float) delta_y * 0.005f;
-	if (data->cam_pitch > 1.5f)
-	{
-		data->cam_pitch = 1.5f;
-	}
-	if (data->cam_pitch < -1.5f)
-	{
-		data->cam_pitch = -1.5f;
-	}
-
-	data->drag_last_x = offset_x;
-	data->drag_last_y = offset_y;
-}
-
-private GLuint _create_points_program(void)
-{
-	static const char* vertex_source =
-		"#version 150 core\n"
-		"in vec3 pos;\n"
-		"in vec3 color;\n"
-		"uniform mat4 u_mvp;\n"
-		"uniform float u_size_scale;\n"
-		"out vec3 v_color;\n"
-		"out float v_depth;\n"
-		"void main()\n"
-		"{\n"
-		"    v_color = color;\n"
-		"    gl_Position = u_mvp * vec4(pos, 1.0);\n"
-		"    v_depth = gl_Position.w;\n"
-		"    gl_PointSize = clamp((300.0 / v_depth) * u_size_scale, 1.0, 40.0);\n"
-		"}\n";
-
-	static const char* fragment_source =
-		"#version 150 core\n"
-		"in vec3 v_color;\n"
-		"in float v_depth;\n"
-		"out vec4 frag_color;\n"
-		"void main()\n"
-		"{\n"
-		"    float fade = clamp(3.0 / v_depth, 0.3, 1.0);\n"
-		"    frag_color = vec4(v_color * fade, 1.0);\n"
-		"}\n";
-
-	GLuint vs = _compile_shader(GL_VERTEX_SHADER, vertex_source);
-	GLuint fs = _compile_shader(GL_FRAGMENT_SHADER, fragment_source);
-	if (vs == 0 || fs == 0)
-	{
-		return 0;
-	}
-
-	GLuint program = glCreateProgram();
-	glAttachShader(program, vs);
-	glAttachShader(program, fs);
-	glBindAttribLocation(program, 0, "pos");
-	glBindAttribLocation(program, 1, "color");
-	glLinkProgram(program);
-
-	GLint status = GL_FALSE;
-	glGetProgramiv(program, GL_LINK_STATUS, &status);
-	if (status == GL_FALSE)
-	{
-		char log[512] = {0};
-		glGetProgramInfoLog(program, sizeof(log), NULL, log);
-		fprintf(stderr, "IWT: Programm-Link-Fehler: %s\n", log);
-		glDeleteProgram(program);
-		program = 0;
-	}
-
-	glDeleteShader(vs);
-	glDeleteShader(fs);
-	return program;
-}
-
 callback bool gui_application(gui_event_type_t event, gui_application_t core)
 {
 	bool is_ok = false;
@@ -255,8 +28,8 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
 	{
 		case GE_A_STARTUP:
 		{
-			data->cfg.gamma = 1.0; // Struktur bildend
-			data->cfg.beta = 1.0;  // Bohm-Kopplungsstärke
+			data->cfg.gamma = 1.0;
+			data->cfg.beta = 1.0;
 			data->cfg.T = 1.0;
 			data->cfg.DT = 1.0e-12;
 			data->cfg.hbar = 1.0;
@@ -264,7 +37,7 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
 			data->cfg.D = iwt_fractal_dimension();
 			data->cfg.l0 = 1.0;
 			data->cfg.seed = (unsigned int) time(NULL);
-			data->cfg.cluster_threshold = 1.2; // [1.0, 1.5]
+			data->cfg.cluster_threshold = 1.2;
 			data->cfg.enable_motion = false;
 			data->zoom = 1.0f;
 			data->cam_yaw = 0.785398f;
@@ -285,7 +58,6 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
 
 			if (is_ok)
 			{
-				// === Anfangszustand (Vakuum + Basisamplitude) ===
 				for (size_t i = 0; i < data->cfg.N; i++)
 				{
 					data->rt.I_real[i] = 0.0;
@@ -311,12 +83,12 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
 			gtk_widget_set_hexpand(gl_frame, TRUE);
 
 			GtkEventController* scroll_controller = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
-			g_signal_connect(scroll_controller, "scroll", G_CALLBACK(_on_scroll), data);
+			g_signal_connect(scroll_controller, "scroll", G_CALLBACK(gui_input_on_scroll), data);
 			gtk_widget_add_controller(data->gl_area, scroll_controller);
 
 			GtkGesture* drag_gesture = gtk_gesture_drag_new();
-			g_signal_connect(drag_gesture, "drag-begin", G_CALLBACK(_on_drag_begin), data);
-			g_signal_connect(drag_gesture, "drag-update", G_CALLBACK(_on_drag_update), data);
+			g_signal_connect(drag_gesture, "drag-begin", G_CALLBACK(gui_input_on_drag_begin), data);
+			g_signal_connect(drag_gesture, "drag-update", G_CALLBACK(gui_input_on_drag_update), data);
 			gtk_widget_add_controller(data->gl_area, GTK_EVENT_CONTROLLER(drag_gesture));
 
 			struct gui_button_configuration motion_cfg = {.label = "Bewegung aktiv", .toggle = true};
@@ -395,18 +167,12 @@ callback void gui_main_window(gui_main_window_t core, gui_event_t e)
 				break;
 			case GDK_KEY_Up:
 				data->cam_pitch += step;
-				if (data->cam_pitch > 1.5f)
-				{
-					data->cam_pitch = 1.5f;
-				}
+				if (data->cam_pitch > 1.5f) data->cam_pitch = 1.5f;
 				e->data.key_pressed.handled = true;
 				break;
 			case GDK_KEY_Down:
 				data->cam_pitch -= step;
-				if (data->cam_pitch < -1.5f)
-				{
-					data->cam_pitch = -1.5f;
-				}
+				if (data->cam_pitch < -1.5f) data->cam_pitch = -1.5f;
 				e->data.key_pressed.handled = true;
 				break;
 			default:
@@ -461,7 +227,7 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			data->points_buffer = malloc((size_t) data->cfg.N * 6 * sizeof(float));
 			data->cluster_points_buffer = malloc((size_t) data->rt.cluster_capacity * 6 * sizeof(float));
 
-			data->gl_program = _create_points_program();
+			data->gl_program = gui_shader_create_points_program();
 
 			glGenVertexArrays(1, &data->gl_vao);
 			glGenBuffers(1, &data->gl_vbo);
@@ -497,7 +263,6 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			run_simulation_step(&data->rt, &data->cfg);
 			data->iter++;
 
-			// --- Knotenwolke (alle N Knoten) ---
 			iwt_compute_node_colors(data->rt.mass, data->rt.charge, data->cfg.N, data->node_colors);
 			for (size_t i = 0; i < data->cfg.N; i++)
 			{
@@ -509,35 +274,30 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				data->points_buffer[i * 6 + 5] = data->node_colors[i * 3 + 2];
 			}
 
-			// --- Cluster-Schwerpunkte ---
 			size_t cluster_draw_count = 0;
 			for (size_t c = 0; c < data->rt.cluster_count; c++)
 			{
 				iwt_cluster_t cl = &data->rt.clusters[c];
-				if (!cl->is_active)
-				{
-					continue;
-				}
+				if (!cl->is_active) continue;
 
 				data->cluster_points_buffer[cluster_draw_count * 6 + 0] = (float) cl->pos.x;
 				data->cluster_points_buffer[cluster_draw_count * 6 + 1] = (float) cl->pos.y;
 				data->cluster_points_buffer[cluster_draw_count * 6 + 2] = (float) cl->pos.z;
 
-				// Farbe: Rot = positive Ladung, Blau = negative Ladung
 				float charge_norm = (float) (cl->charge / (fabs(cl->charge) + 1.0));
 				float brightness = (float) (cl->mass / (cl->mass + 1.0));
 
 				if (charge_norm > 0.0f)
 				{
-					data->cluster_points_buffer[cluster_draw_count * 6 + 3] = brightness; // R
-					data->cluster_points_buffer[cluster_draw_count * 6 + 4] = 0.0f;		  // G
-					data->cluster_points_buffer[cluster_draw_count * 6 + 5] = 0.0f;		  // B
+					data->cluster_points_buffer[cluster_draw_count * 6 + 3] = brightness;
+					data->cluster_points_buffer[cluster_draw_count * 6 + 4] = 0.0f;
+					data->cluster_points_buffer[cluster_draw_count * 6 + 5] = 0.0f;
 				}
 				else
 				{
-					data->cluster_points_buffer[cluster_draw_count * 6 + 3] = 0.0f;		  // R
-					data->cluster_points_buffer[cluster_draw_count * 6 + 4] = 0.0f;		  // G
-					data->cluster_points_buffer[cluster_draw_count * 6 + 5] = brightness; // B
+					data->cluster_points_buffer[cluster_draw_count * 6 + 3] = 0.0f;
+					data->cluster_points_buffer[cluster_draw_count * 6 + 4] = 0.0f;
+					data->cluster_points_buffer[cluster_draw_count * 6 + 5] = brightness;
 				}
 
 				cluster_draw_count++;
@@ -561,25 +321,21 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			float up[3] = {0.0f, 1.0f, 0.0f};
 
 			float view[16], proj[16], mvp[16];
-			_mat4_look_at(view, eye, center, up);
-			_mat4_perspective(proj, 0.785398f, aspect, 0.1f, 200.0f);
-			_mat4_mul(mvp, proj, view);
+			gui_math_mat4_look_at(view, eye, center, up);
+			gui_math_mat4_perspective(proj, 0.785398f, aspect, 0.1f, 200.0f);
+			gui_math_mat4_mul(mvp, proj, view);
 
 			glUniformMatrix4fv(data->gl_u_mvp, 1, GL_FALSE, mvp);
 
-			// 1. Knotenwolke zeichnen (klein)
 			glUniform1f(data->gl_u_size_scale, 1.0f);
 			glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
-			glBufferSubData(GL_ARRAY_BUFFER, 0,
-							(GLsizeiptr) ((size_t) data->cfg.N * 6 * sizeof(float)), data->points_buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr) ((size_t) data->cfg.N * 6 * sizeof(float)), data->points_buffer);
 			glBindVertexArray(data->gl_vao);
 			glDrawArrays(GL_POINTS, 0, (GLsizei) data->cfg.N);
 
-			// 2. Cluster-Schwerpunkte darueber zeichnen (gross/hell)
 			glUniform1f(data->gl_u_size_scale, 3.0f);
 			glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo_clusters);
-			glBufferSubData(GL_ARRAY_BUFFER, 0,
-							(GLsizeiptr) (cluster_draw_count * 6 * sizeof(float)), data->cluster_points_buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr) (cluster_draw_count * 6 * sizeof(float)), data->cluster_points_buffer);
 			glBindVertexArray(data->gl_vao_clusters);
 			glDrawArrays(GL_POINTS, 0, (GLsizei) cluster_draw_count);
 
