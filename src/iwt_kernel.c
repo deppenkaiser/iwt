@@ -188,11 +188,10 @@ bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg)
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
 	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
-	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->K_gpu);
-	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->mass_gpu);
-	clSetKernelArg(kernel, 5, sizeof(cl_mem), &rt->charge_gpu);
-	clSetKernelArg(kernel, 6, sizeof(int), &N);
-	clSetKernelArg(kernel, 7, sizeof(double), &delta);
+	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->mass_gpu);
+	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->charge_gpu);
+	clSetKernelArg(kernel, 5, sizeof(int), &N);
+	clSetKernelArg(kernel, 6, sizeof(double), &delta);
 
 	size_t global = cfg->N;
 	size_t local = 64;
