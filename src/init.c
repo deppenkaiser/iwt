@@ -16,6 +16,17 @@ static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 static void free_cluster_arrays(const iwt_runtime_t rt);
 
+/* Helper to check a list of pointers */
+static bool all_ptrs_valid(void *ptrs[], size_t n)
+{
+    for (size_t i = 0; i < n; i++) {
+        if (!ptrs[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 private void _free_memory(void** pp)
 {
 	if (*pp != NULL)
@@ -47,6 +58,7 @@ bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 	return true;
 }
 
+/* Allocate all host arrays. Complexity reduced by using all_ptrs_valid */
 static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	rt->I_real = calloc(cfg->N, sizeof(double));
@@ -80,24 +92,25 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 		rt->clusters[i].is_active = false;
 	}
 
-	if (rt->I_real == NULL) return false;
-	if (rt->I_imag == NULL) return false;
-	if (rt->I_prev_real == NULL) return false;
-	if (rt->I_prev_imag == NULL) return false;
-	if (rt->I_phase == NULL) return false;
-	if (rt->I_phase_prev == NULL) return false;
-	if (rt->K == NULL) return false;
-	if (rt->sumJ == NULL) return false;
-	if (rt->Q == NULL) return false;
-	if (rt->pos == NULL) return false;
-	if (rt->adjacency == NULL) return false;
-	if (rt->mass == NULL) return false;
-	if (rt->charge == NULL) return false;
-	if (rt->xi_real == NULL) return false;
-	if (rt->xi_imag == NULL) return false;
-	if (rt->uncertainty == NULL) return false;
-	if (rt->clusters == NULL) return false;
-	if (rt->visited == NULL) return false;
+	void *ptrs[] = {
+		rt->I_real, rt->I_imag, rt->I_prev_real, rt->I_prev_imag,
+		rt->I_phase, rt->I_phase_prev,
+		rt->K, rt->sumJ, rt->Q,
+		rt->pos, rt->adjacency,
+		rt->mass, rt->charge,
+		rt->xi_real, rt->xi_imag, rt->uncertainty,
+		rt->clusters, rt->visited
+	};
+
+	if (!all_ptrs_valid(ptrs, sizeof(ptrs)/sizeof(ptrs[0]))) {
+		return false;
+	}
+
+	for (size_t i = 0; i < rt->cluster_capacity; i++) {
+		if (!rt->clusters[i].node_indices) {
+			return false;
+		}
+	}
 
 	return true;
 }
@@ -196,6 +209,7 @@ bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 	return allocate_gpu_buffers(rt, cfg);
 }
 
+/* Allocate GPU buffers. Complexity reduced by using all_ptrs_valid */
 static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	rt->I_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
@@ -216,22 +230,15 @@ static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->xi_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 	rt->uncertainty_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
-	if (rt->I_real_gpu == NULL) return false;
-	if (rt->I_imag_gpu == NULL) return false;
-	if (rt->I_prev_real_gpu == NULL) return false;
-	if (rt->I_prev_imag_gpu == NULL) return false;
-	if (rt->I_phase_gpu == NULL) return false;
-	if (rt->I_phase_prev_gpu == NULL) return false;
-	if (rt->K_gpu == NULL) return false;
-	if (rt->sumJ_gpu == NULL) return false;
-	if (rt->Q_gpu == NULL) return false;
-	if (rt->mass_gpu == NULL) return false;
-	if (rt->charge_gpu == NULL) return false;
-	if (rt->xi_real_gpu == NULL) return false;
-	if (rt->xi_imag_gpu == NULL) return false;
-	if (rt->uncertainty_gpu == NULL) return false;
+	void *gpu_ptrs[] = {
+		rt->I_real_gpu, rt->I_imag_gpu, rt->I_prev_real_gpu, rt->I_prev_imag_gpu,
+		rt->I_phase_gpu, rt->I_phase_prev_gpu,
+		rt->K_gpu, rt->sumJ_gpu, rt->Q_gpu,
+		rt->mass_gpu, rt->charge_gpu,
+		rt->xi_real_gpu, rt->xi_imag_gpu, rt->uncertainty_gpu
+	};
 
-	return true;
+	return all_ptrs_valid(gpu_ptrs, sizeof(gpu_ptrs)/sizeof(gpu_ptrs[0]));
 }
 
 void deinitialize_host_data(const iwt_runtime_t rt)
