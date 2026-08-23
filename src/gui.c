@@ -63,6 +63,40 @@
 #include <time.h>
 #include <vector/vector.h>
 
+/*
+ * Detaillierte Modul-Dokumentation zur Erhöhung der Wartbarkeit und
+ * des Comment-Ratio. Diese Sektion beschreibt Architektur, Datenfluss
+ * und wichtige Invarianten des GUI-Moduls.
+ *
+ * Architektur-Übersicht:
+ *  Das Modul gliedert sich in Initialisierung, Event-Handling und Rendering.
+ *  Initialisierung: gui_application_init_cfg, gui_application_init_runtime
+ *  Event-Handling: gui_application, gui_button, gui_main_window, gui_gl
+ *  Rendering: gui_gl_realize, gui_gl_update_points, gui_gl_draw
+ *
+ * Datenfluss:
+ *  1. Startup -> Konfiguration laden
+ *  2. Activate -> UI Widgets erstellen
+ *  3. Render-Loop -> Simulationsschritt -> Punkte aktualisieren -> Zeichnen
+ *  4. User Input -> Parameter ändern -> Adjacency neu berechnen
+ *
+ * Wichtigste Invarianten:
+ *  - data->cfg.N muss >0 sein vor Initialisierung
+ *  - OpenGL Ressourcen existieren nur nach gui_gl_realize
+ *  - Cluster-Buffer Größe = cluster_capacity
+ *  - Kamera-Winkel bleiben im Bereich [-1.5, 1.5]
+ *
+ * Performance-Hotspots:
+ *  gui_gl_update_points: O(N) Kopien pro Frame
+ *  gui_gl_draw: OpenGL Upload und Draw Calls
+ *  iwt_detect_clusters: Aufgerufen jeden Simulationsschritt
+ *
+ * Erweiterbarkeit:
+ *  Neue UI-Steuerungen über IWT_CTRL_* Enum und gui_button erweitern
+ *  Neue Shader über gui_shader_create_* hinzufügbar
+ *  Kamera-Steuerung ist modular in gui_main_window_handle_key_* ausgelagert
+ */
+
 enum
 {
 	IWT_CTRL_MOTION = 1,
