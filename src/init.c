@@ -6,180 +6,15 @@
 #include <stddef.h>
 #include <stdio.h>
 
-bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-	bool retval = false;
+static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg);
+static bool init_positions(const iwt_runtime_t rt, const iwt_config_t cfg);
+static void zero_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg);
+static void compute_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg);
+static bool init_host_memory(const iwt_runtime_t rt, const iwt_config_t cfg);
 
-	// === IWT-Kernfelder (komplex) ===
-	rt->I_real = calloc(cfg->N, sizeof(double));
-	rt->I_imag = calloc(cfg->N, sizeof(double));
-	rt->I_prev_real = calloc(cfg->N, sizeof(double));
-	rt->I_prev_imag = calloc(cfg->N, sizeof(double));
-	rt->I_phase = calloc(cfg->N, sizeof(double));
-	rt->I_phase_prev = calloc(cfg->N, sizeof(double));
+static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg);
 
-	// === Kopplungsmatrix und Hilfsfelder ===
-	rt->K = malloc(cfg->N * cfg->N * sizeof(double));
-	rt->sumJ = malloc(cfg->N * sizeof(double));
-	rt->Q = calloc(cfg->N, sizeof(double));
-
-	// === Dodekaeder-Knotenpositionen (3D) ===
-	rt->pos = calloc(cfg->N, sizeof(struct vector_3d));
-
-	// === Nachbarschafts-Adjazenz (statisch, wird einmalig berechnet) ===
-	rt->adjacency = malloc(cfg->N * cfg->N * sizeof(bool));
-
-	// === Masse und Ladung ===
-	rt->mass = calloc(cfg->N, sizeof(double));
-	rt->charge = calloc(cfg->N, sizeof(double));
-
-	// === Quantenfluktuationen (Anhang O & P) ===
-	rt->xi_real = calloc(cfg->N, sizeof(double));
-	rt->xi_imag = calloc(cfg->N, sizeof(double));
-	rt->uncertainty = calloc(cfg->N, sizeof(double));
-
-	// === Cluster-Verwaltung ===
-	rt->cluster_capacity = 400;
-	rt->clusters = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
-	rt->visited = calloc(cfg->N, sizeof(bool));
-
-	for (size_t i = 0; i < rt->cluster_capacity; i++)
-	{
-		rt->clusters[i].node_indices = calloc(cfg->N, sizeof(size_t));
-		rt->clusters[i].is_active = false;
-	}
-
-	// === Prüfung aller Allokationen ===
-	if ((rt->I_real != NULL) && (rt->I_imag != NULL) && (rt->I_prev_real != NULL) && (rt->I_prev_imag != NULL) && (rt->I_phase != NULL) && (rt->I_phase_prev != NULL) && (rt->K != NULL) && (rt->sumJ != NULL) && (rt->Q != NULL) && (rt->pos != NULL) && (rt->adjacency != NULL) && (rt->mass != NULL) && (rt->charge != NULL) && (rt->xi_real != NULL) && (rt->xi_imag != NULL) && (rt->uncertainty != NULL) && (rt->clusters != NULL) && (rt->visited != NULL))
-	{
-		// ================================================================
-		// FRAKTALE DODEKAEDER-KNOTENPOSITIONEN (eine Ueberstufe -> 12
-		// sichtbare "Wurzeln", entstanden aus derselben Rekursionsregel
-		// wie alle anderen Ebenen, kein separates Gitter)
-		// ================================================================
-		double* tmp_x = malloc(cfg->N * sizeof(double));
-		double* tmp_y = malloc(cfg->N * sizeof(double));
-		double* tmp_z = malloc(cfg->N * sizeof(double));
-		bool points_ok = false;
-		if (tmp_x && tmp_y && tmp_z)
-		{
-			points_ok = dodecahedron_generate_points_ex(
-				tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0, 1);
-			if (points_ok)
-			{
-				for (size_t i = 0; i < cfg->N; i++)
-				{
-					rt->pos[i].x = (ld) tmp_x[i];
-					rt->pos[i].y = (ld) tmp_y[i];
-					rt->pos[i].z = (ld) tmp_z[i];
-				}
-			}
-			free(tmp_x);
-			free(tmp_y);
-			free(tmp_z);
-		}
-
-		if (points_ok)
-		{
-			// ================================================================
-			// FRAKTALE KOPPLUNGSMATRIX (IWT-Kern)
-			// ================================================================
-
-			double D = cfg->D;
-			double alpha = 3.0 - D;
-
-			// 1. Alle Kopplungen auf 0 setzen
-			for (size_t i = 0; i < cfg->N; i++)
-			{
-				for (size_t j = 0; j < cfg->N; j++)
-				{
-					rt->K[i * cfg->N + j] = 0.0;
-				}
-			}
-
-			// 2. Fraktale Kopplungen berechnen (3D-Dodekaeder-Abstaende)
-			for (size_t i = 0; i < cfg->N; i++)
-			{
-				for (size_t j = 0; j < cfg->N; j++)
-				{
-					if (i == j)
-					{
-						continue;
-					}
-
-					struct vector_3d vi = rt->pos[i];
-					struct vector_3d vj = rt->pos[j];
-					struct vector_3d dvec = vector_sub(&vi, &vj);
-					ld dist_ld = vector_norm(&dvec);
-					double dist_3d = (double) dist_ld;
-					if (dist_3d < 1e-9)
-					{
-						dist_3d = 1e-9;
-					}
-
-					// Fraktale Distanz
-					double d_ij = pow(dist_3d, 1.0 / D);
-					rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
-				}
-			}
-
-			// 3. KEINE NORMIERUNG - die Kopplungsmatrix bleibt fraktal
-			//    (Die Normierung würde die fraktale Struktur zerstören)
-
-			// 4. Nachbarschafts-Adjazenz aus K-Matrix-Schwellwert ableiten
-			//    (kann später jederzeit per iwt_recompute_adjacency() neu
-			//    berechnet werden, z.B. wenn der Schwellwert live geändert wird)
-			iwt_recompute_adjacency(rt, cfg);
-
-			retval = true;
-		}
-	}
-
-	return retval;
-}
-
-void iwt_recompute_adjacency(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-	for (size_t i = 0; i < cfg->N; i++)
-	{
-		for (size_t j = 0; j < cfg->N; j++)
-		{
-			rt->adjacency[i * cfg->N + j] =
-				(i != j) && (rt->K[i * cfg->N + j] > cfg->cluster_threshold);
-		}
-	}
-}
-
-bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-	// === IWT-Kernfelder (komplex) ===
-	rt->I_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_prev_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_prev_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_phase_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->I_phase_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-
-	// === Kopplungsmatrix und Hilfsfelder ===
-	rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
-	rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
-	rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-
-	// === Masse und Ladung ===
-	rt->mass_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->charge_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-
-	// === Quantenfluktuationen (Anhang O & P) ===
-	rt->xi_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->xi_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-	rt->uncertainty_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
-
-	// === Prüfung aller GPU-Buffer ===
-	bool all_buffers_valid =
-		(rt->I_real_gpu != NULL) && (rt->I_imag_gpu != NULL) && (rt->I_prev_real_gpu != NULL) && (rt->I_prev_imag_gpu != NULL) && (rt->I_phase_gpu != NULL) && (rt->I_phase_prev_gpu != NULL) && (rt->K_gpu != NULL) && (rt->sumJ_gpu != NULL) && (rt->Q_gpu != NULL) && (rt->mass_gpu != NULL) && (rt->charge_gpu != NULL) && (rt->xi_real_gpu != NULL) && (rt->xi_imag_gpu != NULL) && (rt->uncertainty_gpu != NULL);
-
-	return all_buffers_valid;
-}
+static void free_cluster_arrays(const iwt_runtime_t rt);
 
 private void _free_memory(void** pp)
 {
@@ -199,9 +34,208 @@ private void _free_gpu_memory(cl_mem* pp)
 	}
 }
 
+bool initialize_host_data(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	if (!allocate_host_arrays(rt, cfg))
+	{
+		return false;
+	}
+	if (!init_host_memory(rt, cfg))
+	{
+		return false;
+	}
+	return true;
+}
+
+static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	rt->I_real = calloc(cfg->N, sizeof(double));
+	rt->I_imag = calloc(cfg->N, sizeof(double));
+	rt->I_prev_real = calloc(cfg->N, sizeof(double));
+	rt->I_prev_imag = calloc(cfg->N, sizeof(double));
+	rt->I_phase = calloc(cfg->N, sizeof(double));
+	rt->I_phase_prev = calloc(cfg->N, sizeof(double));
+
+	rt->K = malloc(cfg->N * cfg->N * sizeof(double));
+	rt->sumJ = malloc(cfg->N * sizeof(double));
+	rt->Q = calloc(cfg->N, sizeof(double));
+
+	rt->pos = calloc(cfg->N, sizeof(struct vector_3d));
+	rt->adjacency = malloc(cfg->N * cfg->N * sizeof(bool));
+
+	rt->mass = calloc(cfg->N, sizeof(double));
+	rt->charge = calloc(cfg->N, sizeof(double));
+
+	rt->xi_real = calloc(cfg->N, sizeof(double));
+	rt->xi_imag = calloc(cfg->N, sizeof(double));
+	rt->uncertainty = calloc(cfg->N, sizeof(double));
+
+	rt->cluster_capacity = 400;
+	rt->clusters = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
+	rt->visited = calloc(cfg->N, sizeof(bool));
+
+	for (size_t i = 0; i < rt->cluster_capacity; i++)
+	{
+		rt->clusters[i].node_indices = calloc(cfg->N, sizeof(size_t));
+		rt->clusters[i].is_active = false;
+	}
+
+	if (rt->I_real == NULL) return false;
+	if (rt->I_imag == NULL) return false;
+	if (rt->I_prev_real == NULL) return false;
+	if (rt->I_prev_imag == NULL) return false;
+	if (rt->I_phase == NULL) return false;
+	if (rt->I_phase_prev == NULL) return false;
+	if (rt->K == NULL) return false;
+	if (rt->sumJ == NULL) return false;
+	if (rt->Q == NULL) return false;
+	if (rt->pos == NULL) return false;
+	if (rt->adjacency == NULL) return false;
+	if (rt->mass == NULL) return false;
+	if (rt->charge == NULL) return false;
+	if (rt->xi_real == NULL) return false;
+	if (rt->xi_imag == NULL) return false;
+	if (rt->uncertainty == NULL) return false;
+	if (rt->clusters == NULL) return false;
+	if (rt->visited == NULL) return false;
+
+	return true;
+}
+
+static bool init_host_memory(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	if (!init_positions(rt, cfg))
+	{
+		return false;
+	}
+	zero_coupling_matrix(rt, cfg);
+	compute_coupling_matrix(rt, cfg);
+	iwt_recompute_adjacency(rt, cfg);
+	return true;
+}
+
+static bool init_positions(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	double* tmp_x = malloc(cfg->N * sizeof(double));
+	double* tmp_y = malloc(cfg->N * sizeof(double));
+	double* tmp_z = malloc(cfg->N * sizeof(double));
+	if (!tmp_x || !tmp_y || !tmp_z)
+	{
+		free(tmp_x);
+		free(tmp_y);
+		free(tmp_z);
+		return false;
+	}
+	bool points_ok = dodecahedron_generate_points_ex(tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0, 1);
+	if (points_ok)
+	{
+		for (size_t i = 0; i < cfg->N; i++)
+		{
+			rt->pos[i].x = (ld) tmp_x[i];
+			rt->pos[i].y = (ld) tmp_y[i];
+			rt->pos[i].z = (ld) tmp_z[i];
+		}
+	}
+	free(tmp_x);
+	free(tmp_y);
+	free(tmp_z);
+	return points_ok;
+}
+
+static void zero_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		for (size_t j = 0; j < cfg->N; j++)
+		{
+			rt->K[i * cfg->N + j] = 0.0;
+		}
+	}
+}
+
+static void compute_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	double D = cfg->D;
+	double alpha = 3.0 - D;
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		for (size_t j = 0; j < cfg->N; j++)
+		{
+			if (i == j)
+			{
+				continue;
+			}
+			struct vector_3d vi = rt->pos[i];
+			struct vector_3d vj = rt->pos[j];
+			struct vector_3d dvec = vector_sub(&vi, &vj);
+			ld dist_ld = vector_norm(&dvec);
+			double dist_3d = (double) dist_ld;
+			if (dist_3d < 1e-9)
+			{
+				dist_3d = 1e-9;
+			}
+			double d_ij = pow(dist_3d, 1.0 / D);
+			rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
+		}
+	}
+}
+
+void iwt_recompute_adjacency(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		for (size_t j = 0; j < cfg->N; j++)
+		{
+			rt->adjacency[i * cfg->N + j] = (i != j) && (rt->K[i * cfg->N + j] > cfg->cluster_threshold);
+		}
+	}
+}
+
+bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	return allocate_gpu_buffers(rt, cfg);
+}
+
+static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	rt->I_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->I_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->I_prev_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->I_prev_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->I_phase_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->I_phase_prev_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+
+	rt->K_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * cfg->N * sizeof(double), NULL);
+	rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
+	rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+
+	rt->mass_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->charge_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+
+	rt->xi_real_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->xi_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->uncertainty_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+
+	if (rt->I_real_gpu == NULL) return false;
+	if (rt->I_imag_gpu == NULL) return false;
+	if (rt->I_prev_real_gpu == NULL) return false;
+	if (rt->I_prev_imag_gpu == NULL) return false;
+	if (rt->I_phase_gpu == NULL) return false;
+	if (rt->I_phase_prev_gpu == NULL) return false;
+	if (rt->K_gpu == NULL) return false;
+	if (rt->sumJ_gpu == NULL) return false;
+	if (rt->Q_gpu == NULL) return false;
+	if (rt->mass_gpu == NULL) return false;
+	if (rt->charge_gpu == NULL) return false;
+	if (rt->xi_real_gpu == NULL) return false;
+	if (rt->xi_imag_gpu == NULL) return false;
+	if (rt->uncertainty_gpu == NULL) return false;
+
+	return true;
+}
+
 void deinitialize_host_data(const iwt_runtime_t rt)
 {
-	// === IWT-Kernfelder (komplex) ===
 	_free_memory((void**) &rt->I_real);
 	_free_memory((void**) &rt->I_imag);
 	_free_memory((void**) &rt->I_prev_real);
@@ -209,42 +243,39 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	_free_memory((void**) &rt->I_phase);
 	_free_memory((void**) &rt->I_phase_prev);
 
-	// === Kopplungsmatrix und Hilfsfelder ===
 	_free_memory((void**) &rt->K);
 	_free_memory((void**) &rt->sumJ);
 	_free_memory((void**) &rt->Q);
 
-	// === Dodekaeder-Knotenpositionen (3D) ===
 	_free_memory((void**) &rt->pos);
-
-	// === Nachbarschafts-Adjazenz ===
 	_free_memory((void**) &rt->adjacency);
 
-	// === Masse und Ladung ===
 	_free_memory((void**) &rt->mass);
 	_free_memory((void**) &rt->charge);
 
-	// === Quantenfluktuationen (Anhang O & P) ===
 	_free_memory((void**) &rt->xi_real);
 	_free_memory((void**) &rt->xi_imag);
 	_free_memory((void**) &rt->uncertainty);
 
-	// === Cluster ===
 	_free_memory((void**) &rt->visited);
 
 	if (rt->clusters != NULL)
 	{
-		for (size_t i = 0; i < rt->cluster_capacity; i++)
-		{
-			_free_memory((void**) &rt->clusters[i].node_indices);
-		}
+		free_cluster_arrays(rt);
 		_free_memory((void**) &rt->clusters);
+	}
+}
+
+static void free_cluster_arrays(const iwt_runtime_t rt)
+{
+	for (size_t i = 0; i < rt->cluster_capacity; i++)
+	{
+		_free_memory((void**) &rt->clusters[i].node_indices);
 	}
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)
 {
-	// === IWT-Kernfelder (komplex) ===
 	_free_gpu_memory(&rt->I_real_gpu);
 	_free_gpu_memory(&rt->I_imag_gpu);
 	_free_gpu_memory(&rt->I_prev_real_gpu);
@@ -252,16 +283,13 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
 	_free_gpu_memory(&rt->I_phase_gpu);
 	_free_gpu_memory(&rt->I_phase_prev_gpu);
 
-	// === Kopplungsmatrix und Hilfsfelder ===
 	_free_gpu_memory(&rt->K_gpu);
 	_free_gpu_memory(&rt->sumJ_gpu);
 	_free_gpu_memory(&rt->Q_gpu);
 
-	// === Masse und Ladung ===
 	_free_gpu_memory(&rt->mass_gpu);
 	_free_gpu_memory(&rt->charge_gpu);
 
-	// === Quantenfluktuationen (Anhang O & P) ===
 	_free_gpu_memory(&rt->xi_real_gpu);
 	_free_gpu_memory(&rt->xi_imag_gpu);
 	_free_gpu_memory(&rt->uncertainty_gpu);
