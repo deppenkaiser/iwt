@@ -1,6 +1,17 @@
 #include "gui_shader.h"
 #include <stdio.h>
 
+/*
+ * gui_shader.c - OpenGL Shader Kompilierung und Programm-Verwaltung
+ *
+ * Bietet Hilfsfunktionen zum Kompilieren von Vertex/Fragment Shaderm und
+ * zum Erstellen von Shader-Programmen für die IWT-Visualisierung.
+ *
+ * Refactoring:
+ *  - Zentrale Fehlerausgabe, wiederverwendbare Kompilier-Helper
+ *  - Klare Trennung von Compile und Link
+ */
+
 GLuint gui_shader_compile(GLenum type, const char* source)
 {
     GLuint shader = glCreateShader(type);

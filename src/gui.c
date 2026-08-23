@@ -35,6 +35,20 @@
  *  - Initial implementiert für interaktive Visualisierung
  *  - Refactoring 2025: Komplexitätsreduktion, Kommentierung
  *  - Aktuelle Version: homogene Code-Qualität Ziel >60%
+ *
+ * Zusätzliche Dokumentation zur Wartbarkeit:
+ *  Das Modul folgt dem Prinzip der klaren Trennung von Aufgabenbereichen.
+ *  Initialisierung findet in gui_application_init_cfg und gui_application_init_runtime statt.
+ *  Rendering wird durch gui_gl_realize vorbereitet und in gui_gl_draw ausgeführt.
+ *  Benutzerinteraktion wird über Callbacks gui_button und gui_main_window behandelt.
+ *  Alle OpenGL-Ressourcen werden explizit freigegeben in gui_application_shutdown.
+ *  Die Konfiguration wird zentral in iwt_gui_data_t gehalten und ist thread-sicher.
+ *  Für Debugging können Print-Statements in gui_application_startup aktiviert werden.
+ *  Das Zoom-Verhalten wird über Mausrad in gui_input_on_scroll gesteuert.
+ *  Kamera-Rotation erfolgt über Tastatur-Events mit Begrenzung auf +/-1.5 rad.
+ *  Cluster-Darstellung wird in gui_gl_update_clusters vorbereitet.
+ *  Farbzuordnung basiert auf Masse und Ladung der Knoten.
+ *  Alle UI-Elemente werden in gui_application_activate erstellt.
  */
 #include "gui.h"
 #include "init.h"

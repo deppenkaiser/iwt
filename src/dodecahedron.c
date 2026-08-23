@@ -4,6 +4,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * dodecahedron.c - Fraktale Dodekaeder-Punkterzeugung
+ *
+ * Implementiert die rekursive Erzeugung von Punkten auf einem fraktalen
+ * Dodekaeder-Gitter. Kernfunktion ist _dodecahedron_generate_from_center,
+ * die eine Breadth-First-Queue über Dodekaeder-Zellen verwaltet.
+ *
+ * Refactoring-Hinweise:
+ *  - Queue-Expansion und Child-Erzeugung sind klar getrennt
+ *  - Konstante Geometrie wird einmalig vorberechnet
+ *  - Funktionen sind rein funktional und ohne Seiteneffekte
+ */
+
 typedef struct
 {
 	double center[3];
