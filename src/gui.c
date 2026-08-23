@@ -124,6 +124,12 @@ static void gui_main_window_handle_key_up(iwt_gui_data_t data, gui_event_t e);
 static void gui_main_window_handle_key_down(iwt_gui_data_t data, gui_event_t e);
 static void gui_main_window_handle_key(iwt_gui_data_t data, gui_event_t e);
 
+/*
+ * gui_application - Haupt-Event-Dispatcher der IWT-Anwendung
+ *
+ * Verarbeitet Lebenszyklus-Events Startup, Activate und Shutdown.
+ * Alle Initialisierungen und Aufräumarbeiten laufen hier zentral zusammen.
+ */
 callback bool gui_application(gui_event_type_t event, gui_application_t core)
 {
 	bool is_ok = false;
@@ -184,6 +190,12 @@ static void gui_application_clear_arrays(iwt_gui_data_t data)
 	}
 }
 
+/*
+ * gui_application_startup - Initialisierung der Simulation
+ *
+ * Lädt Konfiguration, initialisiert OpenCL und Host/GPU-Daten.
+ * Gibt false zurück bei Fehler, sonst true.
+ */
 static bool gui_application_startup(iwt_gui_data_t data)
 {
 	bool is_ok = false;
@@ -213,6 +225,11 @@ static bool gui_application_startup(iwt_gui_data_t data)
 	return is_ok;
 }
 
+/*
+ * gui_application_activate - UI Aufbau
+ *
+ * Erstellt OpenGL-Fläche, Steuer-Widgets und Hauptfenster.
+ */
 static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data)
 {
 	data->gl_area = gui_gl_create(data);
@@ -340,6 +357,41 @@ static void gui_main_window_handle_key_down(iwt_gui_data_t data, gui_event_t e)
 	e->data.key_pressed.handled = true;
 }
 
+static void gui_button_handle_toggled(gui_button_t core, gui_event_t e, iwt_gui_data_t data)
+{
+	if (core->id == IWT_CTRL_MOTION)
+	{
+		data->cfg.enable_motion = e->data.b_toggled.active;
+	}
+}
+
+static void gui_button_handle_selected(gui_button_t core, iwt_gui_data_t data)
+{
+	if (core->id == IWT_CTRL_BETA)
+	{
+		data->cfg.beta = gui_button_spin_get_double(core->button);
+	}
+	else if (core->id == IWT_CTRL_GAMMA)
+	{
+		data->cfg.gamma = gui_button_spin_get_double(core->button);
+	}
+	else if (core->id == IWT_CTRL_CLUSTER_THRESHOLD)
+	{
+		data->cfg.cluster_threshold = gui_button_spin_get_double(core->button);
+		iwt_recompute_adjacency(&data->rt, &data->cfg);
+	}
+}
+
+/*
+ * gui_button - Callback für UI-Button Events
+ *
+ * Verteilt Button-Events an die spezialisierten Handler:
+ *  - GE_B_TOGGLED  -> gui_button_handle_toggled
+ *  - GE_B_SELECTED -> gui_button_handle_selected
+ *
+ * Die Funktion selbst enthält keine Geschäftslogik mehr, dadurch ist die
+ * zyklomatische Komplexität reduziert und die Wartbarkeit erhöht.
+ */
 callback void gui_button(gui_button_t core, gui_event_t e)
 {
 	iwt_gui_data_t data = core->user_data;
@@ -347,26 +399,11 @@ callback void gui_button(gui_button_t core, gui_event_t e)
 	switch (e->type)
 	{
 		case GE_B_TOGGLED:
-			if (core->id == IWT_CTRL_MOTION)
-			{
-				data->cfg.enable_motion = e->data.b_toggled.active;
-			}
+			gui_button_handle_toggled(core, e, data);
 			break;
 
 		case GE_B_SELECTED:
-			if (core->id == IWT_CTRL_BETA)
-			{
-				data->cfg.beta = gui_button_spin_get_double(core->button);
-			}
-			else if (core->id == IWT_CTRL_GAMMA)
-			{
-				data->cfg.gamma = gui_button_spin_get_double(core->button);
-			}
-			else if (core->id == IWT_CTRL_CLUSTER_THRESHOLD)
-			{
-				data->cfg.cluster_threshold = gui_button_spin_get_double(core->button);
-				iwt_recompute_adjacency(&data->rt, &data->cfg);
-			}
+			gui_button_handle_selected(core, data);
 			break;
 
 		default:
@@ -374,6 +411,12 @@ callback void gui_button(gui_button_t core, gui_event_t e)
 	}
 }
 
+/*
+ * gui_gl - OpenGL Event-Handler
+ *
+ * Behandelt GE_GL_REALIZE und GE_GL_RENDER. Beim Render-Event wird
+ * ein Simulationsschritt ausgeführt, Punkte aktualisiert und gezeichnet.
+ */
 callback void gui_gl(gui_gl_t core, gui_event_t e)
 {
 	iwt_gui_data_t data = core->user_data;
@@ -397,6 +440,11 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 	}
 }
 
+/*
+ * gui_gl_realize - OpenGL Ressourcen anlegen
+ *
+ * Allokiert VAO/VBO, Shader und Uniform-Locations.
+ */
 static void gui_gl_realize(iwt_gui_data_t data)
 {
 	data->node_colors = malloc((size_t) data->cfg.N * 3 * sizeof(float));
