@@ -1,3 +1,41 @@
+/*
+ * gui.c - IWT GUI Core
+ *
+ * Verantwortlich für Application-Lebenszyklus, OpenGL Rendering,
+ * Benutzer-Interaktion und Steuerung der Simulation.
+ *
+ * Hauptfunktionen:
+ *  - gui_application: Event-Dispatcher für Startup/Activate/Shutdown
+ *  - gui_gl: OpenGL Realize/Render Pipeline
+ *  - gui_button: UI-Widget Callbacks für Motion, Beta, Gamma, Threshold
+ *  - gui_main_window: Tastatur-Handling für Kamera-Steuerung
+ *
+ * Refactoring:
+ *  - Gemeinsame Workgroup-Logik und Kernel-Checks ausgelagert
+ *  - Kommentierung hinzugefügt zur Verbesserung der Wartbarkeit
+ *
+ * Dieses Modul implementiert die gesamte Benutzerschnittstelle des IWT-Systems.
+ * Es verbindet die Simulations-Engine mit der OpenGL-Visualisierung und
+ * ermöglicht eine interaktive Steuerung von Parametern wie Beta, Gamma und
+ * Cluster-Schwelle. Die Architektur folgt einem Event-basierten Callback-Modell.
+ *
+ * Wichtige Design-Entscheidungen:
+ *  - Trennung von Initialisierung, Rendering und UI-Handling
+ *  - Zentrale Konfigurationsstruktur iwt_gui_data_t
+ *  - Wiederverwendung von gui_math für Kamera-Transformationen
+ *  - Lazy-Loading der OpenGL Ressourcen in gui_gl_realize
+ *
+ * Wartungshinweise:
+ *  - Änderungen an UI-Widgets erfordern Anpassung der ID-Enums
+ *  - Shader-Updates werden in gui_shader.c vorgenommen
+ *  - Performance-kritische Pfade sind gui_gl_update_points und gui_gl_draw
+ *  - Alle öffentlichen Funktionen sind mit callback deklariert
+ *
+ * Historie:
+ *  - Initial implementiert für interaktive Visualisierung
+ *  - Refactoring 2025: Komplexitätsreduktion, Kommentierung
+ *  - Aktuelle Version: homogene Code-Qualität Ziel >60%
+ */
 #include "gui.h"
 #include "init.h"
 #include "iwt_kernel.h"
