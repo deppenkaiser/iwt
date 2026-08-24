@@ -232,54 +232,73 @@ static bool gui_application_startup(iwt_gui_data_t data)
  */
 static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data)
 {
-	data->gl_area = gui_gl_create(data);
-	GtkWidget* gl_frame = gui_frame_create("IWT Live View", data->gl_area);
-	gtk_widget_set_vexpand(gl_frame, TRUE);
-	gtk_widget_set_hexpand(gl_frame, TRUE);
+    data->gl_area = gui_gl_create(data);
+    GtkWidget* gl_frame = gui_frame_create("IWT Live View", data->gl_area);
+    gtk_widget_set_vexpand(gl_frame, TRUE);
+    gtk_widget_set_hexpand(gl_frame, TRUE);
 
-	GtkEventController* scroll_controller = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
-	g_signal_connect(scroll_controller, "scroll", G_CALLBACK(gui_input_on_scroll), data);
-	gtk_widget_add_controller(data->gl_area, scroll_controller);
+    GtkEventController* scroll_controller = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
+    g_signal_connect(scroll_controller, "scroll", G_CALLBACK(gui_input_on_scroll), data);
+    gtk_widget_add_controller(data->gl_area, scroll_controller);
 
-	GtkGesture* drag_gesture = gtk_gesture_drag_new();
-	g_signal_connect(drag_gesture, "drag-begin", G_CALLBACK(gui_input_on_drag_begin), data);
-	g_signal_connect(drag_gesture, "drag-update", G_CALLBACK(gui_input_on_drag_update), data);
-	gtk_widget_add_controller(data->gl_area, GTK_EVENT_CONTROLLER(drag_gesture));
+    GtkGesture* drag_gesture = gtk_gesture_drag_new();
+    g_signal_connect(drag_gesture, "drag-begin", G_CALLBACK(gui_input_on_drag_begin), data);
+    g_signal_connect(drag_gesture, "drag-update", G_CALLBACK(gui_input_on_drag_update), data);
+    gtk_widget_add_controller(data->gl_area, GTK_EVENT_CONTROLLER(drag_gesture));
 
-	struct gui_button_configuration motion_cfg = {.label = "Bewegung aktiv", .toggle = true};
-	data->toggle_motion = gui_button_create(IWT_CTRL_MOTION, &motion_cfg, data);
-	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_motion), data->cfg.enable_motion);
+    struct gui_button_configuration motion_cfg = {.label = "Bewegung aktiv", .toggle = true};
+    data->toggle_motion = gui_button_create(IWT_CTRL_MOTION, &motion_cfg, data);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_motion), data->cfg.enable_motion);
+    gtk_widget_set_tooltip_text(data->toggle_motion,
+        "Aktiviert die Bewegung der Cluster.\n"
+        "Berechnet die Weber-Kraft zwischen Clustern (DSTT-Drift).\n"
+        "Theorie: Kap. 8");
 
-	struct gui_spin_button_configuration beta_cfg = {.alignment = 0.5f, .value = data->cfg.beta, .min = 0.0, .max = 10.0, .increment = 0.01, .digits = 3};
-	data->spin_beta = gui_button_spin_create(IWT_CTRL_BETA, &beta_cfg, data);
+    struct gui_spin_button_configuration beta_cfg = {.alignment = 0.5f, .value = data->cfg.beta, .min = 0.0, .max = 10.0, .increment = 0.01, .digits = 3};
+    data->spin_beta = gui_button_spin_create(IWT_CTRL_BETA, &beta_cfg, data);
+    gtk_widget_set_tooltip_text(data->spin_beta,
+        "Bohm-Kopplung: Stärke des globalen, nicht-lokalen Bohm-Potentials.\n"
+        "Kontrolliert die systemische Organisation des Informationsfeldes.\n"
+        "Hohe Werte → stärkere nicht-lokale Kopplung über das ganze Netzwerk.\n"
+        "Theorie: Kap. 12, Gleichung (J.1)");
 
-	struct gui_spin_button_configuration gamma_cfg = {.alignment = 0.5f, .value = data->cfg.gamma, .min = 0.0, .max = 10.0, .increment = 0.01, .digits = 3};
-	data->spin_gamma = gui_button_spin_create(IWT_CTRL_GAMMA, &gamma_cfg, data);
+    struct gui_spin_button_configuration gamma_cfg = {.alignment = 0.5f, .value = data->cfg.gamma, .min = 0.0, .max = 10.0, .increment = 0.01, .digits = 3};
+    data->spin_gamma = gui_button_spin_create(IWT_CTRL_GAMMA, &gamma_cfg, data);
+    gtk_widget_set_tooltip_text(data->spin_gamma,
+        "Fraktale Verstärkung: Stärke der nichtlinearen Strukturbildung.\n"
+        "Kontrolliert die lokale Verstärkung von Fluktuationen zu stabilen Mustern.\n"
+        "Hohe Werte → schnellere Bildung stabiler Strukturen (Teilchen).\n"
+        "Theorie: Kap. 4.6, Gleichung (P.3), Term 3");
 
-	struct gui_spin_button_configuration threshold_cfg = {.alignment = 0.5f, .value = data->cfg.cluster_threshold, .min = 0.0, .max = 5.0, .increment = 0.01, .digits = 3};
-	data->spin_cluster_threshold = gui_button_spin_create(IWT_CTRL_CLUSTER_THRESHOLD, &threshold_cfg, data);
+    struct gui_spin_button_configuration threshold_cfg = {.alignment = 0.5f, .value = data->cfg.cluster_threshold, .min = 0.0, .max = 5.0, .increment = 0.01, .digits = 3};
+    data->spin_cluster_threshold = gui_button_spin_create(IWT_CTRL_CLUSTER_THRESHOLD, &threshold_cfg, data);
+    gtk_widget_set_tooltip_text(data->spin_cluster_threshold,
+        "Cluster-Schwelle: Schwellwert für die Cluster-Erkennung.\n"
+        "Knoten mit Kopplung > Schwellwert werden als zusammenhängend betrachtet.\n"
+        "Niedrige Werte → größere Cluster (mehr Verbindungen).\n"
+        "Theorie: Kap. 2, Axiom 4");
 
-	GtkWidget* label_beta = gtk_label_new("Bohm-Kopplung:");
-	GtkWidget* label_gamma = gtk_label_new("Fraktale Verstärkung:");
-	GtkWidget* label_threshold = gtk_label_new("Cluster-Schwelle:");
+    GtkWidget* label_beta = gtk_label_new("Bohm-Kopplung:");
+    GtkWidget* label_gamma = gtk_label_new("Fraktale Verstärkung:");
+    GtkWidget* label_threshold = gtk_label_new("Cluster-Schwelle:");
 
-	GtkWidget* control_box = gui_box_horizontal_create(8);
-	gui_box_append_widget(control_box, data->toggle_motion);
-	gui_box_append_widget(control_box, label_beta);
-	gui_box_append_widget(control_box, data->spin_beta);
-	gui_box_append_widget(control_box, label_gamma);
-	gui_box_append_widget(control_box, data->spin_gamma);
-	gui_box_append_widget(control_box, label_threshold);
-	gui_box_append_widget(control_box, data->spin_cluster_threshold);
+    GtkWidget* control_box = gui_box_horizontal_create(8);
+    gui_box_append_widget(control_box, data->toggle_motion);
+    gui_box_append_widget(control_box, label_beta);
+    gui_box_append_widget(control_box, data->spin_beta);
+    gui_box_append_widget(control_box, label_gamma);
+    gui_box_append_widget(control_box, data->spin_gamma);
+    gui_box_append_widget(control_box, label_threshold);
+    gui_box_append_widget(control_box, data->spin_cluster_threshold);
 
-	GtkWidget* main_box = gui_box_vertical_create(4);
-	gui_box_append_widget(main_box, control_box);
-	gui_box_append_widget(main_box, gl_frame);
+    GtkWidget* main_box = gui_box_vertical_create(4);
+    gui_box_append_widget(main_box, control_box);
+    gui_box_append_widget(main_box, gl_frame);
 
-	data->window = gui_main_window_create(core->app, 800, 800, data, false, true);
-	gtk_window_set_child(GTK_WINDOW(data->window), main_box);
+    data->window = gui_main_window_create(core->app, 800, 800, data, false, true);
+    gtk_window_set_child(GTK_WINDOW(data->window), main_box);
 
-	return true;
+    return true;
 }
 
 static bool gui_application_shutdown(iwt_gui_data_t data)
