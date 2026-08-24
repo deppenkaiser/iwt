@@ -78,6 +78,10 @@ static void flood_fill_push_neighbors(const iwt_runtime_t rt, const iwt_config_t
 	}
 }
 
+// Erkennt Cluster aus dem Informationsfeld via Flood-Fill über Adjazenz.
+// Realisiert automatische Strukturbildung: Fluktuationen werden lokal verstärkt und durch globales Potential zu stabilen Mustern organisiert.
+// Theorie: Strukturbildung ist automatisch, benötigt keine externen Initialisierungen, vgl. app:iwt_eq_konsequenzen § Die Strukturbildung ist automatisch.
+// Axiome: IWT vereinheitlicht alle Wechselwirkungen und macht testbare Vorhersagen, vgl. sec:axiome_zusammenfassung.
 void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	detect_reset_visited(rt, cfg);

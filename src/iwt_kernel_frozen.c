@@ -49,6 +49,10 @@ static double box_muller(unsigned int* seed)
 // 1. FLUKTUATIONEN (Vakuumfluktuation)
 // ============================================================================
 
+// Vakuumfluktuation ist intrinsisch: Gleichung (P.3) erzeugt immer Fluktuationen auch im leeren Vakuum.
+// Die Vakuumfluktuation ist keine externe Annahme, sondern eine Eigenschaft der diskreten Zeit.
+// Vgl. app:iwt_eq_konsequenzen § Die Vakuumfluktuation ist intrinsisch
+// Diese Funktion realisiert den intrinsischen Fluktuationsterm xi_real/xi_imag für jeden Knoten.
 bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	double scale = SCALE;
@@ -100,6 +104,9 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 	return true;
 }
 
+// Transfer der intrinsisch erzeugten Fluktuationen xi_real/xi_imag von Host zu GPU.
+// Notwendig damit der OpenCL-Kernel iwt_apply_fluctuations die diskrete Unschärfe anwenden kann.
+// Theorie: Fluktuationen sind Teil der geschlossenen Evolutionsgleichung P.3, vgl. app:iwt_eq_konsequenzen § Die Theorie ist geschlossen.
 bool frozen_upload_uncertainty_to_gpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	if (clEnqueueWriteBuffer(rt->ocl.queue, rt->xi_real_gpu, CL_TRUE, 0,
@@ -117,6 +124,10 @@ bool frozen_upload_uncertainty_to_gpu(const iwt_runtime_t rt, const iwt_config_t
 	return true;
 }
 
+// Anwendung der intrinsischen Vakuumfluktuation auf das Informationsfeld I_real/I_imag.
+// Realisiert den Term aus Gleichung P.3 der IWT: Fluktuationen werden immer erzeugt, auch im Vakuum.
+// Theorie: Vakuumfluktuation ist intrinsisch, vgl. app:iwt_eq_konsequenzen § Die Vakuumfluktuation ist intrinsisch.
+// IWT ist fundamental diskret, emergent kontinuierlich, vgl. sec:axiome_zusammenfassung.
 bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_APPLY_FLUCTUATIONS);
@@ -167,6 +178,10 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 // 2. ENERGIESSENKE (Materie-Zerstrahlung)
 // ============================================================================
 
+// Energiesenke / Redshift Damping: Materie-Zerstrahlung als irreversibler Dissipationsterm.
+// Realisiert die Irreversibilität der fundamentalen WDBT+ und damit der Ω-Theorie.
+// Ω-Theorie vermeidet Singularitäten, kommt ohne dunkle Materie/Energie aus und bewahrt Irreversibilität.
+// Vgl. sec:mg_zusammenhaenge und app:iwt_eq_konsequenzen § Die Theorie ist geschlossen.
 bool frozen_run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	double alpha_0 = ALPHA_0;
