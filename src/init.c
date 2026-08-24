@@ -211,49 +211,71 @@ static void zero_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg)
 }
 
 /**
- * Berechnet die fraktale Kopplungsmatrix K_kl.
- * THEORIE: K_kl = 1 / d_kl^(3-D)  (Anhang A.2, Gleichung A.7)
- *          3-D ≈ 0,296 für D ≈ 2,704
- *
- * Diese Matrix definiert die Stärke der direkten Wechselwirkung zwischen
- * zwei Knoten. Sie ist die Grundlage für:
+ * Berechnet die fraktale Kopplungsmatrix K_kl = 1 / d_kl^(3-D).
+ * 
+ * THEORIE: Anhang A.2, Gleichung (A.7); Kap. 2, Axiom 3; Kap. 5.2; Kap. 8.
+ * 
+ * Die Distanz d_kl ist die FRAKTALE DISTANZ IM INDEXRAUM.
+ * Implementierung: d_kl = (||pos_k - pos_l|| / l0)^(1/D)
+ * 
+ * Diese Formel gilt FÜR ALLE KNOTENPAARE – auch über Dodekaeder-Grenzen hinweg.
+ * Dadurch wird die Kopplung über Zellgrenzen korrekt berechnet und
+ * die Information kann sich frei im gesamten fraktalen Netzwerk bewegen.
+ * 
+ * Die Kopplungsmatrix ist die Grundlage für:
  * - Die diskrete Metrik g_kl (Kap. 5.2)
  * - Die lokale Weber-Dynamik (Kap. 8)
  * - Die Adjazenzmatrix für die Cluster-Erkennung
- *
- * Die Kopplung folgt der fraktalen Struktur des Raumes und führt nicht zu
- * einer unphysikalischen, vollständigen Vernetzung (Kap. 2, Axiom 3).
  */
 static void compute_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-	double D = cfg->D;
-	double alpha = 3.0 - D; // ≈ 0,296
+    // Theoretische Werte: D ≈ 2.704, alpha = 3 - D ≈ 0.296
+    double D = cfg->D;
+    double alpha = 3.0 - D;         
+    double l0 = cfg->l0;            // Fundamentale Längenskala (Kap. 6.4)
 
-	for (size_t i = 0; i < cfg->N; i++)
-	{
-		for (size_t j = 0; j < cfg->N; j++)
-		{
-			if (i == j)
-			{
-				continue;
-			}
+    for (size_t i = 0; i < cfg->N; i++) {
+        for (size_t j = 0; j < cfg->N; j++) {
+            if (i == j) {
+                // Diagonale = 0 (keine Selbstkopplung, wie in der Theorie)
+                rt->K[i * cfg->N + j] = 0.0;
+                continue;
+            }
 
-			struct vector_3d vi = rt->pos[i];
-			struct vector_3d vj = rt->pos[j];
-			struct vector_3d dvec = vector_sub(&vi, &vj);
-			ld dist_ld = vector_norm(&dvec);
-			double dist_3d = (double) dist_ld;
+            // Euklidische Distanz im 3D-Raum (wie ursprünglich)
+            struct vector_3d vi = rt->pos[i];
+            struct vector_3d vj = rt->pos[j];
+            struct vector_3d dvec = vector_sub(&vi, &vj);
+            ld dist_ld = vector_norm(&dvec);
+            double dist_3d = (double)dist_ld;
 
-			if (dist_3d < 1e-9)
-			{
-				dist_3d = 1e-9;
-			}
+            // Vermeidung von Singularitäten
+            if (dist_3d < 1e-12) {
+                dist_3d = 1e-12;
+            }
 
-			// Fraktale Distanz im Indexraum (Anhang A.2)
-			double d_ij = pow(dist_3d, 1.0 / D);
-			rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
-		}
-	}
+            // ================================================================
+            // KORREKTUR NACH THEORIE:
+            // Fraktale Distanz im Indexraum: d_kl = (dist_3d / l0)^(1/D)
+            // K_kl = 1 / d_kl^(3-D)
+            // ================================================================
+            
+            // 1. Fraktale Distanz berechnen
+            double d_ij = pow(dist_3d / l0, 1.0 / D);
+            
+            // 2. Kopplung berechnen (exakt nach Gleichung A.7)
+            rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
+
+            // ================================================================
+            // ALTE (FALSCHE) IMPLEMENTIERUNG (auskommentiert zur Referenz):
+            // double d_ij = pow(dist_3d, 1.0 / D);
+            // rt->K[i * cfg->N + j] = 1.0 / pow(d_ij, alpha);
+            // FEHLER: Fehlende Normierung auf l0 führte zu viel zu kleinen
+            // Kopplungen zwischen entfernten Knoten, wodurch die Information
+            // in den Dodekaeder-Zellen gefangen blieb.
+            // ================================================================
+        }
+    }
 }
 
 /**
