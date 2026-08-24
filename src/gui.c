@@ -259,9 +259,9 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
 	struct gui_spin_button_configuration threshold_cfg = {.alignment = 0.5f, .value = data->cfg.cluster_threshold, .min = 0.0, .max = 5.0, .increment = 0.01, .digits = 3};
 	data->spin_cluster_threshold = gui_button_spin_create(IWT_CTRL_CLUSTER_THRESHOLD, &threshold_cfg, data);
 
-	GtkWidget* label_beta = gtk_label_new("beta:");
-	GtkWidget* label_gamma = gtk_label_new("gamma:");
-	GtkWidget* label_threshold = gtk_label_new("cluster_threshold:");
+	GtkWidget* label_beta = gtk_label_new("Bohm-Kopplung:");
+	GtkWidget* label_gamma = gtk_label_new("Fraktale Verstärkung:");
+	GtkWidget* label_threshold = gtk_label_new("Cluster-Schwelle:");
 
 	GtkWidget* control_box = gui_box_horizontal_create(8);
 	gui_box_append_widget(control_box, data->toggle_motion);

@@ -212,16 +212,16 @@ static void zero_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 /**
  * Berechnet die fraktale Kopplungsmatrix K_kl = 1 / d_kl^(3-D).
- * 
+ *
  * THEORIE: Anhang A.2, Gleichung (A.7); Kap. 2, Axiom 3; Kap. 5.2; Kap. 8.
- * 
+ *
  * Die Distanz d_kl ist die FRAKTALE DISTANZ IM INDEXRAUM.
  * Implementierung: d_kl = (||pos_k - pos_l|| / l0)^(1/D)
- * 
+ *
  * Diese Formel gilt FÜR ALLE KNOTENPAARE – auch über Dodekaeder-Grenzen hinweg.
  * Dadurch wird die Kopplung über Zellgrenzen korrekt berechnet und
  * die Information kann sich frei im gesamten fraktalen Netzwerk bewegen.
- * 
+ *
  * Die Kopplungsmatrix ist die Grundlage für:
  * - Die diskrete Metrik g_kl (Kap. 5.2)
  * - Die lokale Weber-Dynamik (Kap. 8)
@@ -229,66 +229,82 @@ static void zero_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg)
  */
 static void compute_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-    double D = cfg->D;
-    double alpha = 3.0 - D;
-    double s = 2.0 + (1.0 + sqrt(5.0)) / 2.0;
-    double l0 = cfg->l0;
-    double scale_coupling = 1.0 / pow(s, alpha);
+	double D = cfg->D;
+	double alpha = 3.0 - D;
+	double s = 2.0 + (1.0 + sqrt(5.0)) / 2.0;
+	double l0 = cfg->l0;
+	double scale_coupling = 1.0 / pow(s, alpha);
 
-    // 1. Skala jedes Knotens bestimmen
-    int* scale = calloc(cfg->N, sizeof(int));
-    if (!scale) return;
+	// 1. Skala jedes Knotens bestimmen
+	int* scale = calloc(cfg->N, sizeof(int));
+	if (!scale)
+	{
+		return;
+	}
 
-    for (size_t i = 0; i < cfg->N; i++) {
-        struct vector_3d pos = rt->pos[i];
-        double r = (double)vector_norm(&pos);
-        scale[i] = (int)(log(r / l0 + 1.0) / log(s));
-        if (scale[i] < 0) scale[i] = 0;
-    }
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		struct vector_3d pos = rt->pos[i];
+		double r = (double) vector_norm(&pos);
+		scale[i] = (int) (log(r / l0 + 1.0) / log(s));
+		if (scale[i] < 0)
+		{
+			scale[i] = 0;
+		}
+	}
 
-    // 2. Kopplungsmatrix berechnen
-    for (size_t i = 0; i < cfg->N; i++) {
-        for (size_t j = 0; j < cfg->N; j++) {
-            if (i == j) {
-                rt->K[i * cfg->N + j] = 0.0;
-                continue;
-            }
+	// 2. Kopplungsmatrix berechnen
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		for (size_t j = 0; j < cfg->N; j++)
+		{
+			if (i == j)
+			{
+				rt->K[i * cfg->N + j] = 0.0;
+				continue;
+			}
 
-            int scale_i = scale[i];
-            int scale_j = scale[j];
-            int scale_diff = abs(scale_i - scale_j);
+			int scale_i = scale[i];
+			int scale_j = scale[j];
+			int scale_diff = abs(scale_i - scale_j);
 
-            // ============================================================
-            // SCHRITT 1: Kopplung aus der fraktalen Distanz (BLEIBT)
-            // ============================================================
-            struct vector_3d vi = rt->pos[i];
-            struct vector_3d vj = rt->pos[j];
-            struct vector_3d dvec = vector_sub(&vi, &vj);
-            ld dist_ld = vector_norm(&dvec);
-            double dist_3d = (double)dist_ld;
-            if (dist_3d < 1e-12) dist_3d = 1e-12;
+			// ============================================================
+			// SCHRITT 1: Kopplung aus der fraktalen Distanz (BLEIBT)
+			// ============================================================
+			struct vector_3d vi = rt->pos[i];
+			struct vector_3d vj = rt->pos[j];
+			struct vector_3d dvec = vector_sub(&vi, &vj);
+			ld dist_ld = vector_norm(&dvec);
+			double dist_3d = (double) dist_ld;
+			if (dist_3d < 1e-12)
+			{
+				dist_3d = 1e-12;
+			}
 
-            // Fraktale Distanz (korrigiert, bleibt erhalten)
-            double d_ij = pow(dist_3d / l0, 1.0 / D);
-            double K_ij = 1.0 / pow(d_ij, alpha);
+			// Fraktale Distanz (korrigiert, bleibt erhalten)
+			double d_ij = pow(dist_3d / l0, 1.0 / D);
+			double K_ij = 1.0 / pow(d_ij, alpha);
 
-            // ============================================================
-            // SCHRITT 2: Skalen-Normierung (NEU, ERGÄNZEND)
-            // ============================================================
-            if (scale_diff == 0) {
-                // Gleiche Skala: Kopplung bleibt wie berechnet (oder wird verstärkt)
-                // Hier belassen wir K_ij, weil es die Feinstruktur innerhalb der Skala abbildet
-                rt->K[i * cfg->N + j] = K_ij;
-            } else {
-                // Unterschiedliche Skalen: Kopplung wird durch die Skalendifferenz begrenzt
-                // Die Kopplung darf nicht größer sein als die theoriekonforme Skalen-Kopplung
-                double K_scale = pow(scale_coupling, scale_diff);
-                rt->K[i * cfg->N + j] = fmin(K_ij, K_scale);
-            }
-        }
-    }
+			// ============================================================
+			// SCHRITT 2: Skalen-Normierung (NEU, ERGÄNZEND)
+			// ============================================================
+			if (scale_diff == 0)
+			{
+				// Gleiche Skala: Kopplung bleibt wie berechnet (oder wird verstärkt)
+				// Hier belassen wir K_ij, weil es die Feinstruktur innerhalb der Skala abbildet
+				rt->K[i * cfg->N + j] = K_ij;
+			}
+			else
+			{
+				// Unterschiedliche Skalen: Kopplung wird durch die Skalendifferenz begrenzt
+				// Die Kopplung darf nicht größer sein als die theoriekonforme Skalen-Kopplung
+				double K_scale = pow(scale_coupling, scale_diff);
+				rt->K[i * cfg->N + j] = fmin(K_ij, K_scale);
+			}
+		}
+	}
 
-    free(scale);
+	free(scale);
 }
 
 /**
