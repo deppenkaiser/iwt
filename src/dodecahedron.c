@@ -4,17 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-/*
+/**
  * dodecahedron.c - Fraktale Dodekaeder-Punkterzeugung
  *
- * Implementiert die rekursive Erzeugung von Punkten auf einem fraktalen
- * Dodekaeder-Gitter. Kernfunktion ist _dodecahedron_generate_from_center,
- * die eine Breadth-First-Queue über Dodekaeder-Zellen verwaltet.
+ * THEORIE: Kap. 6 "Fraktale Informationsdimension D"
+ *          Anhang E "Spektrale Dimension des Dodekaeder-Ikosaeder-Netzwerks"
  *
- * Refactoring-Hinweise:
- *  - Queue-Expansion und Child-Erzeugung sind klar getrennt
- *  - Konstante Geometrie wird einmalig vorberechnet
- *  - Funktionen sind rein funktional und ohne Seiteneffekte
+ * Implementiert die rekursive Erzeugung von Knotenpositionen auf einem
+ * fraktalen Dodekaeder-Gitter. Die fraktale Dimension D = ln(20*phi)/ln(2+phi)
+ * ist die Hausdorff-Dimension des Netzwerks. Die Kopplungsmatrix K_kl = 1/d^(3-D)
+ * wird später aus diesen Positionen berechnet (init.c).
+ *
+ * Die Chiralität des Raumes entsteht durch die Verdrehung um den Goldenen Winkel
+ * psi = 360° * (2 - phi) ≈ 137,5° bei jeder Iteration (Randbedingung der
+ * optimalen Packung, Kap. 6.2).
  */
 
 typedef struct
@@ -66,15 +69,16 @@ void _mat3_vec_mul(double out[3], const double m[3][3], const double v[3])
 	}
 }
 
-// Rodrigues-Rotationsformel: Drehung um `angle` (rad) um die Einheitsachse `axis`
+/**
+ * Rodrigues-Rotationsformel.
+ * THEORIE: Die Rotation um den Goldenen Winkel psi an jeder Flächennormalen
+ *          erzeugt die chirale, lückenlose Packung (Kap. 6.2).
+ */
 private
 void _mat3_from_axis_angle(double m[3][3], const double axis[3], double angle)
 {
 	double x = axis[0], y = axis[1], z = axis[2];
-	double c = cos(angle);
-	double s = sin(angle);
-	double t = 1.0 - c;
-
+	double c = cos(angle), s = sin(angle), t = 1.0 - c;
 	m[0][0] = t * x * x + c;
 	m[0][1] = t * x * y - s * z;
 	m[0][2] = t * x * z + s * y;
@@ -86,32 +90,34 @@ void _mat3_from_axis_angle(double m[3][3], const double axis[3], double angle)
 	m[2][2] = t * z * z + c;
 }
 
-// 20 Dodekaeder-Ecken (roh, unnormiert) - exakt wie in dodekaeder.scad
+/**
+ * 20 Dodekaeder-Ecken (unnormiert).
+ * THEORIE: Ein Dodekaeder hat V=20 Ecken, F=12 Flächen.
+ *          Die duale Beziehung Dodekaeder ↔ Ikosaeder ist fundamental für
+ *          die spektrale Dimension d_s = 2D/3 (Anhang E).
+ */
 private
 void _base_vertices_raw(double v[20][3])
 {
-	double p = (1.0 + sqrt(5.0)) / 2.0;
+	double p = (1.0 + sqrt(5.0)) / 2.0; // Goldener Schnitt phi
 	double raw[20][3] = {
 		{1, 1, 1}, {1, 1, -1}, {1, -1, 1}, {1, -1, -1}, {-1, 1, 1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {p, 1.0 / p, 0}, {p, -1.0 / p, 0}, {-p, 1.0 / p, 0}, {-p, -1.0 / p, 0}, {0, p, 1.0 / p}, {0, p, -1.0 / p}, {0, -p, 1.0 / p}, {0, -p, -1.0 / p}, {1.0 / p, 0, p}, {1.0 / p, 0, -p}, {-1.0 / p, 0, p}, {-1.0 / p, 0, -p}};
 	memcpy(v, raw, sizeof(raw));
 }
 
-// 12 Fuenfeck-Flaechen (Eckindizes) - exakt wie in dodekaeder.scad
+/**
+ * 12 Fünfeck-Flächen (Eckindizes).
+ * THEORIE: Die 12 Flächenzentren sind die Ecken des dualen Ikosaeders.
+ *          Dies ist die Grundlage für die iterative Netzwerk-Expansion.
+ */
 static const int _base_faces[12][5] = {
-	{0, 12, 4, 18, 16},
-	{0, 12, 13, 1, 8},
-	{0, 8, 9, 2, 16},
-	{2, 14, 6, 18, 16},
-	{12, 4, 10, 5, 13},
-	{11, 10, 5, 19, 7},
-	{13, 5, 19, 17, 1},
-	{1, 8, 9, 3, 17},
-	{11, 6, 18, 4, 10},
-	{15, 14, 6, 11, 7},
-	{15, 3, 17, 19, 7},
-	{14, 2, 9, 3, 15}};
+	{0, 12, 4, 18, 16}, {0, 12, 13, 1, 8}, {0, 8, 9, 2, 16}, {2, 14, 6, 18, 16}, {12, 4, 10, 5, 13}, {11, 10, 5, 19, 7}, {13, 5, 19, 17, 1}, {1, 8, 9, 3, 17}, {11, 6, 18, 4, 10}, {15, 14, 6, 11, 7}, {15, 3, 17, 19, 7}, {14, 2, 9, 3, 15}};
 
-// 12 Flaechenzentren (normiert) = Ecken des dualen (eingepassten) Ikosaeders
+/**
+ * 12 Flächenzentren (normiert) = Ecken des dualen Ikosaeders.
+ * THEORIE: Diese Zentren dienen als Positionen für die 12 Kind-Dodekaeder
+ *          pro Iteration (Vermehrungsfaktor V = 20*phi, Kap. 6.3).
+ */
 private
 void _base_face_centers(const double v[20][3], double c[12][3])
 {
@@ -132,20 +138,27 @@ void _base_face_centers(const double v[20][3], double c[12][3])
 	}
 }
 
-// Fraktale Punkterzeugung (Breadth-First) ausgehend von einem beliebigen
-// Wurzel-Zentrum `center` statt fest (0,0,0) - Kern von
-// dodecahedron_generate_points() und dodecahedron_generate_multi_root_points()
+/**
+ * Kern der fraktalen Punkterzeugung (Breadth-First).
+ * THEORIE: Die Dodekaeder-Packung folgt einer Fibonacci-Rekursion mit
+ *          Skalierungsfaktor s = 2+phi ≈ 3,618 und Vermehrungsfaktor V=20*phi.
+ *          Daraus folgt D = ln(V)/ln(s) ≈ 2,704 (Kap. 6.3).
+ *          Die Korrelationslänge des Q-Feldes L_Q,0 ≈ 2,0e46 m folgt aus
+ *          derselben fraktalen Geometrie (Kap. 12, Anhang J).
+ */
 private
-bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, const double center[3])
+bool _dodecahedron_generate_from_center(
+	double* pos_x, double* pos_y, double* pos_z,
+	size_t N, double R0, const double center[3])
 {
 	const double phi = (1.0 + sqrt(5.0)) / 2.0;
-	const double s = 2.0 + phi;									  // Skalierungsfaktor
-	const double psi_rad = 2.0 * (4.0 * atan(1.0)) * (2.0 - phi); // Goldener Winkel (rad)
+	const double s = 2.0 + phi;									  // Skalierungsfaktor (Kap. 6.3)
+	const double psi_rad = 2.0 * (4.0 * atan(1.0)) * (2.0 - phi); // Goldener Winkel
 
 	double base_v_raw[20][3];
 	_base_vertices_raw(base_v_raw);
 
-	// Alle Rohecken haben identische Norm sqrt(3) -> einheitliche Normierung
+	// Normierung auf Einheitskugel
 	double inv_norm = 1.0 / sqrt(3.0);
 	double base_v[20][3];
 	for (int i = 0; i < 20; i++)
@@ -158,7 +171,7 @@ bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* po
 	double base_face_dir[12][3];
 	_base_face_centers(base_v, base_face_dir);
 
-	// Breadth-First-Warteschlange (dynamisch wachsend)
+	// BFS-Queue für die rekursive Expansion
 	size_t queue_cap = 64;
 	_dodeca_cell_t* queue = malloc(queue_cap * sizeof(_dodeca_cell_t));
 	if (!queue)
@@ -166,9 +179,7 @@ bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* po
 		return false;
 	}
 
-	size_t queue_head = 0;
-	size_t queue_tail = 0;
-
+	size_t queue_head = 0, queue_tail = 0;
 	queue[queue_tail].center[0] = center[0];
 	queue[queue_tail].center[1] = center[1];
 	queue[queue_tail].center[2] = center[2];
@@ -180,13 +191,15 @@ bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* po
 
 	while (queue_head < queue_tail && generated < N)
 	{
-		_dodeca_cell_t cell = queue[queue_head];
-		queue_head++;
+		_dodeca_cell_t cell = queue[queue_head++];
 
-		int vertices_written = 0;
+		// 20 Ecken des aktuellen Dodekaeders
 		for (int i = 0; i < 20 && generated < N; i++)
 		{
-			double scaled[3] = {base_v[i][0] * cell.scale, base_v[i][1] * cell.scale, base_v[i][2] * cell.scale};
+			double scaled[3] = {
+				base_v[i][0] * cell.scale,
+				base_v[i][1] * cell.scale,
+				base_v[i][2] * cell.scale};
 			double rotated[3];
 			_mat3_vec_mul(rotated, cell.rot, scaled);
 
@@ -194,46 +207,42 @@ bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* po
 			pos_y[generated] = cell.center[1] + rotated[1];
 			pos_z[generated] = cell.center[2] + rotated[2];
 			generated++;
-			vertices_written++;
 		}
 
-		if (vertices_written == 20)
+		// 12 Kind-Dodekaeder an den Flächenzentren
+		for (int f = 0; f < 12; f++)
 		{
-			// Schale vollstaendig gefuellt -> 12 Kind-Dodekaeder an den
-			// Flaechenzentren (= Ikosaeder-Ecken) erzeugen
-			for (int f = 0; f < 12; f++)
+			if (queue_tail >= queue_cap)
 			{
-				if (queue_tail >= queue_cap)
+				queue_cap *= 2;
+				_dodeca_cell_t* new_queue = realloc(queue, queue_cap * sizeof(_dodeca_cell_t));
+				if (!new_queue)
 				{
-					queue_cap *= 2;
-					_dodeca_cell_t* new_queue = realloc(queue, queue_cap * sizeof(_dodeca_cell_t));
-					if (!new_queue)
-					{
-						free(queue);
-						return false;
-					}
-					queue = new_queue;
+					free(queue);
+					return false;
 				}
-
-				double scaled_dir[3] = {
-					base_face_dir[f][0] * cell.scale,
-					base_face_dir[f][1] * cell.scale,
-					base_face_dir[f][2] * cell.scale};
-				double world_offset[3];
-				_mat3_vec_mul(world_offset, cell.rot, scaled_dir);
-
-				_dodeca_cell_t* child = &queue[queue_tail];
-				child->center[0] = cell.center[0] + world_offset[0];
-				child->center[1] = cell.center[1] + world_offset[1];
-				child->center[2] = cell.center[2] + world_offset[2];
-				child->scale = cell.scale / s;
-
-				double r_local[3][3];
-				_mat3_from_axis_angle(r_local, base_face_dir[f], psi_rad);
-				_mat3_mul(child->rot, cell.rot, r_local);
-
-				queue_tail++;
+				queue = new_queue;
 			}
+
+			double scaled_dir[3] = {
+				base_face_dir[f][0] * cell.scale,
+				base_face_dir[f][1] * cell.scale,
+				base_face_dir[f][2] * cell.scale};
+			double world_offset[3];
+			_mat3_vec_mul(world_offset, cell.rot, scaled_dir);
+
+			_dodeca_cell_t* child = &queue[queue_tail];
+			child->center[0] = cell.center[0] + world_offset[0];
+			child->center[1] = cell.center[1] + world_offset[1];
+			child->center[2] = cell.center[2] + world_offset[2];
+			child->scale = cell.scale / s;
+
+			// Rotation um den Goldenen Winkel (Chiralität, Kap. 6.2)
+			double r_local[3][3];
+			_mat3_from_axis_angle(r_local, base_face_dir[f], psi_rad);
+			_mat3_mul(child->rot, cell.rot, r_local);
+
+			queue_tail++;
 		}
 	}
 
@@ -241,6 +250,12 @@ bool _dodecahedron_generate_from_center(double* pos_x, double* pos_y, double* po
 	return generated == N;
 }
 
+/**
+ * Öffentliche Schnittstelle: Erzeugt N Punkte.
+ * THEORIE: extra_levels implementiert die Selbstähnlichkeit des fraktalen
+ *          Raumes. Jede zusätzliche Stufe skaliert R0 um s nach oben,
+ *          was der Skaleninvarianz der Dodekaeder-Packung entspricht.
+ */
 bool dodecahedron_generate_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0)
 {
 	return dodecahedron_generate_points_ex(pos_x, pos_y, pos_z, N, R0, 0);

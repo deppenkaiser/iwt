@@ -1,17 +1,3 @@
-// ============================================================================
-// iwt_kernel_frozen.c - Eingefrorene IWT-Kernfunktionen
-// ============================================================================
-//
-// Status: Eingefroren am 27.07.2026
-//
-// Enthält NUR:
-//   1. Fluktuationen (Vakuumfluktuation)
-//   2. Energiesenke (Materie-Zerstrahlung)
-//
-// Diese Funktionen werden NICHT mehr geändert.
-//
-// ============================================================================
-
 #include "iwt_kernel_frozen.h"
 #include "iwt.h"
 #include <api/api.h>
@@ -20,9 +6,29 @@
 #include <stdio.h>
 #include <string/string.h>
 
-// ============================================================================
-// KONSTANTEN (eingefroren)
-// ============================================================================
+/**
+ * iwt_kernel_frozen.c - Eingefrorene IWT-Kernfunktionen
+ *
+ * Status: Eingefroren am 27.07.2026
+ *
+ * THEORIE: Anhang O "Herleitung der Unschärferelation aus diskreter Zeit"
+ *          Anhang P "Vollständige Evolutionsgleichung der IWT"
+ *          Anhang Q "Rotverschiebung in der IWT"
+ *
+ * Enthält zwei fundamentale Prozesse:
+ *
+ * 1. Vakuumfluktuationen (frozen_generate_uncertainty_cpu)
+ *    THEORIE: Die diskrete Zeit T > 0 erzwingt eine minimale Energie-Unschärfe
+ *             ΔE ~ ℏ/T (Anhang O). Diese manifestiert sich als intrinsische
+ *             Fluktuation des Informationsfeldes ΔI_k ~ sqrt(ℏ/(2T)) * ξ_k.
+ *             Gleichung (P.3), Term 4: sqrt(ℏ/(2T)) * ξ_k^(n)
+ *
+ * 2. Energiesenke / Redshift Damping (frozen_run_apply_redshift_damping)
+ *    THEORIE: Die Rotverschiebung wirkt als Energiesenke, die Energie aus dem
+ *             Materiesystem entfernt und an das Vakuum zurückgibt (Anhang Q).
+ *             Dies schließt den Energiekreislauf: Vakuum -> Materie -> Vakuum.
+ *             Gleichung (Q.9): Vakuum -> Fluktuationen -> Materie -> Rotverschiebung -> Vakuum
+ */
 
 #define RHO_0 1e-6
 #define RHO_MIN 1e-8
@@ -30,10 +36,12 @@
 #define ALPHA_MIN 1e-9
 #define SCALE 0.70710678
 
-// ============================================================================
-// HILFSFUNKTIONEN (eingefroren)
-// ============================================================================
-
+/**
+ * Box-Muller-Transformator für normale Zufallszahlen.
+ * THEORIE: Die Zufallsvariable ξ_k^(n) ist komplex und standard-normalverteilt
+ *          (Anhang P.3). Real- und Imaginärteil sind unabhängig.
+ *          ⟨ξ_k⟩ = 0, ⟨ξ_k · ξ_l⟩ = δ_kl (Gleichung P.2)
+ */
 static double box_muller(unsigned int* seed)
 {
 	double u1, u2;
@@ -45,22 +53,28 @@ static double box_muller(unsigned int* seed)
 	return sqrt(-2.0 * log(u1)) * cos(2.0 * iwt_pi() * u2);
 }
 
-// ============================================================================
-// 1. FLUKTUATIONEN (Vakuumfluktuation)
-// ============================================================================
-
-// Vakuumfluktuation ist intrinsisch: Gleichung (P.3) erzeugt immer Fluktuationen auch im leeren Vakuum.
-// Die Vakuumfluktuation ist keine externe Annahme, sondern eine Eigenschaft der diskreten Zeit.
-// Vgl. app:iwt_eq_konsequenzen § Die Vakuumfluktuation ist intrinsisch
-// Diese Funktion realisiert den intrinsischen Fluktuationsterm xi_real/xi_imag für jeden Knoten.
+/**
+ * Erzeugt intrinsische Vakuumfluktuationen.
+ * THEORIE: Gleichung (P.3), Term 4: sqrt(ℏ/(2T)) * ξ_k^(n)
+ *
+ * Die Fluktuation ist KEINE externe Störung, sondern eine Eigenschaft der
+ * diskreten Zeit T > 0. Sie ist die mathematische Manifestation des
+ * bandbegrenzten Frequenzspektrums (Anhang O).
+ *
+ * Die Fluktuation wird NUR im Vakuum erzeugt (rho_i klein), da Strukturen
+ * (rho_i groß) bereits stabil sind. Die Stärke skaliert mit
+ * (1 - rho_i/(RHO_0 + rho_i)), so dass sie im Vakuum maximal und in
+ * dichten Strukturen minimal ist.
+ *
+ * Fisher-Yates-Shuffle stellt sicher, dass die Fluktuationen unkorreliert
+ * über das Netzwerk verteilt sind (⟨ξ_k · ξ_l⟩ = δ_kl).
+ */
 bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	double scale = SCALE;
 	unsigned int seed = cfg->seed;
 
-	// ================================================================
-	// NEU: Knoten-Indizes in zufälliger Reihenfolge
-	// ================================================================
+	// Fisher-Yates-Shuffle für unkorrelierte Fluktuationen
 	size_t* indices = malloc(cfg->N * sizeof(size_t));
 	if (!indices)
 	{
@@ -72,7 +86,6 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 		indices[i] = i;
 	}
 
-	// Fisher-Yates Shuffle
 	for (size_t i = cfg->N - 1; i > 0; i--)
 	{
 		size_t j = rand_r(&seed) % (i + 1);
@@ -81,18 +94,14 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 		indices[j] = temp;
 	}
 
-	// ================================================================
-	// Fluktuationen in zufälliger Reihenfolge erzeugen
-	// ================================================================
 	for (size_t n = 0; n < cfg->N; n++)
 	{
 		size_t i = indices[n];
 
 		double rho_i = rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i] + 1e-30;
 
-		// Fluktuation NUR im Vakuum
+		// Fluktuation NUR im Vakuum (rho_i klein)
 		double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
-
 		double delta = box_muller(&seed) * fluct_strength;
 
 		rt->xi_real[i] = delta;
@@ -104,9 +113,11 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 	return true;
 }
 
-// Transfer der intrinsisch erzeugten Fluktuationen xi_real/xi_imag von Host zu GPU.
-// Notwendig damit der OpenCL-Kernel iwt_apply_fluctuations die diskrete Unschärfe anwenden kann.
-// Theorie: Fluktuationen sind Teil der geschlossenen Evolutionsgleichung P.3, vgl. app:iwt_eq_konsequenzen § Die Theorie ist geschlossen.
+/**
+ * Transfer der Fluktuationen zur GPU.
+ * THEORIE: Die Fluktuationen werden im OpenCL-Kernel iwt_apply_fluctuations
+ *          auf das Informationsfeld angewendet (Gleichung P.3).
+ */
 bool frozen_upload_uncertainty_to_gpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	if (clEnqueueWriteBuffer(rt->ocl.queue, rt->xi_real_gpu, CL_TRUE, 0,
@@ -124,10 +135,13 @@ bool frozen_upload_uncertainty_to_gpu(const iwt_runtime_t rt, const iwt_config_t
 	return true;
 }
 
-// Anwendung der intrinsischen Vakuumfluktuation auf das Informationsfeld I_real/I_imag.
-// Realisiert den Term aus Gleichung P.3 der IWT: Fluktuationen werden immer erzeugt, auch im Vakuum.
-// Theorie: Vakuumfluktuation ist intrinsisch, vgl. app:iwt_eq_konsequenzen § Die Vakuumfluktuation ist intrinsisch.
-// IWT ist fundamental diskret, emergent kontinuierlich, vgl. sec:axiome_zusammenfassung.
+/**
+ * Wendet die intrinsischen Fluktuationen auf das Informationsfeld an.
+ * THEORIE: Gleichung (P.3): I_k^(n+1) = ... + sqrt(ℏ/(2T)) * ξ_k^(n)
+ *
+ * Die Fluktuationen sind eine zwingende Konsequenz der diskreten Zeit.
+ * Sie erzeugen Vakuumfluktuationen ohne externe Annahmen (Anhang P.5).
+ */
 bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_APPLY_FLUCTUATIONS);
@@ -147,7 +161,6 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 	}
 
 	int N = (int) cfg->N;
-
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
 	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->xi_real_gpu);
@@ -174,14 +187,22 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 	return true;
 }
 
-// ============================================================================
-// 2. ENERGIESSENKE (Materie-Zerstrahlung)
-// ============================================================================
-
-// Energiesenke / Redshift Damping: Materie-Zerstrahlung als irreversibler Dissipationsterm.
-// Realisiert die Irreversibilität der fundamentalen WDBT+ und damit der Ω-Theorie.
-// Ω-Theorie vermeidet Singularitäten, kommt ohne dunkle Materie/Energie aus und bewahrt Irreversibilität.
-// Vgl. sec:mg_zusammenhaenge und app:iwt_eq_konsequenzen § Die Theorie ist geschlossen.
+/**
+ * Energiesenke / Redshift Damping (Materie-Zerstrahlung).
+ * THEORIE: Anhang Q "Rotverschiebung in der IWT"
+ *
+ * Die Rotverschiebung wirkt als Energiesenke, die Energie aus dem Materiesystem
+ * entfernt und an das Vakuum zurückgibt. Dies schließt den Energiekreislauf:
+ *
+ *   Vakuum --Fluktuationen--> Materie --Rotverschiebung--> Vakuum  (Q.9)
+ *
+ * Die Dämpfung wird NUR in Strukturen angewendet (rho_i groß), nicht im Vakuum.
+ * Der Dämpfungsfaktor alpha skaliert mit anti_rho = 1/rho_i, so dass dichte
+ * Strukturen stärker gedämpft werden als das Vakuum.
+ *
+ * Die irreversible Dämpfung realisiert den intrinsischen Zeitpfeil der
+ * Ω-Theorie (Kap. 9). Die Gravitation ist irreversibel (Kap. 8).
+ */
 bool frozen_run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	double alpha_0 = ALPHA_0;
@@ -190,10 +211,9 @@ bool frozen_run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_
 	for (size_t i = 0; i < cfg->N; i++)
 	{
 		double rho_i = rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i] + 1e-30;
-
 		double anti_rho = 1.0 / rho_i;
 
-		// Energiesenke NUR in Strukturen
+		// Energiesenke NUR in Strukturen (rho_i groß)
 		double alpha = alpha_0 * (anti_rho / (1.0 + anti_rho)) + alpha_min;
 
 		rt->I_real[i] *= (1.0 - alpha);
