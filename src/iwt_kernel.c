@@ -217,6 +217,7 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 	int N = (int) cfg->N;
 	double DT = cfg->DT;
+	double DT_Q = cfg->phase_dt;
 
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
@@ -225,6 +226,7 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
 	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->Q_gpu);
 	clSetKernelArg(kernel, 5, sizeof(int), &N);
 	clSetKernelArg(kernel, 6, sizeof(double), &DT);
+	clSetKernelArg(kernel, 7, sizeof(double), &DT_Q);
 
 	size_t global = cfg->N;
 	size_t local = get_local_size(global);

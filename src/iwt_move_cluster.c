@@ -115,8 +115,7 @@ private void _iwt_update_cluster_velocities(const iwt_runtime_t rt, double dt)
 /**
  * Führungsgeschwindigkeit aus dem diskreten Phasengradienten (Bohm).
  * v_c ∝ Σ_edges K_ij · ΔS_ij · r_ij, ΔS gefaltet auf [-π, π].
- */
-private void _iwt_apply_guidance(const iwt_runtime_t rt, const iwt_config_t cfg)
+ */private void _iwt_apply_guidance(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	double vmax = GUIDANCE_SPEED * cfg->l0 / cfg->DT;
 	size_t N = cfg->N;
@@ -168,56 +167,6 @@ private void _iwt_apply_guidance(const iwt_runtime_t rt, const iwt_config_t cfg)
 		else
 		{
 			cl->vel = cl->vel_weber;
-		}
-	}
-}
-
-private void _iwt_update_cluster_phases(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
-{
-	double PI = iwt_pi();
-	double twoPI = 2.0 * PI;
-	for (size_t c = 0; c < rt->cluster_count; c++)
-	{
-		iwt_cluster_t cl = &rt->clusters[c];
-		if (!cl->is_active)
-		{
-			continue;
-		}
-		if (cl->node_count == 0)
-		{
-			continue;
-		}
-		ld v_speed_ld = vector_norm(&cl->vel);
-		double v_speed_sq = (double) (v_speed_ld * v_speed_ld);
-		for (size_t n = 0; n < cl->node_count; n++)
-		{
-			size_t i = cl->node_indices[n];
-			struct vector_3d r_vec = vector_sub(&rt->pos[i], &cl->pos);
-			ld r_ld = vector_norm(&r_vec);
-			double r = (double) r_ld;
-			if (r < 1e-30)
-			{
-				continue;
-			}
-			struct vector_3d v_vec = cl->vel;
-			ld v_rad_ld = vector_dot(&r_vec, &v_vec) / r_ld;
-			double v_rad = (double) v_rad_ld;
-			double v_tan_sq = v_speed_sq - v_rad * v_rad;
-			double v_tan = v_tan_sq > 0.0 ? sqrt(v_tan_sq) : 0.0;
-			double lambda_rad = 1.0;
-			double dphi_rad = (twoPI / lambda_rad) * v_rad * dt;
-			double lambda_tan = 1.0;
-			double dphi_tan = (twoPI / lambda_tan) * (v_tan / r) * dt;
-			double dphi = dphi_rad + dphi_tan;
-			rt->I_phase[i] += dphi;
-			while (rt->I_phase[i] > PI)
-			{
-				rt->I_phase[i] -= twoPI;
-			}
-			while (rt->I_phase[i] < -PI)
-			{
-				rt->I_phase[i] += twoPI;
-			}
 		}
 	}
 }
@@ -278,24 +227,21 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 	// 2. FÜHRUNGSGESCHWINDIGKEIT aus dem Phasengradienten (Bohm)
 	_iwt_apply_guidance(rt, cfg);
 
-	// 3. PHASENVERSCHIEBUNG (de-Broglie-Inneruhr entlang der Bahn)
-	if (cfg->enable_motion)
-	{
-		_iwt_update_cluster_phases(rt, cfg, dt);
-	}
-
 	// 4. SCHWERPUNKT + DRIFT-OFFSET NEU BERECHNEN
 	_iwt_update_cluster_centers(rt);
-	for (size_t c = 0; c < rt->cluster_count; c++)
+	if (cfg->enable_motion)
 	{
-		iwt_cluster_t cl = &rt->clusters[c];
-		if (!cl->is_active || cl->node_count == 0)
+		for (size_t c = 0; c < rt->cluster_count; c++)
 		{
-			continue;
+			iwt_cluster_t cl = &rt->clusters[c];
+			if (!cl->is_active || cl->node_count == 0)
+			{
+				continue;
+			}
+			struct vector_3d drift = vector_multiply_scalar(&cl->vel, (cld) dt);
+			cl->pos_offset = vector_add(&cl->pos_offset, &drift);
+			cl->pos = vector_add(&cl->pos, &drift);
 		}
-		struct vector_3d drift = vector_multiply_scalar(&cl->vel, (cld) dt);
-		cl->pos_offset = vector_add(&cl->pos_offset, &drift);
-		cl->pos = vector_add(&cl->pos, &drift);
 	}
 
 	// 5. KNOTENLISTE ZURÜCKSETZEN

@@ -114,6 +114,9 @@ typedef struct iwt_config
 
 	// Advektions-Kopplungsstärke (Transport entlang des Phasengradienten)
 	double kappa;
+
+	// Effektiver Zeitschritt des Bohm-Phasen-Kicks (numerische Quantenrate)
+	double phase_dt;
 }* iwt_config_t;
 
 typedef struct iwt_spectrum

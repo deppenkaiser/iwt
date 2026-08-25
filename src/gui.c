@@ -166,6 +166,7 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.seed = (unsigned int) time(NULL);
 	data->cfg.cluster_threshold = 1.2;
 	data->cfg.kappa = 0.5;
+	data->cfg.phase_dt = 0.02;
 	data->cfg.enable_motion = false;
 	data->zoom = 1.0f;
 	data->cam_yaw = 0.785398f;
