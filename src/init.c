@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string/string.h>
 
 /**
  * init.c - Initialisierung des IWT-Informationsnetzwerks
@@ -34,6 +35,8 @@ static void compute_coupling_matrix(const iwt_runtime_t rt, const iwt_config_t c
 static bool init_host_memory(const iwt_runtime_t rt, const iwt_config_t cfg);
 static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg);
 static void free_cluster_arrays(const iwt_runtime_t rt);
+static bool k_cache_load(const iwt_runtime_t rt, const iwt_config_t cfg);
+static bool k_cache_save(const iwt_runtime_t rt, const iwt_config_t cfg);
 
 static bool all_ptrs_valid(void* ptrs[], size_t n)
 {
@@ -173,8 +176,16 @@ static bool init_host_memory(const iwt_runtime_t rt, const iwt_config_t cfg)
 	{
 		return false;
 	}
-	zero_coupling_matrix(rt, cfg);
-	compute_coupling_matrix(rt, cfg); // K_kl = 1/d^(3-D) (Anhang A.2)
+
+	// Versuch K-Matrix aus Cache zu laden
+	if (!k_cache_load(rt, cfg))
+	{
+		zero_coupling_matrix(rt, cfg);
+		compute_coupling_matrix(rt, cfg); // K_kl = 1/d^(3-D) (Anhang A.2)
+		// Neu berechnet -> in Cache schreiben
+		k_cache_save(rt, cfg);
+	}
+
 	iwt_recompute_adjacency(rt, cfg);
 	return true;
 }
@@ -432,6 +443,8 @@ bool iwt_rebuild_geometry(const iwt_runtime_t rt, const iwt_config_t cfg)
 		return false;
 	}
 	iwt_k_gpu_set_uploaded(false);
+	// K wurde evtl. geladen oder neu berechnet, sicherstellen dass Cache aktuell ist
+	k_cache_save(rt, cfg);
 	return clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
 								cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL,
 								NULL) == CL_SUCCESS;
@@ -504,6 +517,97 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	_free_memory((void**) &rt->adj_count);
 	_free_memory((void**) &rt->wave_flat);
 	_free_memory((void**) &rt->wave_count);
+}
+
+static bool k_cache_load(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	char exe_path[STRING_MAXLEN];
+	string_get_exe_path(exe_path, sizeof(exe_path));
+	char exe_path_copy[STRING_MAXLEN];
+	string_copy(exe_path_copy, sizeof(exe_path_copy), exe_path);
+	const char* base_dir = string_dirname_from_filepath(exe_path_copy);
+	if (!base_dir)
+	{
+		return false;
+	}
+
+	string_t cache_dir;
+	string_copy(cache_dir, sizeof(cache_dir), base_dir);
+	string_cat(cache_dir, sizeof(cache_dir), "/.cache");
+
+	// Cache-Datei-Name aus Config-Parametern ableiten
+	string_t filename;
+	string_copy(filename, sizeof(filename), cache_dir);
+	string_cat(filename, sizeof(filename), "/k_matrix_");
+	{
+		char buf[64];
+		snprintf(buf, sizeof(buf), "%zu_%d_%g_%g.bin", cfg->N, cfg->extra_levels, cfg->D, cfg->l0);
+		string_cat(filename, sizeof(filename), buf);
+	}
+
+	if (!string_directory_exists(cache_dir))
+	{
+		return false;
+	}
+	if (!string_filepath_exist(filename))
+	{
+		return false;
+	}
+
+	FILE* f = fopen(filename, "rb");
+	if (!f)
+	{
+		return false;
+	}
+
+	size_t elems = cfg->N * cfg->N;
+	size_t read = fread(rt->K, sizeof(double), elems, f);
+	fclose(f);
+
+	return read == elems;
+}
+
+static bool k_cache_save(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	char exe_path[STRING_MAXLEN];
+	string_get_exe_path(exe_path, sizeof(exe_path));
+	char exe_path_copy[STRING_MAXLEN];
+	string_copy(exe_path_copy, sizeof(exe_path_copy), exe_path);
+	const char* base_dir = string_dirname_from_filepath(exe_path_copy);
+	if (!base_dir)
+	{
+		return false;
+	}
+
+	string_t cache_dir;
+	string_copy(cache_dir, sizeof(cache_dir), base_dir);
+	string_cat(cache_dir, sizeof(cache_dir), "/.cache");
+
+	if (!string_directory_exists(cache_dir))
+	{
+		string_directory_create(cache_dir);
+	}
+
+	string_t filename;
+	string_copy(filename, sizeof(filename), cache_dir);
+	string_cat(filename, sizeof(filename), "/k_matrix_");
+	{
+		char buf[64];
+		snprintf(buf, sizeof(buf), "%zu_%d_%g_%g.bin", cfg->N, cfg->extra_levels, cfg->D, cfg->l0);
+		string_cat(filename, sizeof(filename), buf);
+	}
+
+	FILE* f = fopen(filename, "wb");
+	if (!f)
+	{
+		return false;
+	}
+
+	size_t elems = cfg->N * cfg->N;
+	size_t written = fwrite(rt->K, sizeof(double), elems, f);
+	fclose(f);
+
+	return written == elems;
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)
