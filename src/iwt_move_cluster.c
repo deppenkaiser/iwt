@@ -3,6 +3,31 @@
 #include <api/api.h>
 #include <math.h>
 
+/**
+ * IWT_NORM: Führungsgeschwindigkeit (Bohm/Guidance) und quasi-teilchenhafter Drift.
+ * Theorie: WDBT+ Führungsgleichung v = ∇S/m (de Broglie-Bohm, Teil II);
+ *          Kap. 8 (Weber-Kräfte zwischen emergenten Objekten).
+ * Implementierung:
+ *   - Diskreter Phasengradient: grad = Σ_edges K_ij·ΔS_ij·r_ij (ΔS auf [-π,π] gefaltet)
+ *   - Richtung = normierter Gradient, Betrag = GUIDANCE_SPEED·l0/DT
+ *     (konstante Gleitgeschwindigkeit bei vorhandenem Gradienten)
+ *   - Weber-Anteil wird separat integriert (vel_weber, gedämpft)
+ *   - pos_offset integriert vel relativ zum knotenverankerten Schwerpunkt
+ * Grund: Die Knoten des fraktalen Gitters sind statisch; sichtbare Bewegung
+ * emergiert aus Feldtransport (Advektion im Flux-Kernel) + Objektdrift.
+ */
+
+#define WEBER_VELOCITY_DAMP 0.98
+#define OFFSET_DECAY 0.98
+#define GUIDANCE_SPEED 0.1
+#define GUIDANCE_EPSILON 1e-12
+
+static double phase_wrap(double dphi)
+{
+	const double two_pi = 2.0 * iwt_pi();
+	return dphi - two_pi * rint(dphi / two_pi);
+}
+
 private struct vector_3d _iwt_compute_weber_force(const iwt_cluster_t a, const iwt_cluster_t b, double G, double c, double epsilon0)
 {
 	struct vector_3d r_vec = vector_sub(&b->pos, &a->pos);
@@ -80,7 +105,69 @@ private void _iwt_update_cluster_velocities(const iwt_runtime_t rt, double dt)
 		if (cl->mass > 1e-30)
 		{
 			struct vector_3d dv = vector_multiply_scalar(&force, (cld) (dt / cl->mass));
-			cl->vel = vector_add(&cl->vel, &dv);
+			cl->vel_weber = vector_add(&cl->vel_weber, &dv);
+		}
+		// Dämpfung hält den integrierten Impulsanteil beschränkt
+		cl->vel_weber = vector_multiply_scalar(&cl->vel_weber, (cld) WEBER_VELOCITY_DAMP);
+	}
+}
+
+/**
+ * Führungsgeschwindigkeit aus dem diskreten Phasengradienten (Bohm).
+ * v_c ∝ Σ_edges K_ij · ΔS_ij · r_ij, ΔS gefaltet auf [-π, π].
+ */
+private void _iwt_apply_guidance(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	double vmax = GUIDANCE_SPEED * cfg->l0 / cfg->DT;
+	size_t N = cfg->N;
+
+	for (size_t c = 0; c < rt->cluster_count; c++)
+	{
+		iwt_cluster_t cl = &rt->clusters[c];
+		if (!cl->is_active || cl->node_count == 0)
+		{
+			continue;
+		}
+
+		struct vector_3d grad = vector_clear(NULL);
+		for (size_t n = 0; n < cl->node_count; n++)
+		{
+			size_t i = cl->node_indices[n];
+			const bool* row = &rt->adjacency[i * N];
+			double phase_i = rt->I_phase[i];
+			for (size_t j = 0; j < N; j++)
+			{
+				if (!row[j])
+				{
+					continue;
+				}
+				double ds = phase_wrap(rt->I_phase[j] - phase_i);
+				if (fabs(ds) < GUIDANCE_EPSILON)
+				{
+					continue;
+				}
+				struct vector_3d r_vec = vector_sub(&rt->pos[j], &rt->pos[i]);
+				ld r_ld = vector_norm(&r_vec);
+				double r = (double) r_ld;
+				if (r < GUIDANCE_EPSILON)
+				{
+					continue;
+				}
+				struct vector_3d dir = vector_multiply_scalar(&r_vec, (cld) (1.0 / r_ld));
+				struct vector_3d contrib = vector_multiply_scalar(&dir, (cld) (rt->K[i * N + j] * ds));
+				grad = vector_add(&grad, &contrib);
+			}
+		}
+
+		ld mag = vector_norm(&grad);
+		if (mag > GUIDANCE_EPSILON)
+		{
+			struct vector_3d dir = vector_multiply_scalar(&grad, (cld) (1.0 / mag));
+			cl->vel = vector_multiply_scalar(&dir, (cld) vmax);
+		}
+		else
+		{
+			cl->vel = cl->vel_weber;
 		}
 	}
 }
@@ -135,17 +222,6 @@ private void _iwt_update_cluster_phases(const iwt_runtime_t rt, const iwt_config
 	}
 }
 
-private void _iwt_update_I_values(const iwt_runtime_t rt, const iwt_config_t cfg)
-{
-	for (size_t i = 0; i < cfg->N; i++)
-	{
-		double rho = rt->mass[i];
-		double phi = rt->I_phase[i];
-		rt->I_real[i] = sqrt(fabs(rho)) * cos(phi);
-		rt->I_imag[i] = sqrt(fabs(rho)) * sin(phi);
-	}
-}
-
 private void _iwt_update_cluster_centers(const iwt_runtime_t rt)
 {
 	for (size_t c = 0; c < rt->cluster_count; c++)
@@ -173,7 +249,10 @@ private void _iwt_update_cluster_centers(const iwt_runtime_t rt)
 		}
 		if (new_mass > 1e-30)
 		{
-			cl->pos = vector_divide_scalar(&new_pos, (cld) new_mass);
+			// Knotenverankerter Schwerpunkt + integrierter Drift-Offset
+			struct vector_3d anchor = vector_divide_scalar(&new_pos, (cld) new_mass);
+			cl->pos_offset = vector_multiply_scalar(&cl->pos_offset, (cld) OFFSET_DECAY);
+			cl->pos = vector_add(&anchor, &cl->pos_offset);
 		}
 	}
 }
@@ -193,18 +272,31 @@ private void _iwt_reset_cluster_node_counts(const iwt_runtime_t rt)
 
 void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
 {
-	// 1. GESCHWINDIGKEITEN AUS WEBER-KRÄFTEN BERECHNEN
+	// 1. WEBER-IMPULSE (persistent, gedämpft)
 	_iwt_update_cluster_velocities(rt, dt);
 
-	// 2. PHASENVERSCHIEBUNG & I-Werte
+	// 2. FÜHRUNGSGESCHWINDIGKEIT aus dem Phasengradienten (Bohm)
+	_iwt_apply_guidance(rt, cfg);
+
+	// 3. PHASENVERSCHIEBUNG (de-Broglie-Inneruhr entlang der Bahn)
 	if (cfg->enable_motion)
 	{
 		_iwt_update_cluster_phases(rt, cfg, dt);
-		_iwt_update_I_values(rt, cfg);
 	}
 
-	// 4. SCHWERPUNKT NEU BERECHNEN
+	// 4. SCHWERPUNKT + DRIFT-OFFSET NEU BERECHNEN
 	_iwt_update_cluster_centers(rt);
+	for (size_t c = 0; c < rt->cluster_count; c++)
+	{
+		iwt_cluster_t cl = &rt->clusters[c];
+		if (!cl->is_active || cl->node_count == 0)
+		{
+			continue;
+		}
+		struct vector_3d drift = vector_multiply_scalar(&cl->vel, (cld) dt);
+		cl->pos_offset = vector_add(&cl->pos_offset, &drift);
+		cl->pos = vector_add(&cl->pos, &drift);
+	}
 
 	// 5. KNOTENLISTE ZURÜCKSETZEN
 	_iwt_reset_cluster_node_counts(rt);

@@ -160,6 +160,8 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 						 cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
 	clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
 						 cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
+	clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
+						 cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 	clEnqueueWriteBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE, 0,
 						 cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
 	clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
@@ -168,15 +170,18 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 	int N = (int) cfg->N;
 	double DT = cfg->DT;
 	double gamma = cfg->gamma;
+	double kappa = cfg->kappa;
 
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
-	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->Q_gpu);
-	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->K_gpu);
-	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->sumJ_gpu);
-	clSetKernelArg(kernel, 5, sizeof(int), &N);
-	clSetKernelArg(kernel, 6, sizeof(double), &DT);
-	clSetKernelArg(kernel, 7, sizeof(double), &gamma);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
+	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->Q_gpu);
+	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->K_gpu);
+	clSetKernelArg(kernel, 5, sizeof(cl_mem), &rt->sumJ_gpu);
+	clSetKernelArg(kernel, 6, sizeof(int), &N);
+	clSetKernelArg(kernel, 7, sizeof(double), &DT);
+	clSetKernelArg(kernel, 8, sizeof(double), &gamma);
+	clSetKernelArg(kernel, 9, sizeof(double), &kappa);
 
 	size_t global = cfg->N;
 	size_t local = get_local_size(global);
@@ -301,6 +306,8 @@ bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg)
  */
 bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
+	rt->n_steps++;
+
 	// Speichere vorherigen Zustand für die Weber-Kraft (Kap. 3.4)
 	for (size_t i = 0; i < cfg->N; i++)
 	{

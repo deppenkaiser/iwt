@@ -27,6 +27,12 @@ typedef struct iwt_cluster
 	// Geschwindigkeit – vector Bibliothek
 	struct vector_3d vel;
 
+	// Persistenter Impulsanteil aus Weber-Kräften (wird über Frames integriert)
+	struct vector_3d vel_weber;
+
+	// Drift-Offset relativ zum knotenverankerten Schwerpunkt (quasi-teilchenhaft)
+	struct vector_3d pos_offset;
+
 	// Knotenliste (für die Phasenverschiebung)
 	size_t node_count;
 	size_t* node_indices;
@@ -39,7 +45,19 @@ typedef struct iwt_runtime
 	uint32_t cluster_capacity;
 	uint32_t cluster_count;
 	iwt_cluster_t clusters;
+
+	// Cluster des vorherigen Schritts (Persistence/Tracking)
+	iwt_cluster_t clusters_prev;
+	uint32_t cluster_count_prev;
+
 	bool* visited;
+
+	// Geglättete Masse für stabile Detektion (EMA) + Hysterese-Flag
+	double* mass_smooth;
+	bool* was_member;
+
+	// Anzahl ausgeführter Simulationsschritte (Seed-Derivation pro Frame)
+	uint64_t n_steps;
 
 	double* I_real;
 	double* I_imag;
@@ -93,6 +111,9 @@ typedef struct iwt_config
 	unsigned int seed;
 	bool enable_motion;
 	double cluster_threshold;
+
+	// Advektions-Kopplungsstärke (Transport entlang des Phasengradienten)
+	double kappa;
 }* iwt_config_t;
 
 typedef struct iwt_spectrum

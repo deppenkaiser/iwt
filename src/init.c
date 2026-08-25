@@ -117,6 +117,16 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->clusters = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
 	rt->visited = calloc(cfg->N, sizeof(bool));
 
+	// Persistence: Schatten-Array für Cluster des vorherigen Schritts.
+	// node_indices bleibt NULL (nur pos/vel/id werden fuer das Matching benoetigt).
+	rt->clusters_prev = calloc(rt->cluster_capacity, sizeof(struct iwt_cluster));
+	rt->cluster_count_prev = 0;
+
+	// EMA-geglättete Masse + Hysterese-Flag fuer flimmerfreie Cluster-Detektion
+	rt->mass_smooth = calloc(cfg->N, sizeof(double));
+	rt->was_member = calloc(cfg->N, sizeof(bool));
+	rt->n_steps = 0;
+
 	for (size_t i = 0; i < rt->cluster_capacity; i++)
 	{
 		rt->clusters[i].node_indices = calloc(cfg->N, sizeof(size_t));
@@ -130,7 +140,8 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 		rt->pos, rt->adjacency,
 		rt->mass, rt->charge,
 		rt->xi_real, rt->xi_imag, rt->uncertainty,
-		rt->clusters, rt->visited};
+		rt->clusters, rt->clusters_prev, rt->visited,
+		rt->mass_smooth, rt->was_member};
 
 	if (!all_ptrs_valid(ptrs, sizeof(ptrs) / sizeof(ptrs[0])))
 	{
@@ -391,6 +402,10 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 		}
 		_free_memory((void**) &rt->clusters);
 	}
+
+	_free_memory((void**) &rt->mass_smooth);
+	_free_memory((void**) &rt->was_member);
+	_free_memory((void**) &rt->clusters_prev);
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)

@@ -37,12 +37,16 @@
 #define SCALE 0.70710678
 
 /**
- * Box-Muller-Transformator für normale Zufallszahlen.
+ * Box-Muller-Transformator für normalverteilte Zufallszahlenpaare.
  * THEORIE: Die Zufallsvariable ξ_k^(n) ist komplex und standard-normalverteilt
- *          (Anhang P.3). Real- und Imaginärteil sind unabhängig.
+ *          (Anhang P.3). Real- und Imaginärteil sind UNABHÄNGIG:
  *          ⟨ξ_k⟩ = 0, ⟨ξ_k · ξ_l⟩ = δ_kl (Gleichung P.2)
+ *
+ * IWT_NORM_FIX: Vorher erhielten Real- und Imaginärteil denselben
+ * Zufallswert (Korrelationsverletzung); jetzt liefert ein Box-Muller-Zug
+ * zwei unabhängige Komponenten (cos- und sin-Zweig).
  */
-static double box_muller(unsigned int* seed)
+static void box_muller2(unsigned int* seed, double* out_re, double* out_im)
 {
 	double u1, u2;
 	do
@@ -50,7 +54,9 @@ static double box_muller(unsigned int* seed)
 		u1 = (double) rand_r(seed) / (double) RAND_MAX;
 		u2 = (double) rand_r(seed) / (double) RAND_MAX;
 	} while (u1 < 1e-30 || u2 < 1e-30);
-	return sqrt(-2.0 * log(u1)) * cos(2.0 * iwt_pi() * u2);
+	double r = sqrt(-2.0 * log(u1));
+	*out_re = r * cos(2.0 * iwt_pi() * u2);
+	*out_im = r * sin(2.0 * iwt_pi() * u2);
 }
 
 /**
@@ -72,7 +78,10 @@ static double box_muller(unsigned int* seed)
 bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	double scale = SCALE;
-	unsigned int seed = cfg->seed;
+
+	// IWT_NORM_FIX: Seed variiert pro Zeitschritt (vorher identische
+	// Zufallssequenz in jedem Frame, da rand_r mit konstantem Seed startete).
+	unsigned int seed = (unsigned int) (cfg->seed ^ (rt->n_steps * 2654435761ull));
 
 	// Fisher-Yates-Shuffle für unkorrelierte Fluktuationen
 	size_t* indices = malloc(cfg->N * sizeof(size_t));
@@ -102,10 +111,11 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 
 		// Fluktuation NUR im Vakuum (rho_i klein)
 		double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
-		double delta = box_muller(&seed) * fluct_strength;
+		double delta_re, delta_im;
+		box_muller2(&seed, &delta_re, &delta_im);
 
-		rt->xi_real[i] = delta;
-		rt->xi_imag[i] = delta;
+		rt->xi_real[i] = delta_re * fluct_strength;
+		rt->xi_imag[i] = delta_im * fluct_strength;
 		rt->uncertainty[i] = 0.0;
 	}
 
