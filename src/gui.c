@@ -106,6 +106,8 @@ enum
 	IWT_CTRL_SHOW_WAVES,
 	IWT_CTRL_SLICE_MODE,
 	IWT_CTRL_SLICE_POS,
+	IWT_CTRL_SLICE_DELTA,
+	IWT_CTRL_WAVE_K_MIN,
 	IWT_CTRL_EXTRA_LEVELS
 };
 
@@ -142,13 +144,10 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
  *          durch den Phasenraum (Frontenzug).
  */
 
-#define WAVE_LEVELS 8
+#define WAVE_LEVELS 16
 #define WAVE_MARCH_FRAMES 240
-#define WAVE_MAX_SEGMENTS 40000
-#define WAVE_MAX_CROSSINGS 16
-
-// Halbe Dicke der Schnittebene im 2D-Schnittmodus
-#define SLICE_DELTA 0.25
+#define WAVE_MAX_SEGMENTS 80000
+#define WAVE_MAX_CROSSINGS 24
 
 static bool slice_point_visible(const iwt_gui_data_t data, double z)
 {
@@ -156,7 +155,7 @@ static bool slice_point_visible(const iwt_gui_data_t data, double z)
 	{
 		return true;
 	}
-	return fabs(z - data->cfg.slice_pos) <= SLICE_DELTA;
+	return fabs(z - data->cfg.slice_pos) <= data->cfg.slice_delta;
 }
 
 static void wave_hsv_to_rgb(float h, float s, float v, float* out_rgb)
@@ -238,12 +237,14 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.D = iwt_fractal_dimension();
 	data->cfg.l0 = 1.0;
 	data->cfg.seed = (unsigned int) time(NULL);
-	data->cfg.cluster_threshold = 1.2;
+	data->cfg.cluster_threshold = 1.0;
 	data->cfg.kappa = 0.5;
 	data->cfg.phase_dt = 0.05;
 	data->cfg.show_waves = true;
 	data->cfg.slice_mode = false;
 	data->cfg.slice_pos = 0.0;
+	data->cfg.slice_delta = 0.25;
+	data->cfg.wave_k_min = 0.6;
 	data->cfg.extra_levels = 1;
 	data->cfg.enable_motion = false;
 	data->zoom = 1.0f;
@@ -393,6 +394,19 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
     gtk_widget_set_tooltip_text(data->spin_slice_pos,
         "z-Position der Schnittebene.");
 
+    struct gui_spin_button_configuration slice_delta_cfg = {.alignment = 0.5f, .value = data->cfg.slice_delta, .min = 0.05, .max = 2.0, .increment = 0.05, .digits = 2};
+    data->spin_slice_delta = gui_button_spin_create(IWT_CTRL_SLICE_DELTA, &slice_delta_cfg, data);
+    gtk_widget_set_tooltip_text(data->spin_slice_delta,
+        "Halbe Dicke der Schnittscheibe (in Einheiten von l0).\n"
+        "Klein = scharfer 2D-Schnitt, gross = Volumenansicht.");
+
+    struct gui_spin_button_configuration wave_k_cfg = {.alignment = 0.5f, .value = data->cfg.wave_k_min, .min = 0.3, .max = 0.95, .increment = 0.05, .digits = 2};
+    data->spin_wave_k_min = gui_button_spin_create(IWT_CTRL_WAVE_K_MIN, &wave_k_cfg, data);
+    gtk_widget_set_tooltip_text(data->spin_wave_k_min,
+        "Kopplungs-Schwelle des Wellen-Kantennetzes.\n"
+        "Kleiner = Konturen reichen weiter in den Zwischenraum\n"
+        "(schwerer Schweif von K ~ d^-(3-D)).");
+
     GtkWidget* label_beta = gtk_label_new("Bohm-Kopplung:");
     GtkWidget* label_gamma = gtk_label_new("Fraktale Verstärkung:");
     GtkWidget* label_threshold = gtk_label_new("Cluster-Schwelle:");
@@ -413,6 +427,8 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
     gui_box_append_widget(control_box, data->spin_extra_levels);
     gui_box_append_widget(control_box, label_slice_pos);
     gui_box_append_widget(control_box, data->spin_slice_pos);
+    gui_box_append_widget(control_box, data->spin_slice_delta);
+    gui_box_append_widget(control_box, data->spin_wave_k_min);
 
     GtkWidget* main_box = gui_box_vertical_create(4);
     gui_box_append_widget(main_box, control_box);
@@ -535,6 +551,15 @@ static void gui_button_handle_selected(gui_button_t core, iwt_gui_data_t data)
 	else if (core->id == IWT_CTRL_SLICE_POS)
 	{
 		data->cfg.slice_pos = gui_button_spin_get_double(core->button);
+	}
+	else if (core->id == IWT_CTRL_SLICE_DELTA)
+	{
+		data->cfg.slice_delta = gui_button_spin_get_double(core->button);
+	}
+	else if (core->id == IWT_CTRL_WAVE_K_MIN)
+	{
+		data->cfg.wave_k_min = gui_button_spin_get_double(core->button);
+		iwt_recompute_adjacency(&data->rt, &data->cfg);
 	}
 	else if (core->id == IWT_CTRL_EXTRA_LEVELS)
 	{
@@ -747,8 +772,8 @@ static size_t gui_gl_update_waves(iwt_gui_data_t data)
 
 	for (size_t i = 0; i < N && seg < WAVE_MAX_SEGMENTS; i++)
 	{
-		int count = data->rt.adj_count[i];
-		const int* neighbors = &data->rt.adj_flat[i * IWT_ADJ_STRIDE];
+		int count = data->rt.wave_count[i];
+		const int* neighbors = &data->rt.wave_flat[i * IWT_WAVE_STRIDE];
 
 		// Differenz der Knotenphase zu allen Niveaus vorberechnen
 		double di[WAVE_LEVELS];

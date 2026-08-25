@@ -15,6 +15,8 @@ typedef struct iwt_gui_data
 	GtkWidget* spin_gamma;
 	GtkWidget* spin_cluster_threshold;
 	GtkWidget* spin_slice_pos;
+	GtkWidget* spin_slice_delta;
+	GtkWidget* spin_wave_k_min;
 	GtkWidget* spin_extra_levels;
 
 	struct iwt_config cfg;

@@ -107,6 +107,8 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->adjacency = malloc(cfg->N * cfg->N * sizeof(bool));
 	rt->adj_flat = calloc((size_t) cfg->N * IWT_ADJ_STRIDE, sizeof(int));
 	rt->adj_count = calloc(cfg->N, sizeof(int));
+	rt->wave_flat = calloc((size_t) cfg->N * IWT_WAVE_STRIDE, sizeof(int));
+	rt->wave_count = calloc(cfg->N, sizeof(int));
 
 	rt->mass = calloc(cfg->N, sizeof(double));
 	rt->charge = calloc(cfg->N, sizeof(double));
@@ -145,7 +147,8 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 		rt->xi_real, rt->xi_imag, rt->uncertainty,
 		rt->clusters, rt->clusters_prev, rt->visited,
 		rt->mass_smooth, rt->was_member,
-		rt->adj_flat, rt->adj_count};
+		rt->adj_flat, rt->adj_count,
+		rt->wave_flat, rt->wave_count};
 
 	if (!all_ptrs_valid(ptrs, sizeof(ptrs) / sizeof(ptrs[0])))
 	{
@@ -356,6 +359,64 @@ void iwt_recompute_adjacency(const iwt_runtime_t rt, const iwt_config_t cfg)
 		}
 		rt->adj_count[i] = count;
 	}
+
+	// ================================================================
+	// Erweitertes Wellen-Kantennetz: Alle Knoten mit K > wave_k_min sind
+	// Kandidaten (schwerer Kopplungsschweif reicht weit in den Raum),
+	// pro Knoten werden die IWT_WAVE_STRIDE naechsten ausgewaehlt.
+	// IWT_NORM: Visualisierungs-Graph, keine Dynamik-Aenderung.
+	// Theorie: Konturen brauchen Kanten; die fraktale Kopplung klingt
+	// nur langsam ab (alpha = 3-D ≈ 0.296), daher ueberbruecken die
+	// staerksten Fern-Kopplungen die Zwischenraeume der Packung.
+	// ================================================================
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		double best_d2[IWT_WAVE_STRIDE];
+		int best_j[IWT_WAVE_STRIDE];
+		int cnt = 0;
+		struct vector_3d pi_pos = rt->pos[i];
+
+		for (size_t j = 0; j < cfg->N; j++)
+		{
+			if (j == i || !(rt->K[i * cfg->N + j] > cfg->wave_k_min))
+			{
+				continue;
+			}
+			struct vector_3d dvec = vector_sub(&rt->pos[j], &pi_pos);
+			double d2 = (double) vector_dot(&dvec, &dvec);
+
+			if (cnt < IWT_WAVE_STRIDE)
+			{
+				int p = cnt++;
+				while (p > 0 && best_d2[p - 1] > d2)
+				{
+					best_d2[p] = best_d2[p - 1];
+					best_j[p] = best_j[p - 1];
+					p--;
+				}
+				best_d2[p] = d2;
+				best_j[p] = (int) j;
+			}
+			else if (d2 < best_d2[cnt - 1])
+			{
+				int p = cnt - 1;
+				while (p > 0 && best_d2[p - 1] > d2)
+				{
+					best_d2[p] = best_d2[p - 1];
+					best_j[p] = best_j[p - 1];
+					p--;
+				}
+				best_d2[p] = d2;
+				best_j[p] = (int) j;
+			}
+		}
+
+		rt->wave_count[i] = cnt;
+		for (int n = 0; n < cnt; n++)
+		{
+			rt->wave_flat[(size_t) i * IWT_WAVE_STRIDE + n] = best_j[n];
+		}
+	}
 }
 
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -439,6 +500,8 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	_free_memory((void**) &rt->clusters_prev);
 	_free_memory((void**) &rt->adj_flat);
 	_free_memory((void**) &rt->adj_count);
+	_free_memory((void**) &rt->wave_flat);
+	_free_memory((void**) &rt->wave_count);
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)

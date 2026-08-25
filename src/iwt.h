@@ -14,6 +14,9 @@
 // Maximale Nachbaranzahl pro Knoten in der komprimierten Liste
 #define IWT_ADJ_STRIDE 64
 
+// Entsprechend fuer das erweiterte Wellen-Kantennetz (schwerer Schweif)
+#define IWT_WAVE_STRIDE 24
+
 typedef struct iwt_cluster
 {
 	int id;
@@ -85,6 +88,11 @@ typedef struct iwt_runtime
 	int* adj_flat;
 	int* adj_count;
 
+	// Erweitertes Netz fuer das Wellen-Overlay: Fern-Kopplungen
+	// (K > wave_k_min), je Knoten auf die naechsten begrenzt.
+	int* wave_flat;
+	int* wave_count;
+
 	// Nachbarschafts-Adjazenz (K-Matrix-Schwellwert), N*N, statisch
 	bool* adjacency;
 
@@ -133,8 +141,14 @@ typedef struct iwt_config
 	bool slice_mode;
 	double slice_pos;
 
+	// Halbe Dicke der Schnittscheibe
+	double slice_delta;
+
 	// Fraktale Selbstähnlichkeits-Stufen (0 = einzelner Dodekaeder)
 	int extra_levels;
+
+	// Kopplungs-Schwelle des erweiterten Wellen-Kantennetzes
+	double wave_k_min;
 }* iwt_config_t;
 
 typedef struct iwt_spectrum
