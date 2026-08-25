@@ -234,7 +234,7 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.T = 1.0;
 	data->cfg.DT = 1.0e-12;
 	data->cfg.hbar = 1.0;
-	data->cfg.N = 8192;
+	data->cfg.N = 16384;
 	data->cfg.D = iwt_fractal_dimension();
 	data->cfg.l0 = 1.0;
 	data->cfg.seed = (unsigned int) time(NULL);
