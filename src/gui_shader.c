@@ -55,7 +55,7 @@ GLuint gui_shader_create_points_program(void)
         "out vec4 frag_color;\n"
         "void main()\n"
         "{\n"
-        "    float fade = clamp(3.0 / v_depth, 0.3, 1.0);\n"
+        "    float fade = clamp(4.0 / v_depth, 0.75, 1.0);\n"
         "    frag_color = vec4(v_color * fade, 1.0);\n"
         "}\n";
 

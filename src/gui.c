@@ -102,7 +102,8 @@ enum
 	IWT_CTRL_MOTION = 1,
 	IWT_CTRL_BETA,
 	IWT_CTRL_GAMMA,
-	IWT_CTRL_CLUSTER_THRESHOLD
+	IWT_CTRL_CLUSTER_THRESHOLD,
+	IWT_CTRL_SHOW_WAVES
 };
 
 static void gui_application_init_cfg(iwt_gui_data_t data);
@@ -116,7 +117,65 @@ static void gui_gl_realize(iwt_gui_data_t data);
 static void gui_gl_update_points(iwt_gui_data_t data);
 static void gui_gl_update_cluster_point(iwt_gui_data_t data, size_t idx, iwt_cluster_t cl);
 static size_t gui_gl_update_clusters(iwt_gui_data_t data);
+static size_t gui_gl_update_waves(iwt_gui_data_t data);
 static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
+
+/**
+ * EM-Wellenfront-Darstellung als Aequipotenzial-Polylinien im Raum.
+ *
+ * IWT_NORM: Visualisierung freier Strahlungsanregungen.
+ * Theorie: Eine Wanderwelle ist eine Flaeche konstanter Phase
+ *          S(x,t) = const; Wellenfronten bewegen sich mit der
+ *          Dispersion omega ~ k^(D/3) (Kap. 11, Anhang E).
+ * Implementierung: WAVE_LEVELS Phasen-Niveaus werden SIMULTAN
+ *          gerendert (Topografie-Karten-Prinzip): Jede Kante, die ein
+ *          Niveau schneidet, liefert einen interpolierten Schnittpunkt
+ *          P = pos_i + t*(pos_j - pos_i); benachbarte Schnittpunkte
+ *          eines Knotens werden zu Polyliniensegmenten verbunden.
+ *          Der Farbton kodiert den POTENTIALWERT (hue = (phi0+pi)/2pi),
+ *          nicht die Zeit – benachbarte Niveaus sind dadurch fest
+ *          unterscheidbar, verschachtelte Schalen erscheinen als
+ *          Regenbogen-Folge. Alle Niveaus wandern langsam gemeinsam
+ *          durch den Phasenraum (Frontenzug).
+ */
+
+#define WAVE_LEVELS 8
+#define WAVE_MARCH_FRAMES 240
+#define WAVE_MAX_SEGMENTS 40000
+#define WAVE_MAX_CROSSINGS 16
+
+static void wave_hsv_to_rgb(float h, float s, float v, float* out_rgb)
+{
+	float i = floorf(h * 6.0f);
+	float f = h * 6.0f - i;
+	float p = v * (1.0f - s);
+	float q = v * (1.0f - f * s);
+	float t = v * (1.0f - (1.0f - f) * s);
+	switch (((int) i) % 6)
+	{
+		case 0: out_rgb[0] = v; out_rgb[1] = t; out_rgb[2] = p; break;
+		case 1: out_rgb[0] = q; out_rgb[1] = v; out_rgb[2] = p; break;
+		case 2: out_rgb[0] = p; out_rgb[1] = v; out_rgb[2] = t; break;
+		case 3: out_rgb[0] = p; out_rgb[1] = q; out_rgb[2] = v; break;
+		case 4: out_rgb[0] = t; out_rgb[1] = p; out_rgb[2] = v; break;
+		default: out_rgb[0] = v; out_rgb[1] = p; out_rgb[2] = q; break;
+	}
+}
+
+static void wave_emit_segment(iwt_gui_data_t data, size_t seg,
+							  const double* pa, const double* pb,
+							  float hue, float val)
+{
+	float rgb[3];
+	wave_hsv_to_rgb(hue, 0.85f, val, rgb);
+
+	float* v0 = &data->wave_buffer[seg * 12 + 0];
+	float* v1 = &data->wave_buffer[seg * 12 + 6];
+	v0[0] = (float) pa[0]; v0[1] = (float) pa[1]; v0[2] = (float) pa[2];
+	v1[0] = (float) pb[0]; v1[1] = (float) pb[1]; v1[2] = (float) pb[2];
+	v0[3] = rgb[0]; v0[4] = rgb[1]; v0[5] = rgb[2];
+	v1[3] = rgb[0]; v1[4] = rgb[1]; v1[5] = rgb[2];
+}
 
 static void gui_main_window_handle_key_left(iwt_gui_data_t data, gui_event_t e);
 static void gui_main_window_handle_key_right(iwt_gui_data_t data, gui_event_t e);
@@ -166,7 +225,8 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.seed = (unsigned int) time(NULL);
 	data->cfg.cluster_threshold = 1.2;
 	data->cfg.kappa = 0.5;
-	data->cfg.phase_dt = 0.02;
+	data->cfg.phase_dt = 0.05;
+	data->cfg.show_waves = true;
 	data->cfg.enable_motion = false;
 	data->zoom = 1.0f;
 	data->cam_yaw = 0.785398f;
@@ -181,14 +241,20 @@ static bool gui_application_init_runtime(iwt_gui_data_t data)
 
 static void gui_application_clear_arrays(iwt_gui_data_t data)
 {
+	// Zufaellige Anfangsphasen: das Vakuum traegt von Beginn an eine
+	// Phasen-Textur, aus der ueber Bohm-Kick + Nachbarkopplung sich
+	// freie Anregungen (EM-Wellen) organisieren koennen.
+	unsigned int seed = data->cfg.seed;
+	double two_pi = 2.0 * iwt_pi();
+
 	for (size_t i = 0; i < data->cfg.N; i++)
 	{
 		data->rt.I_real[i] = 0.0;
 		data->rt.I_imag[i] = 0.0;
-		data->rt.I_phase[i] = 0.0;
+		data->rt.I_phase[i] = two_pi * ((double) rand_r(&seed) / (double) RAND_MAX) - iwt_pi();
 		data->rt.I_prev_real[i] = 0.0;
 		data->rt.I_prev_imag[i] = 0.0;
-		data->rt.I_phase_prev[i] = 0.0;
+		data->rt.I_phase_prev[i] = data->rt.I_phase[i];
 	}
 }
 
@@ -280,12 +346,21 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
         "Niedrige Werte → größere Cluster (mehr Verbindungen).\n"
         "Theorie: Kap. 2, Axiom 4");
 
+    struct gui_button_configuration waves_cfg = {.label = "EM-Wellen", .toggle = true};
+    data->toggle_waves = gui_button_create(IWT_CTRL_SHOW_WAVES, &waves_cfg, data);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_waves), data->cfg.show_waves);
+    gtk_widget_set_tooltip_text(data->toggle_waves,
+        "EM-Wellen-Overlay: gelbe Linien entlang Kanten mit kohärenter\n"
+        "Phasengeschwindigkeit im Vakuum (freie Strahlung).\n"
+        "Theorie: Dispersion omega ~ k^(D/3), Kap. 11, Anhang E");
+
     GtkWidget* label_beta = gtk_label_new("Bohm-Kopplung:");
     GtkWidget* label_gamma = gtk_label_new("Fraktale Verstärkung:");
     GtkWidget* label_threshold = gtk_label_new("Cluster-Schwelle:");
 
     GtkWidget* control_box = gui_box_horizontal_create(8);
     gui_box_append_widget(control_box, data->toggle_motion);
+    gui_box_append_widget(control_box, data->toggle_waves);
     gui_box_append_widget(control_box, label_beta);
     gui_box_append_widget(control_box, data->spin_beta);
     gui_box_append_widget(control_box, label_gamma);
@@ -314,6 +389,8 @@ static bool gui_application_shutdown(iwt_gui_data_t data)
 	data->points_buffer = NULL;
 	free(data->cluster_points_buffer);
 	data->cluster_points_buffer = NULL;
+	free(data->wave_buffer);
+	data->wave_buffer = NULL;
 	return true;
 }
 
@@ -384,6 +461,10 @@ static void gui_button_handle_toggled(gui_button_t core, gui_event_t e, iwt_gui_
 	{
 		data->cfg.enable_motion = e->data.b_toggled.active;
 	}
+	else if (core->id == IWT_CTRL_SHOW_WAVES)
+	{
+		data->cfg.show_waves = e->data.b_toggled.active;
+	}
 }
 
 static void gui_button_handle_selected(gui_button_t core, iwt_gui_data_t data)
@@ -453,6 +534,7 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				data->iter++;
 				gui_gl_update_points(data);
 				size_t cluster_draw_count = gui_gl_update_clusters(data);
+				gui_gl_update_waves(data);
 				gui_gl_draw(data, cluster_draw_count);
 			}
 			break;
@@ -496,6 +578,20 @@ static void gui_gl_realize(iwt_gui_data_t data)
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*) (3 * sizeof(float)));
 	glBindVertexArray(0);
 
+	data->wave_buffer = malloc(WAVE_MAX_SEGMENTS * 2 * 6 * sizeof(float));
+	data->wave_segment_count = 0;
+
+	glGenVertexArrays(1, &data->gl_vao_wave);
+	glGenBuffers(1, &data->gl_vbo_wave);
+	glBindVertexArray(data->gl_vao_wave);
+	glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo_wave);
+	glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr) (WAVE_MAX_SEGMENTS * 2 * 6 * sizeof(float)), NULL, GL_DYNAMIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*) 0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*) (3 * sizeof(float)));
+	glBindVertexArray(0);
+
 	glEnable(GL_PROGRAM_POINT_SIZE);
 
 	data->gl_u_mvp = glGetUniformLocation(data->gl_program, "u_mvp");
@@ -523,7 +619,7 @@ static void gui_gl_update_cluster_point(iwt_gui_data_t data, size_t idx, iwt_clu
 	data->cluster_points_buffer[idx * 6 + 2] = (float) cl->pos.z;
 
 	float charge_norm = (float) (cl->charge / (fabs(cl->charge) + 1.0));
-	float brightness = (float) (cl->mass / (cl->mass + 1.0));
+	float brightness = (float) fmin(cl->mass / (cl->mass + 0.35), 1.0);
 
 	if (charge_norm > 0.0f)
 	{
@@ -550,6 +646,90 @@ static size_t gui_gl_update_clusters(iwt_gui_data_t data)
 		cluster_draw_count++;
 	}
 	return cluster_draw_count;
+}
+
+static size_t gui_gl_update_waves(iwt_gui_data_t data)
+{
+	data->wave_segment_count = 0;
+	if (!data->cfg.show_waves)
+	{
+		return 0;
+	}
+
+	size_t N = data->cfg.N;
+	double two_pi = 2.0 * iwt_pi();
+	double level_step = two_pi / (double) WAVE_LEVELS;
+
+	// Gemeinsamer Frontenzug: Basis-Niveau wandert langsam
+	double base_level = -iwt_pi() + level_step * (((double) ((long long) data->iter % WAVE_MARCH_FRAMES)) / (double) WAVE_MARCH_FRAMES);
+
+	size_t seg = 0;
+
+	for (size_t i = 0; i < N && seg < WAVE_MAX_SEGMENTS; i++)
+	{
+		const bool* row = &data->rt.adjacency[i * N];
+
+		// Differenz der Knotenphase zu allen Niveaus vorberechnen
+		double di[WAVE_LEVELS];
+		for (int l = 0; l < WAVE_LEVELS; l++)
+		{
+			double level_l = base_level + (double) l * level_step;
+			di[l] = data->rt.I_phase[i] - level_l;
+			di[l] -= two_pi * rint(di[l] / two_pi);
+		}
+
+		double px[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
+		double py[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
+		double pz[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
+		int crossings[WAVE_LEVELS];
+		memset(crossings, 0, sizeof(crossings));
+
+		for (size_t j = 0; j < N; j++)
+		{
+			if (j == i || !row[j])
+			{
+				continue;
+			}
+
+			double dj_raw = data->rt.I_phase[j];
+
+			for (int l = 0; l < WAVE_LEVELS; l++)
+			{
+				if (crossings[l] >= WAVE_MAX_CROSSINGS)
+				{
+					continue;
+				}
+				double level_l = base_level + (double) l * level_step;
+				double dj = dj_raw - level_l;
+				dj -= two_pi * rint(dj / two_pi);
+				if (di[l] * dj >= 0.0)
+				{
+					continue;
+				}
+
+				double t = di[l] / (di[l] - dj);
+				px[l][crossings[l]] = (double) data->rt.pos[i].x + t * ((double) data->rt.pos[j].x - (double) data->rt.pos[i].x);
+				py[l][crossings[l]] = (double) data->rt.pos[i].y + t * ((double) data->rt.pos[j].y - (double) data->rt.pos[i].y);
+				pz[l][crossings[l]] = (double) data->rt.pos[i].z + t * ((double) data->rt.pos[j].z - (double) data->rt.pos[i].z);
+				crossings[l]++;
+			}
+		}
+
+		for (int l = 0; l < WAVE_LEVELS && seg < WAVE_MAX_SEGMENTS; l++)
+		{
+			float hue = (float) (((base_level + (double) l * level_step) + iwt_pi()) / two_pi);
+			for (int k = 0; k + 1 < crossings[l] && seg < WAVE_MAX_SEGMENTS; k += 2)
+			{
+				double pa[3] = {px[l][k], py[l][k], pz[l][k]};
+				double pb[3] = {px[l][k + 1], py[l][k + 1], pz[l][k + 1]};
+				wave_emit_segment(data, seg, pa, pb, hue, 0.95f);
+				seg++;
+			}
+		}
+	}
+
+	data->wave_segment_count = seg;
+	return seg;
 }
 
 static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count)
@@ -589,6 +769,16 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count)
 	glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr) (cluster_draw_count * 6 * sizeof(float)), data->cluster_points_buffer);
 	glBindVertexArray(data->gl_vao_clusters);
 	glDrawArrays(GL_POINTS, 0, (GLsizei) cluster_draw_count);
+
+	if (data->wave_segment_count > 0)
+	{
+		glUniform1f(data->gl_u_size_scale, 1.0f);
+		glLineWidth(1.5f);
+		glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo_wave);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr) (data->wave_segment_count * 12 * sizeof(float)), data->wave_buffer);
+		glBindVertexArray(data->gl_vao_wave);
+		glDrawArrays(GL_LINES, 0, (GLsizei) (data->wave_segment_count * 2));
+	}
 
 	glBindVertexArray(0);
 }

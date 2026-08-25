@@ -117,6 +117,9 @@ typedef struct iwt_config
 
 	// Effektiver Zeitschritt des Bohm-Phasen-Kicks (numerische Quantenrate)
 	double phase_dt;
+
+	// EM-Wellen-Overlay in der Visualisierung anzeigen
+	bool show_waves;
 }* iwt_config_t;
 
 typedef struct iwt_spectrum

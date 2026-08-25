@@ -9,6 +9,7 @@ typedef struct iwt_gui_data
 	GtkWidget* window;
 
 	GtkWidget* toggle_motion;
+	GtkWidget* toggle_waves;
 	GtkWidget* spin_beta;
 	GtkWidget* spin_gamma;
 	GtkWidget* spin_cluster_threshold;
@@ -20,6 +21,10 @@ typedef struct iwt_gui_data
 	float* points_buffer;
 	float* cluster_points_buffer;
 
+	// EM-Wellenfront-Visualisierung (Aequipotenzial-Polylinien)
+	float* wave_buffer;
+	size_t wave_segment_count;
+
 	GLuint gl_program;
 	GLint gl_u_mvp;
 	GLint gl_u_size_scale;
@@ -27,6 +32,8 @@ typedef struct iwt_gui_data
 	GLuint gl_vbo;
 	GLuint gl_vao_clusters;
 	GLuint gl_vbo_clusters;
+	GLuint gl_vao_wave;
+	GLuint gl_vbo_wave;
 
 	float zoom;
 	float cam_yaw;

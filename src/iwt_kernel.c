@@ -113,17 +113,20 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 	double beta = cfg->beta;
 	double epsilon = 1e-6;
 	double Q_min = 1e-6;
+	double thresh = cfg->cluster_threshold;
 
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
-	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->Q_gpu);
-	clSetKernelArg(kernel, 3, sizeof(int), &N);
-	clSetKernelArg(kernel, 4, sizeof(double), &sum_abs_sq_val);
-	clSetKernelArg(kernel, 5, sizeof(double), &hbar);
-	clSetKernelArg(kernel, 6, sizeof(double), &m);
-	clSetKernelArg(kernel, 7, sizeof(double), &beta);
-	clSetKernelArg(kernel, 8, sizeof(double), &epsilon);
-	clSetKernelArg(kernel, 9, sizeof(double), &Q_min);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->K_gpu);
+	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->Q_gpu);
+	clSetKernelArg(kernel, 4, sizeof(int), &N);
+	clSetKernelArg(kernel, 5, sizeof(double), &sum_abs_sq_val);
+	clSetKernelArg(kernel, 6, sizeof(double), &hbar);
+	clSetKernelArg(kernel, 7, sizeof(double), &m);
+	clSetKernelArg(kernel, 8, sizeof(double), &beta);
+	clSetKernelArg(kernel, 9, sizeof(double), &epsilon);
+	clSetKernelArg(kernel, 10, sizeof(double), &Q_min);
+	clSetKernelArg(kernel, 11, sizeof(double), &thresh);
 
 	size_t global = cfg->N;
 	size_t local = get_local_size(global);
@@ -218,15 +221,18 @@ bool run_update_info(const iwt_runtime_t rt, const iwt_config_t cfg)
 	int N = (int) cfg->N;
 	double DT = cfg->DT;
 	double DT_Q = cfg->phase_dt;
+	double thresh = cfg->cluster_threshold;
 
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
 	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
 	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->sumJ_gpu);
 	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->Q_gpu);
-	clSetKernelArg(kernel, 5, sizeof(int), &N);
-	clSetKernelArg(kernel, 6, sizeof(double), &DT);
-	clSetKernelArg(kernel, 7, sizeof(double), &DT_Q);
+	clSetKernelArg(kernel, 5, sizeof(cl_mem), &rt->K_gpu);
+	clSetKernelArg(kernel, 6, sizeof(int), &N);
+	clSetKernelArg(kernel, 7, sizeof(double), &DT);
+	clSetKernelArg(kernel, 8, sizeof(double), &DT_Q);
+	clSetKernelArg(kernel, 9, sizeof(double), &thresh);
 
 	size_t global = cfg->N;
 	size_t local = get_local_size(global);

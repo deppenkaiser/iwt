@@ -173,9 +173,10 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
 	int N = (int) cfg->N;
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
-	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->xi_real_gpu);
-	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->xi_imag_gpu);
-	clSetKernelArg(kernel, 4, sizeof(int), &N);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
+	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->xi_real_gpu);
+	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->xi_imag_gpu);
+	clSetKernelArg(kernel, 5, sizeof(int), &N);
 
 	size_t global = cfg->N;
 	size_t local = 64;
