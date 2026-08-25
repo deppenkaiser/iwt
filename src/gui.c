@@ -53,6 +53,7 @@
 #include "gui.h"
 #include "init.h"
 #include "iwt_kernel.h"
+#include "iwt_detect_cluster.h"
 #include "gui_math.h"
 #include "gui_shader.h"
 #include "gui_input.h"
@@ -432,6 +433,23 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
 
     GtkWidget* main_box = gui_box_vertical_create(4);
     gui_box_append_widget(main_box, control_box);
+
+    // Live-Statistik (Spektrum + Histogramm) als Monospace-Label
+    data->stats_label = gtk_label_new("Statistik wird geladen...");
+    gtk_widget_set_halign(data->stats_label, GTK_ALIGN_START);
+    gtk_widget_set_valign(data->stats_label, GTK_ALIGN_START);
+    gtk_widget_set_margin_start(data->stats_label, 8);
+    GtkCssProvider* stats_css = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(stats_css,
+        ".stats-label { font-family: monospace; font-size: 11px; }");
+    gtk_style_context_add_provider_for_display(
+        gtk_widget_get_display(data->stats_label),
+        GTK_STYLE_PROVIDER(stats_css),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(stats_css);
+    gtk_widget_add_css_class(data->stats_label, "stats-label");
+    gui_box_append_widget(main_box, data->stats_label);
+
     gui_box_append_widget(main_box, gl_frame);
 
     data->window = gui_main_window_create(core->app, 800, 800, data, false, true);
@@ -627,6 +645,15 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				gui_gl_update_points(data);
 				size_t cluster_draw_count = gui_gl_update_clusters(data);
 				gui_gl_update_waves(data);
+
+				// Statistik-Label aktualisieren (30-Frame-Takt)
+				if ((data->iter % 30) == 0 && data->stats_label)
+				{
+					char buf[2048];
+					iwt_format_stats(&data->rt, buf, sizeof(buf));
+					gtk_label_set_text(GTK_LABEL(data->stats_label), buf);
+				}
+
 				gui_gl_draw(data, cluster_draw_count);
 			}
 			break;

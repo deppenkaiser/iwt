@@ -49,6 +49,16 @@ typedef struct iwt_cluster
 	bool is_active;
 }* iwt_cluster_t;
 
+typedef struct iwt_spectrum
+{
+	size_t count_vacuum;
+	size_t count_electron;
+	size_t count_proton;
+	size_t count_u_quark;
+	size_t count_d_quark;
+	size_t count_other;
+} iwt_spectrum_t;
+
 typedef struct iwt_runtime
 {
 	uint32_t cluster_capacity;
@@ -88,6 +98,9 @@ typedef struct iwt_runtime
 
 	// Zell-ID je Knoten (BFS-Reihenfolge des Generators)
 	int* node_cell;
+
+	// Klassifikation der aktuellen Cluster (groessenbasiertes Spektrum)
+	iwt_spectrum_t spectrum;
 
 	// Komprimierte Nachbarschaftslisten (Performance): adj_flat[i*STRIDE..]
 	// enthaelt die Knotenindizes der Nachbarn von i, adj_count[i] deren Zahl.
@@ -156,16 +169,6 @@ typedef struct iwt_config
 	// Kopplungs-Schwelle des erweiterten Wellen-Kantennetzes
 	double wave_k_min;
 }* iwt_config_t;
-
-typedef struct iwt_spectrum
-{
-	size_t count_vacuum;
-	size_t count_electron;
-	size_t count_proton;
-	size_t count_u_quark;
-	size_t count_d_quark;
-	size_t count_other;
-} iwt_spectrum_t;
 
 double iwt_pi(void);
 double iwt_fundamental_length(void);

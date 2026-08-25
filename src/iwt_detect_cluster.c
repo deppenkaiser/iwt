@@ -22,6 +22,57 @@
 #define DETECT_LEAVE (3e-7)
 #define DETECT_MATCH_RADIUS_FACTOR 3.0
 
+// ============================================================
+// Spektren-Klassifikation ueber Cluster-Groesse (Knoten-Fussabdruck).
+// Theorie (User-Hypothese): Proton ~ 150 Knoten, Elektron ~ 1350.
+// Verhaeltnis 9 = 3^2 (C3-Symmetrie); radiale Skala 9^(1/D) ≈ sqrt(5).
+// Bandauswahl mit Faktor-2-Toleranz um die Sollwerte.
+// count_u_quark/count_d_quark bleiben 0: Groesse allein unterscheidet
+// keine Quark-Ladungen - dafuer waere eine ladungsbasierte Regel noetig.
+// ============================================================
+#define SPECT_PROTON_MIN 75
+#define SPECT_PROTON_MAX 300
+#define SPECT_ELECTRON_MIN 675
+#define SPECT_ELECTRON_MAX 2700
+
+#define HIST_BINS 13
+
+static void detect_classify_spectrum(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	size_t clustered = 0;
+	rt->spectrum.count_proton = 0;
+	rt->spectrum.count_electron = 0;
+	rt->spectrum.count_u_quark = 0;
+	rt->spectrum.count_d_quark = 0;
+	rt->spectrum.count_other = 0;
+
+	for (size_t c = 0; c < rt->cluster_count; c++)
+	{
+		const iwt_cluster_t cl = &rt->clusters[c];
+		if (!cl->is_active)
+		{
+			continue;
+		}
+		size_t n = cl->node_count;
+		clustered += n;
+
+		if (n >= SPECT_PROTON_MIN && n <= SPECT_PROTON_MAX)
+		{
+			rt->spectrum.count_proton++;
+		}
+		else if (n >= SPECT_ELECTRON_MIN && n <= SPECT_ELECTRON_MAX)
+		{
+			rt->spectrum.count_electron++;
+		}
+		else
+		{
+			rt->spectrum.count_other++;
+		}
+	}
+
+	rt->spectrum.count_vacuum = cfg->N > clustered ? cfg->N - clustered : 0;
+}
+
 static void flood_fill_process_node(const iwt_runtime_t rt, iwt_cluster_t c, size_t i);
 static bool flood_fill_should_visit(const iwt_runtime_t rt, size_t i);
 static void flood_fill_push_neighbors(const iwt_runtime_t rt, const iwt_config_t cfg, size_t i, size_t* stack, size_t* stack_ptr);
@@ -130,12 +181,71 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 	detect_update_membership(rt, cfg);
 	iwt_match_clusters(rt, cfg);
+	detect_classify_spectrum(rt, cfg);
 
 	// printf im Hot-Path drosseln (stdout-Flush pro Frame ist teuer)
 	static int detect_frame = 0;
 	if ((detect_frame++ % 240) == 0)
 	{
-		printf("Gefundene Cluster: %d\n", rt->cluster_count);
+		char buf[2048];
+		iwt_format_stats(rt, buf, sizeof(buf));
+		fputs(buf, stdout);
+		fflush(stdout);
+	}
+}
+
+void iwt_format_stats(const iwt_runtime_t rt, char* buf, size_t buflen)
+{
+	size_t off = 0;
+
+	off += (size_t) snprintf(buf + off, buflen - off,
+							 "Cluster: %d | Spektrum: proton~%u elektron~%u vakuum=%u andere=%u\n",
+							 rt->cluster_count,
+							 (unsigned) rt->spectrum.count_proton,
+							 (unsigned) rt->spectrum.count_electron,
+							 (unsigned) rt->spectrum.count_vacuum,
+							 (unsigned) rt->spectrum.count_other);
+
+	// Groessen-Histogramm (geometrische Bins, Faktor 2)
+	size_t hist[HIST_BINS];
+	memset(hist, 0, sizeof(hist));
+	size_t hist_max = 1;
+	for (size_t c = 0; c < rt->cluster_count; c++)
+	{
+		const iwt_cluster_t cl = &rt->clusters[c];
+		if (!cl->is_active)
+		{
+			continue;
+		}
+		size_t n = cl->node_count;
+		size_t bin = 0;
+		while (n > ((size_t) 1 << (bin + 1)) && bin + 1 < HIST_BINS)
+		{
+			bin++;
+		}
+		hist[bin]++;
+		if (hist[bin] > hist_max)
+		{
+			hist_max = hist[bin];
+		}
+	}
+
+	off += (size_t) snprintf(buf + off, buflen - off, "Histogramm (Knoten/Cluster):\n");
+	for (int b = 0; b < HIST_BINS && off < buflen; b++)
+	{
+		if (hist[b] == 0)
+		{
+			continue;
+		}
+		int lo = b == 0 ? 1 : (1 << b);
+		int hi = (1 << (b + 1)) - 1;
+		int stars = (int) ((hist[b] * 40 + hist_max - 1) / hist_max);
+		off += (size_t) snprintf(buf + off, buflen - off, "[%5d-%5d] %4u ", lo, hi, (unsigned) hist[b]);
+		for (int s = 0; s < stars && off < buflen; s++)
+		{
+			buf[off++] = '#';
+		}
+		off += (size_t) snprintf(buf + off, buflen - off, "\n");
 	}
 }
 
