@@ -434,21 +434,32 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
     GtkWidget* main_box = gui_box_vertical_create(4);
     gui_box_append_widget(main_box, control_box);
 
-    // Live-Statistik (Spektrum + Histogramm) als Monospace-Label
-    data->stats_label = gtk_label_new("Statistik wird geladen...");
-    gtk_widget_set_halign(data->stats_label, GTK_ALIGN_START);
-    gtk_widget_set_valign(data->stats_label, GTK_ALIGN_START);
-    gtk_widget_set_margin_start(data->stats_label, 8);
+    // Live-Statistik (Spektrum + Histogramm) als Monospace-TextView in
+    // einer Scroll-Flaeche - GtkTextView rendert Mehrzeiliges zuverlaessig.
+    data->stats_buffer = gtk_text_buffer_new(NULL);
+    GtkWidget* stats_view = gtk_text_view_new_with_buffer(data->stats_buffer);
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(stats_view), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(stats_view), FALSE);
+    gtk_text_view_set_left_margin(GTK_TEXT_VIEW(stats_view), 8);
+    gtk_text_view_set_top_margin(GTK_TEXT_VIEW(stats_view), 4);
+
     GtkCssProvider* stats_css = gtk_css_provider_new();
     gtk_css_provider_load_from_string(stats_css,
         ".stats-label { font-family: monospace; font-size: 11px; }");
     gtk_style_context_add_provider_for_display(
-        gtk_widget_get_display(data->stats_label),
+        gtk_widget_get_display(stats_view),
         GTK_STYLE_PROVIDER(stats_css),
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_object_unref(stats_css);
-    gtk_widget_add_css_class(data->stats_label, "stats-label");
-    gui_box_append_widget(main_box, data->stats_label);
+    gtk_widget_add_css_class(stats_view, "stats-label");
+
+    GtkWidget* stats_scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(stats_scroll),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(stats_scroll), stats_view);
+    gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(stats_scroll), 150);
+    gtk_widget_set_hexpand(stats_scroll, TRUE);
+    gui_box_append_widget(main_box, stats_scroll);
 
     gui_box_append_widget(main_box, gl_frame);
 
@@ -646,12 +657,12 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				size_t cluster_draw_count = gui_gl_update_clusters(data);
 				gui_gl_update_waves(data);
 
-				// Statistik-Label aktualisieren (30-Frame-Takt)
-				if ((data->iter % 30) == 0 && data->stats_label)
+				// Statistik-Text aktualisieren (30-Frame-Takt)
+				if ((data->iter % 30) == 0 && data->stats_buffer)
 				{
 					char buf[2048];
 					iwt_format_stats(&data->rt, buf, sizeof(buf));
-					gtk_label_set_text(GTK_LABEL(data->stats_label), buf);
+					gtk_text_buffer_set_text(data->stats_buffer, buf, -1);
 				}
 
 				gui_gl_draw(data, cluster_draw_count);

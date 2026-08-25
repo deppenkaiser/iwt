@@ -1,6 +1,7 @@
 #include "iwt_detect_cluster.h"
 
 #include <api/api.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <memory.h>
 
@@ -21,6 +22,10 @@
 #define DETECT_JOIN 1e-6
 #define DETECT_LEAVE (3e-7)
 #define DETECT_MATCH_RADIUS_FACTOR 3.0
+
+// Minimale Knotenzahl eines Clusters: Einzelknoten sind Vakuumrauschen,
+// belegen Slots (cluster_capacity!) und verschmutzen die Statistik.
+#define DETECT_MIN_NODES 2
 
 // ============================================================
 // Spektren-Klassifikation ueber Cluster-Groesse (Knoten-Fussabdruck).
@@ -194,17 +199,37 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 	}
 }
 
+// Sicherer Append: liefert neuen Offset, klemmt bei Pufferende
+static size_t stats_append(char* buf, size_t buflen, size_t off, const char* fmt, ...)
+{
+	if (off >= buflen)
+	{
+		return buflen;
+	}
+	va_list args;
+	va_start(args, fmt);
+	int w = vsnprintf(buf + off, buflen - off, fmt, args);
+	va_end(args);
+	if (w < 0)
+	{
+		return off;
+	}
+	off += (size_t) w;
+	return off >= buflen ? buflen : off;
+}
+
 void iwt_format_stats(const iwt_runtime_t rt, char* buf, size_t buflen)
 {
 	size_t off = 0;
 
-	off += (size_t) snprintf(buf + off, buflen - off,
-							 "Cluster: %d | Spektrum: proton~%u elektron~%u vakuum=%u andere=%u\n",
-							 rt->cluster_count,
-							 (unsigned) rt->spectrum.count_proton,
-							 (unsigned) rt->spectrum.count_electron,
-							 (unsigned) rt->spectrum.count_vacuum,
-							 (unsigned) rt->spectrum.count_other);
+	off = stats_append(buf, buflen, off,
+					   "Schritt %llu | Cluster: %d | proton~%u elektron~%u vakuum=%u andere=%u\n",
+					   (unsigned long long) rt->n_steps,
+					   rt->cluster_count,
+					   (unsigned) rt->spectrum.count_proton,
+					   (unsigned) rt->spectrum.count_electron,
+					   (unsigned) rt->spectrum.count_vacuum,
+					   (unsigned) rt->spectrum.count_other);
 
 	// Groessen-Histogramm (geometrische Bins, Faktor 2)
 	size_t hist[HIST_BINS];
@@ -219,7 +244,7 @@ void iwt_format_stats(const iwt_runtime_t rt, char* buf, size_t buflen)
 		}
 		size_t n = cl->node_count;
 		size_t bin = 0;
-		while (n > ((size_t) 1 << (bin + 1)) && bin + 1 < HIST_BINS)
+		while (bin + 1 < HIST_BINS && n > ((size_t) 1 << (bin + 1)))
 		{
 			bin++;
 		}
@@ -230,22 +255,18 @@ void iwt_format_stats(const iwt_runtime_t rt, char* buf, size_t buflen)
 		}
 	}
 
-	off += (size_t) snprintf(buf + off, buflen - off, "Histogramm (Knoten/Cluster):\n");
+	off = stats_append(buf, buflen, off, "Histogramm (Knoten/Cluster):\n");
 	for (int b = 0; b < HIST_BINS && off < buflen; b++)
 	{
-		if (hist[b] == 0)
-		{
-			continue;
-		}
-		int lo = b == 0 ? 1 : (1 << b);
-		int hi = (1 << (b + 1)) - 1;
+		int lo = (1 << b) + 1;
+		int hi = (1 << (b + 1));
 		int stars = (int) ((hist[b] * 40 + hist_max - 1) / hist_max);
-		off += (size_t) snprintf(buf + off, buflen - off, "[%5d-%5d] %4u ", lo, hi, (unsigned) hist[b]);
-		for (int s = 0; s < stars && off < buflen; s++)
+		off = stats_append(buf, buflen, off, "[%5d-%5d] %4u ", lo, hi, (unsigned) hist[b]);
+		for (int s = 0; s < stars && off + 1 < buflen; s++)
 		{
 			buf[off++] = '#';
 		}
-		off += (size_t) snprintf(buf + off, buflen - off, "\n");
+		off = stats_append(buf, buflen, off, "\n");
 	}
 }
 
@@ -290,7 +311,7 @@ static void detect_init_cluster(iwt_cluster_t c, size_t id)
 
 static bool detect_finalize_cluster(const iwt_runtime_t rt, iwt_cluster_t c)
 {
-	if (c->node_count == 0)
+	if (c->node_count < DETECT_MIN_NODES)
 	{
 		return false;
 	}
