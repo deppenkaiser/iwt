@@ -204,19 +204,6 @@ private void _iwt_update_cluster_centers(const iwt_runtime_t rt)
 	}
 }
 
-private void _iwt_reset_cluster_node_counts(const iwt_runtime_t rt)
-{
-	for (size_t c = 0; c < rt->cluster_count; c++)
-	{
-		iwt_cluster_t cl = &rt->clusters[c];
-		if (!cl->is_active)
-		{
-			continue;
-		}
-		cl->node_count = 0;
-	}
-}
-
 void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt)
 {
 	// 1. WEBER-IMPULSE (persistent, gedämpft)
@@ -242,6 +229,8 @@ void iwt_move_clusters(const iwt_runtime_t rt, const iwt_config_t cfg, double dt
 		}
 	}
 
-	// 5. KNOTENLISTE ZURÜCKSETZEN
-	_iwt_reset_cluster_node_counts(rt);
+	// HINWEIS: node_count wird bewusst NICHT zurueckgesetzt - detect_init_cluster
+	// initialisiert wiederverwendete Slots beim naechsten Durchlauf selbst.
+	// Ein Reset hier liess node_count==0 auch nach dem Simulationschritt
+	// zurueck und verfaelschte die Histogramm-Statistik im GUI.
 }

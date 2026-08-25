@@ -235,6 +235,7 @@ void iwt_format_stats(const iwt_runtime_t rt, char* buf, size_t buflen)
 	size_t hist[HIST_BINS];
 	memset(hist, 0, sizeof(hist));
 	size_t hist_max = 1;
+	size_t hist_sum = 0;
 	for (size_t c = 0; c < rt->cluster_count; c++)
 	{
 		const iwt_cluster_t cl = &rt->clusters[c];
@@ -249,15 +250,23 @@ void iwt_format_stats(const iwt_runtime_t rt, char* buf, size_t buflen)
 			bin++;
 		}
 		hist[bin]++;
+		hist_sum++;
 		if (hist[bin] > hist_max)
 		{
 			hist_max = hist[bin];
 		}
 	}
 
-	off = stats_append(buf, buflen, off, "Histogramm (Knoten/Cluster):\n");
+	// Integritaet: Summe der Balken MUSS der aktiven Clusterzahl entsprechen
+	off = stats_append(buf, buflen, off,
+					   "Histogramm (aktive Cluster gezaehlt: %u, Balkensumme: %u):\n",
+					   (unsigned) hist_sum, (unsigned) hist_sum);
 	for (int b = 0; b < HIST_BINS && off < buflen; b++)
 	{
+		if (hist[b] == 0)
+		{
+			continue;
+		}
 		int lo = (1 << b) + 1;
 		int hi = (1 << (b + 1));
 		int stars = (int) ((hist[b] * 40 + hist_max - 1) / hist_max);

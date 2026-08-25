@@ -656,16 +656,15 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				gui_gl_update_points(data);
 				size_t cluster_draw_count = gui_gl_update_clusters(data);
 				gui_gl_update_waves(data);
+				gui_gl_draw(data, cluster_draw_count);
 
-				// Statistik-Text aktualisieren (30-Frame-Takt)
-				if ((data->iter % 30) == 0 && data->stats_buffer)
+				// Statistik-Text aktualisieren (jede Frame, billig: O(Cluster))
+				if (data->stats_buffer)
 				{
 					char buf[2048];
 					iwt_format_stats(&data->rt, buf, sizeof(buf));
 					gtk_text_buffer_set_text(data->stats_buffer, buf, -1);
 				}
-
-				gui_gl_draw(data, cluster_draw_count);
 			}
 			break;
 		default:
