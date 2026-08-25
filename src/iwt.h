@@ -15,7 +15,7 @@
 #define IWT_ADJ_STRIDE 64
 
 // Entsprechend fuer das erweiterte Wellen-Kantennetz (schwerer Schweif)
-#define IWT_WAVE_STRIDE 24
+#define IWT_WAVE_STRIDE 32
 
 typedef struct iwt_cluster
 {
@@ -42,6 +42,9 @@ typedef struct iwt_cluster
 	// Knotenliste (für die Phasenverschiebung)
 	size_t node_count;
 	size_t* node_indices;
+
+	// Externer Cluster: Mitglieder aus >= 2 verschiedenen Zellen
+	bool external;
 
 	bool is_active;
 }* iwt_cluster_t;
@@ -82,6 +85,9 @@ typedef struct iwt_runtime
 
 	// Dodekaeder-Knotenpositionen (3D) – vector Bibliothek
 	struct vector_3d* pos;
+
+	// Zell-ID je Knoten (BFS-Reihenfolge des Generators)
+	int* node_cell;
 
 	// Komprimierte Nachbarschaftslisten (Performance): adj_flat[i*STRIDE..]
 	// enthaelt die Knotenindizes der Nachbarn von i, adj_count[i] deren Zahl.

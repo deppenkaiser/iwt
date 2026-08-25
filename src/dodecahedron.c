@@ -24,6 +24,7 @@ typedef struct
 {
 	double center[3];
 	double scale;
+	int cell_id;
 	double rot[3][3];
 } _dodeca_cell_t;
 
@@ -149,6 +150,7 @@ void _base_face_centers(const double v[20][3], double c[12][3])
 private
 bool _dodecahedron_generate_from_center(
 	double* pos_x, double* pos_y, double* pos_z,
+	int* out_cell_ids,
 	size_t N, double R0, const double center[3])
 {
 	const double phi = (1.0 + sqrt(5.0)) / 2.0;
@@ -184,8 +186,11 @@ bool _dodecahedron_generate_from_center(
 	queue[queue_tail].center[1] = center[1];
 	queue[queue_tail].center[2] = center[2];
 	queue[queue_tail].scale = R0;
+	queue[queue_tail].cell_id = 0;
 	_mat3_identity(queue[queue_tail].rot);
 	queue_tail++;
+
+	int next_cell_id = 0;
 
 	size_t generated = 0;
 
@@ -206,6 +211,10 @@ bool _dodecahedron_generate_from_center(
 			pos_x[generated] = cell.center[0] + rotated[0];
 			pos_y[generated] = cell.center[1] + rotated[1];
 			pos_z[generated] = cell.center[2] + rotated[2];
+			if (out_cell_ids)
+			{
+				out_cell_ids[generated] = cell.cell_id;
+			}
 			generated++;
 		}
 
@@ -236,6 +245,7 @@ bool _dodecahedron_generate_from_center(
 			child->center[1] = cell.center[1] + world_offset[1];
 			child->center[2] = cell.center[2] + world_offset[2];
 			child->scale = cell.scale / s;
+			child->cell_id = ++next_cell_id;
 
 			// Rotation um den Goldenen Winkel (Chiralität, Kap. 6.2)
 			double r_local[3][3];
@@ -258,10 +268,10 @@ bool _dodecahedron_generate_from_center(
  */
 bool dodecahedron_generate_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0)
 {
-	return dodecahedron_generate_points_ex(pos_x, pos_y, pos_z, N, R0, 0);
+	return dodecahedron_generate_points_ex(pos_x, pos_y, pos_z, N, R0, 0, NULL);
 }
 
-bool dodecahedron_generate_points_ex(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int extra_levels)
+bool dodecahedron_generate_points_ex(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int extra_levels, int* out_cell_ids)
 {
 	const double phi = (1.0 + sqrt(5.0)) / 2.0;
 	const double s = 2.0 + phi;
@@ -273,5 +283,5 @@ bool dodecahedron_generate_points_ex(double* pos_x, double* pos_y, double* pos_z
 	}
 
 	const double center[3] = {0.0, 0.0, 0.0};
-	return _dodecahedron_generate_from_center(pos_x, pos_y, pos_z, N, R0_effective, center);
+	return _dodecahedron_generate_from_center(pos_x, pos_y, pos_z, out_cell_ids, N, R0_effective, center);
 }

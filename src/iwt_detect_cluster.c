@@ -174,6 +174,7 @@ static void detect_init_cluster(iwt_cluster_t c, size_t id)
 	vector_clear(&c->vel);
 	vector_clear(&c->vel_weber);
 	vector_clear(&c->pos_offset);
+	c->external = false;
 	c->is_active = true;
 }
 
@@ -185,6 +186,29 @@ static bool detect_finalize_cluster(const iwt_runtime_t rt, iwt_cluster_t c)
 	}
 	c->pos = vector_divide_scalar(&c->pos, (cld) c->mass);
 	c->phase /= c->node_count;
+
+	// Extern = Mitglieder aus >= 2 verschiedenen Generator-Zellen
+	// (Fruehabbruch bei 32 verschiedenen IDs - extern ist damit sicher).
+	int distinct[32];
+	int nd = 0;
+	for (size_t n = 0; n < c->node_count && nd < 32; n++)
+	{
+		int id = rt->node_cell[c->node_indices[n]];
+		bool known = false;
+		for (int d = 0; d < nd; d++)
+		{
+			if (distinct[d] == id)
+			{
+				known = true;
+				break;
+			}
+		}
+		if (!known)
+		{
+			distinct[nd++] = id;
+		}
+	}
+	c->external = nd >= 2;
 	return true;
 }
 
@@ -257,6 +281,7 @@ static void iwt_match_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 			cl->pos_offset = old->pos_offset;
 			cl->id = old->id;
 			cl->type = old->type;
+			cl->external = old->external;
 		}
 	}
 }

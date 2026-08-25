@@ -104,6 +104,7 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->Q = calloc(cfg->N, sizeof(double));
 
 	rt->pos = calloc(cfg->N, sizeof(struct vector_3d));
+	rt->node_cell = calloc(cfg->N, sizeof(int));
 	rt->adjacency = malloc(cfg->N * cfg->N * sizeof(bool));
 	rt->adj_flat = calloc((size_t) cfg->N * IWT_ADJ_STRIDE, sizeof(int));
 	rt->adj_count = calloc(cfg->N, sizeof(int));
@@ -142,7 +143,7 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 		rt->I_real, rt->I_imag, rt->I_prev_real, rt->I_prev_imag,
 		rt->I_phase, rt->I_phase_prev,
 		rt->K, rt->sumJ, rt->Q,
-		rt->pos, rt->adjacency,
+		rt->pos, rt->node_cell, rt->adjacency,
 		rt->mass, rt->charge,
 		rt->xi_real, rt->xi_imag, rt->uncertainty,
 		rt->clusters, rt->clusters_prev, rt->visited,
@@ -199,7 +200,7 @@ static bool init_positions(const iwt_runtime_t rt, const iwt_config_t cfg)
 	}
 
 	// extra_levels aus cfg: 0 = einzelner Dodekaeder, 1 = 12 Wurzeln, ...
-	bool points_ok = dodecahedron_generate_points_ex(tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0, cfg->extra_levels);
+	bool points_ok = dodecahedron_generate_points_ex(tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0, cfg->extra_levels, rt->node_cell);
 
 	if (points_ok)
 	{
@@ -478,6 +479,7 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	_free_memory((void**) &rt->sumJ);
 	_free_memory((void**) &rt->Q);
 	_free_memory((void**) &rt->pos);
+	_free_memory((void**) &rt->node_cell);
 	_free_memory((void**) &rt->adjacency);
 	_free_memory((void**) &rt->mass);
 	_free_memory((void**) &rt->charge);

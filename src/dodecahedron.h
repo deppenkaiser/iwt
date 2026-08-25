@@ -13,10 +13,7 @@
 // unvollstaendig und wird deterministisch angeschnitten).
 bool dodecahedron_generate_points(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0);
 
-// Anzahl der "Ueberstufen" (extra_levels): jede zusaetzliche Stufe skaliert
-// R0 um den Faktor s (=2+phi) nach oben, wodurch die bisherige "eine
-// Wurzel" automatisch zu einer von 12 Kind-Ebenen eines (unsichtbaren)
-// groesseren Eltern-Dodekaeders wird - dieselbe Rekursionsregel wie überall
-// sonst, kein separates Gitter noetig. extra_levels=1 -> 12 sichtbare
-// "Wurzeln", extra_levels=2 -> 12*12=144, usw.
-bool dodecahedron_generate_points_ex(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int extra_levels);
+// Wie oben, zusaetzlich mit Ausgabe der Zell-ID je Knoten (darf NULL sein):
+// Alle 20 Ecken einer BFS-Zelle teilen dieselbe ID; die IDs sind
+// fortlaufend in Enqueue-Reihenfolge (Wurzel = 0).
+bool dodecahedron_generate_points_ex(double* pos_x, double* pos_y, double* pos_z, size_t N, double R0, int extra_levels, int* out_cell_ids);

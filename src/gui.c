@@ -144,10 +144,10 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
  *          durch den Phasenraum (Frontenzug).
  */
 
-#define WAVE_LEVELS 16
+#define WAVE_LEVELS 24
 #define WAVE_MARCH_FRAMES 240
-#define WAVE_MAX_SEGMENTS 80000
-#define WAVE_MAX_CROSSINGS 24
+#define WAVE_MAX_SEGMENTS 120000
+#define WAVE_MAX_CROSSINGS 32
 
 static bool slice_point_visible(const iwt_gui_data_t data, double z)
 {
@@ -244,7 +244,7 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.slice_mode = false;
 	data->cfg.slice_pos = 0.0;
 	data->cfg.slice_delta = 0.25;
-	data->cfg.wave_k_min = 0.6;
+	data->cfg.wave_k_min = 0.55;
 	data->cfg.extra_levels = 1;
 	data->cfg.enable_motion = false;
 	data->zoom = 1.0f;
@@ -724,6 +724,15 @@ static void gui_gl_update_cluster_point(iwt_gui_data_t data, size_t idx, iwt_clu
 	if (!slice_point_visible(data, (double) cl->pos.z))
 	{
 		brightness *= 0.2f;
+	}
+
+	if (cl->external)
+	{
+		// Externe Cluster (Mitglieder aus >= 2 Zellen, Dualnetz) violett
+		data->cluster_points_buffer[idx * 6 + 0] = 0.85f * brightness;
+		data->cluster_points_buffer[idx * 6 + 1] = 0.35f * brightness;
+		data->cluster_points_buffer[idx * 6 + 2] = brightness;
+		return;
 	}
 
 	if (charge_norm > 0.0f)
