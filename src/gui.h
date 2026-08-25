@@ -10,9 +10,12 @@ typedef struct iwt_gui_data
 
 	GtkWidget* toggle_motion;
 	GtkWidget* toggle_waves;
+	GtkWidget* toggle_slice;
 	GtkWidget* spin_beta;
 	GtkWidget* spin_gamma;
 	GtkWidget* spin_cluster_threshold;
+	GtkWidget* spin_slice_pos;
+	GtkWidget* spin_extra_levels;
 
 	struct iwt_config cfg;
 	struct iwt_runtime rt;

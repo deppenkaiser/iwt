@@ -120,6 +120,13 @@ typedef struct iwt_config
 
 	// EM-Wellen-Overlay in der Visualisierung anzeigen
 	bool show_waves;
+
+	// 2D-Schnittmodus: nur Konturen nahe z = slice_pos, Knoten außerhalb gedimmt
+	bool slice_mode;
+	double slice_pos;
+
+	// Fraktale Selbstähnlichkeits-Stufen (0 = einzelner Dodekaeder)
+	int extra_levels;
 }* iwt_config_t;
 
 typedef struct iwt_spectrum

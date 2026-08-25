@@ -103,7 +103,10 @@ enum
 	IWT_CTRL_BETA,
 	IWT_CTRL_GAMMA,
 	IWT_CTRL_CLUSTER_THRESHOLD,
-	IWT_CTRL_SHOW_WAVES
+	IWT_CTRL_SHOW_WAVES,
+	IWT_CTRL_SLICE_MODE,
+	IWT_CTRL_SLICE_POS,
+	IWT_CTRL_EXTRA_LEVELS
 };
 
 static void gui_application_init_cfg(iwt_gui_data_t data);
@@ -143,6 +146,18 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
 #define WAVE_MARCH_FRAMES 240
 #define WAVE_MAX_SEGMENTS 40000
 #define WAVE_MAX_CROSSINGS 16
+
+// Halbe Dicke der Schnittebene im 2D-Schnittmodus
+#define SLICE_DELTA 0.25
+
+static bool slice_point_visible(const iwt_gui_data_t data, double z)
+{
+	if (!data->cfg.slice_mode)
+	{
+		return true;
+	}
+	return fabs(z - data->cfg.slice_pos) <= SLICE_DELTA;
+}
 
 static void wave_hsv_to_rgb(float h, float s, float v, float* out_rgb)
 {
@@ -227,6 +242,9 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.kappa = 0.5;
 	data->cfg.phase_dt = 0.05;
 	data->cfg.show_waves = true;
+	data->cfg.slice_mode = false;
+	data->cfg.slice_pos = 0.0;
+	data->cfg.extra_levels = 1;
 	data->cfg.enable_motion = false;
 	data->zoom = 1.0f;
 	data->cam_yaw = 0.785398f;
@@ -350,23 +368,51 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
     data->toggle_waves = gui_button_create(IWT_CTRL_SHOW_WAVES, &waves_cfg, data);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_waves), data->cfg.show_waves);
     gtk_widget_set_tooltip_text(data->toggle_waves,
-        "EM-Wellen-Overlay: gelbe Linien entlang Kanten mit kohärenter\n"
-        "Phasengeschwindigkeit im Vakuum (freie Strahlung).\n"
+        "EM-Wellen-Overlay: Aequipotenziallinien des Phasenfeldes.\n"
+        "Farbe = Potentialwert, mehrere Niveaus gleichzeitig.\n"
         "Theorie: Dispersion omega ~ k^(D/3), Kap. 11, Anhang E");
+
+    struct gui_spin_button_configuration extra_levels_cfg = {.alignment = 0.5f, .value = data->cfg.extra_levels, .min = 0.0, .max = 3.0, .increment = 1.0, .digits = 0};
+    data->spin_extra_levels = gui_button_spin_create(IWT_CTRL_EXTRA_LEVELS, &extra_levels_cfg, data);
+    gtk_widget_set_tooltip_text(data->spin_extra_levels,
+        "Fraktale Selbstähnlichkeits-Stufen:\n"
+        "0 = einzelner Dodekaeder (verschachtelt),\n"
+        "1 = 12 Wurzel-Dodekaeder, 2/3 = grobere Skalen.\n"
+        "Baut die Geometrie sofort neu. Theorie: Kap. 6");
+
+    struct gui_button_configuration slice_cfg = {.label = "2D-Schnitt", .toggle = true};
+    data->toggle_slice = gui_button_create(IWT_CTRL_SLICE_MODE, &slice_cfg, data);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_slice), data->cfg.slice_mode);
+    gtk_widget_set_tooltip_text(data->toggle_slice,
+        "2D-Schnitt: Konturen nur in einer duennen Scheibe bei z=Schnitt-\n"
+        "Position; Knoten ausserhalb werden abgedunkelt. Kamera frontal\n"
+        "drehen (Drag) fuer echte 2D-Ansicht.");
+
+    struct gui_spin_button_configuration slice_pos_cfg = {.alignment = 0.5f, .value = data->cfg.slice_pos, .min = -4.0, .max = 4.0, .increment = 0.05, .digits = 2};
+    data->spin_slice_pos = gui_button_spin_create(IWT_CTRL_SLICE_POS, &slice_pos_cfg, data);
+    gtk_widget_set_tooltip_text(data->spin_slice_pos,
+        "z-Position der Schnittebene.");
 
     GtkWidget* label_beta = gtk_label_new("Bohm-Kopplung:");
     GtkWidget* label_gamma = gtk_label_new("Fraktale Verstärkung:");
     GtkWidget* label_threshold = gtk_label_new("Cluster-Schwelle:");
+    GtkWidget* label_extra_levels = gtk_label_new("Skalen:");
+    GtkWidget* label_slice_pos = gtk_label_new("Schnitt z:");
 
     GtkWidget* control_box = gui_box_horizontal_create(8);
     gui_box_append_widget(control_box, data->toggle_motion);
     gui_box_append_widget(control_box, data->toggle_waves);
+    gui_box_append_widget(control_box, data->toggle_slice);
     gui_box_append_widget(control_box, label_beta);
     gui_box_append_widget(control_box, data->spin_beta);
     gui_box_append_widget(control_box, label_gamma);
     gui_box_append_widget(control_box, data->spin_gamma);
     gui_box_append_widget(control_box, label_threshold);
     gui_box_append_widget(control_box, data->spin_cluster_threshold);
+    gui_box_append_widget(control_box, label_extra_levels);
+    gui_box_append_widget(control_box, data->spin_extra_levels);
+    gui_box_append_widget(control_box, label_slice_pos);
+    gui_box_append_widget(control_box, data->spin_slice_pos);
 
     GtkWidget* main_box = gui_box_vertical_create(4);
     gui_box_append_widget(main_box, control_box);
@@ -465,6 +511,10 @@ static void gui_button_handle_toggled(gui_button_t core, gui_event_t e, iwt_gui_
 	{
 		data->cfg.show_waves = e->data.b_toggled.active;
 	}
+	else if (core->id == IWT_CTRL_SLICE_MODE)
+	{
+		data->cfg.slice_mode = e->data.b_toggled.active;
+	}
 }
 
 static void gui_button_handle_selected(gui_button_t core, iwt_gui_data_t data)
@@ -481,6 +531,23 @@ static void gui_button_handle_selected(gui_button_t core, iwt_gui_data_t data)
 	{
 		data->cfg.cluster_threshold = gui_button_spin_get_double(core->button);
 		iwt_recompute_adjacency(&data->rt, &data->cfg);
+	}
+	else if (core->id == IWT_CTRL_SLICE_POS)
+	{
+		data->cfg.slice_pos = gui_button_spin_get_double(core->button);
+	}
+	else if (core->id == IWT_CTRL_EXTRA_LEVELS)
+	{
+		int levels = (int) (gui_button_spin_get_double(core->button) + 0.5);
+		if (levels != data->cfg.extra_levels)
+		{
+			data->cfg.extra_levels = levels;
+			if (iwt_rebuild_geometry(&data->rt, &data->cfg))
+			{
+				gui_application_clear_arrays(data);
+				printf("Geometrie neu aufgebaut: extra_levels = %d\n", levels);
+			}
+		}
 	}
 }
 
@@ -609,6 +676,14 @@ static void gui_gl_update_points(iwt_gui_data_t data)
 		data->points_buffer[i * 6 + 3] = data->node_colors[i * 3 + 0];
 		data->points_buffer[i * 6 + 4] = data->node_colors[i * 3 + 1];
 		data->points_buffer[i * 6 + 5] = data->node_colors[i * 3 + 2];
+
+		if (!slice_point_visible(data, (double) data->rt.pos[i].z))
+		{
+			// Knoten außerhalb der Schnittebene abdunken
+			data->points_buffer[i * 6 + 3] *= 0.2f;
+			data->points_buffer[i * 6 + 4] *= 0.2f;
+			data->points_buffer[i * 6 + 5] *= 0.2f;
+		}
 	}
 }
 
@@ -620,6 +695,11 @@ static void gui_gl_update_cluster_point(iwt_gui_data_t data, size_t idx, iwt_clu
 
 	float charge_norm = (float) (cl->charge / (fabs(cl->charge) + 1.0));
 	float brightness = (float) fmin(cl->mass / (cl->mass + 0.35), 1.0);
+
+	if (!slice_point_visible(data, (double) cl->pos.z))
+	{
+		brightness *= 0.2f;
+	}
 
 	if (charge_norm > 0.0f)
 	{
@@ -707,11 +787,21 @@ static size_t gui_gl_update_waves(iwt_gui_data_t data)
 					continue;
 				}
 
-				double t = di[l] / (di[l] - dj);
-				px[l][crossings[l]] = (double) data->rt.pos[i].x + t * ((double) data->rt.pos[j].x - (double) data->rt.pos[i].x);
-				py[l][crossings[l]] = (double) data->rt.pos[i].y + t * ((double) data->rt.pos[j].y - (double) data->rt.pos[i].y);
-				pz[l][crossings[l]] = (double) data->rt.pos[i].z + t * ((double) data->rt.pos[j].z - (double) data->rt.pos[i].z);
-				crossings[l]++;
+			double t = di[l] / (di[l] - dj);
+			double cx = (double) data->rt.pos[i].x + t * ((double) data->rt.pos[j].x - (double) data->rt.pos[i].x);
+			double cy = (double) data->rt.pos[i].y + t * ((double) data->rt.pos[j].y - (double) data->rt.pos[i].y);
+			double cz = (double) data->rt.pos[i].z + t * ((double) data->rt.pos[j].z - (double) data->rt.pos[i].z);
+
+			// 2D-Schnitt: nur Schnittpunkte innerhalb der Scheibe
+			if (!slice_point_visible(data, cz))
+			{
+				continue;
+			}
+
+			px[l][crossings[l]] = cx;
+			py[l][crossings[l]] = cy;
+			pz[l][crossings[l]] = cz;
+			crossings[l]++;
 			}
 		}
 

@@ -191,8 +191,8 @@ static bool init_positions(const iwt_runtime_t rt, const iwt_config_t cfg)
 		return false;
 	}
 
-	// extra_levels=1: 12 sichtbare "Wurzeln" (Selbstähnlichkeit)
-	bool points_ok = dodecahedron_generate_points_ex(tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0, 1);
+	// extra_levels aus cfg: 0 = einzelner Dodekaeder, 1 = 12 Wurzeln, ...
+	bool points_ok = dodecahedron_generate_points_ex(tmp_x, tmp_y, tmp_z, cfg->N, cfg->l0, cfg->extra_levels);
 
 	if (points_ok)
 	{
@@ -342,6 +342,17 @@ void iwt_recompute_adjacency(const iwt_runtime_t rt, const iwt_config_t cfg)
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	return allocate_gpu_buffers(rt, cfg);
+}
+
+bool iwt_rebuild_geometry(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	if (!init_host_memory(rt, cfg))
+	{
+		return false;
+	}
+	return clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
+								cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL,
+								NULL) == CL_SUCCESS;
 }
 
 static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
