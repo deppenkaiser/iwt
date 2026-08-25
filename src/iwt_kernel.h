@@ -55,4 +55,13 @@ bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg);
 
 bool run_simulation(const iwt_runtime_t rt, const iwt_config_t cfg);
 
+// ============================================================================
+// K-MATRIX GPU-CACHE
+// ============================================================================
+
+// Markiert die GPU-Kopie der Kopplungsmatrix als veraltet/aktuell.
+// Die Matrix ist statisch; sie wird nur bei Bedarf (einmalig bzw. nach
+// Geometrie-Rebuild) hochgeladen statt in jedem Frame (512 MB/Frame!).
+void iwt_k_gpu_set_uploaded(bool uploaded);
+
 #endif // IWT_KERNEL_H

@@ -11,6 +11,9 @@
 #include <stdint.h>
 #include <vector/vector.h>
 
+// Maximale Nachbaranzahl pro Knoten in der komprimierten Liste
+#define IWT_ADJ_STRIDE 64
+
 typedef struct iwt_cluster
 {
 	int id;
@@ -76,6 +79,11 @@ typedef struct iwt_runtime
 
 	// Dodekaeder-Knotenpositionen (3D) – vector Bibliothek
 	struct vector_3d* pos;
+
+	// Komprimierte Nachbarschaftslisten (Performance): adj_flat[i*STRIDE..]
+	// enthaelt die Knotenindizes der Nachbarn von i, adj_count[i] deren Zahl.
+	int* adj_flat;
+	int* adj_count;
 
 	// Nachbarschafts-Adjazenz (K-Matrix-Schwellwert), N*N, statisch
 	bool* adjacency;

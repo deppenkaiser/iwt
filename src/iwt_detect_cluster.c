@@ -26,7 +26,6 @@ static void flood_fill_process_node(const iwt_runtime_t rt, iwt_cluster_t c, siz
 static bool flood_fill_should_visit(const iwt_runtime_t rt, size_t i);
 static void flood_fill_push_neighbors(const iwt_runtime_t rt, const iwt_config_t cfg, size_t i, size_t* stack, size_t* stack_ptr);
 static void flood_fill(const iwt_runtime_t rt, const iwt_config_t cfg, size_t idx, iwt_cluster_t c);
-
 static void detect_reset_visited(const iwt_runtime_t rt, const iwt_config_t cfg);
 static void detect_reset_clusters(const iwt_runtime_t rt);
 static bool detect_should_start_cluster(const iwt_runtime_t rt, size_t i);
@@ -83,10 +82,12 @@ static void flood_fill_process_node(const iwt_runtime_t rt, iwt_cluster_t c, siz
 
 static void flood_fill_push_neighbors(const iwt_runtime_t rt, const iwt_config_t cfg, size_t i, size_t* stack, size_t* stack_ptr)
 {
-	const bool* row = &rt->adjacency[i * cfg->N];
-	for (size_t j = 0; j < cfg->N; j++)
+	int count = rt->adj_count[i];
+	const int* neighbors = &rt->adj_flat[(size_t) i * IWT_ADJ_STRIDE];
+	for (int n = 0; n < count; n++)
 	{
-		if (row[j] && !rt->visited[j] && rt->mass[j] > 1e-6)
+		size_t j = (size_t) neighbors[n];
+		if (!rt->visited[j] && rt->mass_smooth[j] >= detect_threshold_for(rt, j))
 		{
 			if (*stack_ptr >= cfg->N)
 			{
@@ -130,7 +131,12 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 	detect_update_membership(rt, cfg);
 	iwt_match_clusters(rt, cfg);
 
-	printf("Gefundene Cluster: %d\n", rt->cluster_count);
+	// printf im Hot-Path drosseln (stdout-Flush pro Frame ist teuer)
+	static int detect_frame = 0;
+	if ((detect_frame++ % 240) == 0)
+	{
+		printf("Gefundene Cluster: %d\n", rt->cluster_count);
+	}
 }
 
 static void detect_reset_visited(const iwt_runtime_t rt, const iwt_config_t cfg)

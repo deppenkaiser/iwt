@@ -132,14 +132,12 @@ private void _iwt_update_cluster_velocities(const iwt_runtime_t rt, double dt)
 		for (size_t n = 0; n < cl->node_count; n++)
 		{
 			size_t i = cl->node_indices[n];
-			const bool* row = &rt->adjacency[i * N];
+			int count = rt->adj_count[i];
+			const int* neighbors = &rt->adj_flat[i * IWT_ADJ_STRIDE];
 			double phase_i = rt->I_phase[i];
-			for (size_t j = 0; j < N; j++)
+			for (int e = 0; e < count; e++)
 			{
-				if (!row[j])
-				{
-					continue;
-				}
+				size_t j = (size_t) neighbors[e];
 				double ds = phase_wrap(rt->I_phase[j] - phase_i);
 				if (fabs(ds) < GUIDANCE_EPSILON)
 				{

@@ -747,7 +747,8 @@ static size_t gui_gl_update_waves(iwt_gui_data_t data)
 
 	for (size_t i = 0; i < N && seg < WAVE_MAX_SEGMENTS; i++)
 	{
-		const bool* row = &data->rt.adjacency[i * N];
+		int count = data->rt.adj_count[i];
+		const int* neighbors = &data->rt.adj_flat[i * IWT_ADJ_STRIDE];
 
 		// Differenz der Knotenphase zu allen Niveaus vorberechnen
 		double di[WAVE_LEVELS];
@@ -764,9 +765,10 @@ static size_t gui_gl_update_waves(iwt_gui_data_t data)
 		int crossings[WAVE_LEVELS];
 		memset(crossings, 0, sizeof(crossings));
 
-		for (size_t j = 0; j < N; j++)
+		for (int e = 0; e < count; e++)
 		{
-			if (j == i || !row[j])
+			size_t j = (size_t) neighbors[e];
+			if (j == i)
 			{
 				continue;
 			}

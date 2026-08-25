@@ -42,6 +42,14 @@
 #define DELTA 1.0
 #define GAMMA 1.0
 
+// GPU-Cache-Status der Kopplungsmatrix (statisch -> nur bei Bedarf uploaden)
+static bool k_gpu_uploaded = false;
+
+void iwt_k_gpu_set_uploaded(bool uploaded)
+{
+	k_gpu_uploaded = uploaded;
+}
+
 static size_t get_local_size(size_t global)
 {
 	size_t local = 64;
@@ -167,8 +175,14 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 						 cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
 	clEnqueueWriteBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE, 0,
 						 cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
-	clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
-						 cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
+
+	// K-Matrix ist statisch: nur einmal bzw. nach Geometrie-Rebuild uploaden
+	if (!k_gpu_uploaded)
+	{
+		clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
+							 cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL, NULL);
+		k_gpu_uploaded = true;
+	}
 
 	int N = (int) cfg->N;
 	double DT = cfg->DT;

@@ -1,6 +1,7 @@
 #include "init.h"
 #include "dodecahedron.h"
 #include "iwt.h"
+#include "iwt_kernel.h"
 #include <api/api.h>
 #include <math.h>
 #include <stddef.h>
@@ -104,6 +105,8 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 	rt->pos = calloc(cfg->N, sizeof(struct vector_3d));
 	rt->adjacency = malloc(cfg->N * cfg->N * sizeof(bool));
+	rt->adj_flat = calloc((size_t) cfg->N * IWT_ADJ_STRIDE, sizeof(int));
+	rt->adj_count = calloc(cfg->N, sizeof(int));
 
 	rt->mass = calloc(cfg->N, sizeof(double));
 	rt->charge = calloc(cfg->N, sizeof(double));
@@ -141,7 +144,8 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 		rt->mass, rt->charge,
 		rt->xi_real, rt->xi_imag, rt->uncertainty,
 		rt->clusters, rt->clusters_prev, rt->visited,
-		rt->mass_smooth, rt->was_member};
+		rt->mass_smooth, rt->was_member,
+		rt->adj_flat, rt->adj_count};
 
 	if (!all_ptrs_valid(ptrs, sizeof(ptrs) / sizeof(ptrs[0])))
 	{
@@ -337,6 +341,21 @@ void iwt_recompute_adjacency(const iwt_runtime_t rt, const iwt_config_t cfg)
 				(i != j) && (rt->K[i * cfg->N + j] > cfg->cluster_threshold);
 		}
 	}
+
+	// Komprimierte Nachbarschaftslisten pflegen (O(N·deg) statt O(N²)-Scans)
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		int count = 0;
+		const bool* row = &rt->adjacency[i * cfg->N];
+		for (size_t j = 0; j < cfg->N && count < IWT_ADJ_STRIDE; j++)
+		{
+			if (row[j])
+			{
+				rt->adj_flat[i * IWT_ADJ_STRIDE + count++] = (int) j;
+			}
+		}
+		rt->adj_count[i] = count;
+	}
 }
 
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -350,6 +369,7 @@ bool iwt_rebuild_geometry(const iwt_runtime_t rt, const iwt_config_t cfg)
 	{
 		return false;
 	}
+	iwt_k_gpu_set_uploaded(false);
 	return clEnqueueWriteBuffer(rt->ocl.queue, rt->K_gpu, CL_TRUE, 0,
 								cfg->N * cfg->N * sizeof(double), rt->K, 0, NULL,
 								NULL) == CL_SUCCESS;
@@ -417,6 +437,8 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	_free_memory((void**) &rt->mass_smooth);
 	_free_memory((void**) &rt->was_member);
 	_free_memory((void**) &rt->clusters_prev);
+	_free_memory((void**) &rt->adj_flat);
+	_free_memory((void**) &rt->adj_count);
 }
 
 void deinitialize_gpu_data(const iwt_runtime_t rt)
