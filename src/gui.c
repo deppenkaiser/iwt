@@ -1135,7 +1135,7 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count)
 
 	glUniformMatrix4fv(data->gl_u_mvp, 1, GL_FALSE, mvp);
 
-	glUniform1f(data->gl_u_size_scale, 3.0f);
+	glUniform1f(data->gl_u_size_scale, 0.0f);
 	glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr) ((size_t) data->cfg.N * 6 * sizeof(float)), data->points_buffer);
 	glBindVertexArray(data->gl_vao);
