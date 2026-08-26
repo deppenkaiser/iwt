@@ -976,6 +976,94 @@ static size_t gui_gl_update_clusters(iwt_gui_data_t data)
 	return cluster_draw_count;
 }
 
+/*
+ * wave_compute_crossings - Berechnet Schnittpunkte fuer einen Knoten
+ *
+ * Fuer jeden Knoten i werden die Schnittpunkte der Phasenfilme mit den
+ * Kanten zu den Nachbarn berechnet.
+ */
+static void wave_compute_crossings(iwt_gui_data_t data, size_t i, double base_level,
+    double level_step, double two_pi, double px[][WAVE_MAX_CROSSINGS],
+    double py[][WAVE_MAX_CROSSINGS], double pz[][WAVE_MAX_CROSSINGS], int crossings[])
+{
+	int count = data->rt.wave_count[i];
+	const int* neighbors = &data->rt.wave_flat[i * IWT_WAVE_STRIDE];
+
+	// Differenz der Knotenphase zu allen Niveaus vorberechnen
+	double di[WAVE_LEVELS];
+	for (int l = 0; l < WAVE_LEVELS; l++)
+	{
+		double level_l = base_level + (double) l * level_step;
+		di[l] = data->rt.I_phase[i] - level_l;
+		di[l] -= two_pi * rint(di[l] / two_pi);
+	}
+
+	for (int e = 0; e < count; e++)
+	{
+		size_t j = (size_t) neighbors[e];
+		if (j == i)
+		{
+			continue;
+		}
+
+		double dj_raw = data->rt.I_phase[j];
+
+		for (int l = 0; l < WAVE_LEVELS; l++)
+		{
+			if (crossings[l] >= WAVE_MAX_CROSSINGS)
+			{
+				continue;
+			}
+			double level_l = base_level + (double) l * level_step;
+			double dj = dj_raw - level_l;
+			dj -= two_pi * rint(dj / two_pi);
+			if (di[l] * dj >= 0.0)
+			{
+				continue;
+			}
+
+			double t = di[l] / (di[l] - dj);
+			double cx = (double) data->rt.pos[i].x + t * ((double) data->rt.pos[j].x - (double) data->rt.pos[i].x);
+			double cy = (double) data->rt.pos[i].y + t * ((double) data->rt.pos[j].y - (double) data->rt.pos[i].y);
+			double cz = (double) data->rt.pos[i].z + t * ((double) data->rt.pos[j].z - (double) data->rt.pos[i].z);
+
+			// 2D-Schnitt: nur Schnittpunkte innerhalb der Scheibe
+			if (!slice_point_visible(data, cz))
+			{
+				continue;
+			}
+
+			px[l][crossings[l]] = cx;
+			py[l][crossings[l]] = cy;
+			pz[l][crossings[l]] = cz;
+			crossings[l]++;
+		}
+	}
+}
+
+/*
+ * wave_emit_node_segments - Emittiert Segmente fuer einen Knoten
+ *
+ * Erzeugt die Linien-Segmente aus den berechneten Schnittpunkten.
+ */
+static void wave_emit_node_segments(iwt_gui_data_t data, size_t* seg,
+    double base_level, double level_step, double two_pi,
+    double px[][WAVE_MAX_CROSSINGS], double py[][WAVE_MAX_CROSSINGS],
+    double pz[][WAVE_MAX_CROSSINGS], int crossings[])
+{
+	for (int l = 0; l < WAVE_LEVELS && *seg < WAVE_MAX_SEGMENTS; l++)
+	{
+		float hue = (float) (((base_level + (double) l * level_step) + iwt_pi()) / two_pi);
+		for (int k = 0; k + 1 < crossings[l] && *seg < WAVE_MAX_SEGMENTS; k += 2)
+		{
+			double pa[3] = {px[l][k], py[l][k], pz[l][k]};
+			double pb[3] = {px[l][k + 1], py[l][k + 1], pz[l][k + 1]};
+			wave_emit_segment(data, *seg, pa, pb, hue, 0.95f);
+			(*seg)++;
+		}
+	}
+}
+
 static size_t gui_gl_update_waves(iwt_gui_data_t data)
 {
 	data->wave_segment_count = 0;
@@ -995,77 +1083,14 @@ static size_t gui_gl_update_waves(iwt_gui_data_t data)
 
 	for (size_t i = 0; i < N && seg < WAVE_MAX_SEGMENTS; i++)
 	{
-		int count = data->rt.wave_count[i];
-		const int* neighbors = &data->rt.wave_flat[i * IWT_WAVE_STRIDE];
-
-		// Differenz der Knotenphase zu allen Niveaus vorberechnen
-		double di[WAVE_LEVELS];
-		for (int l = 0; l < WAVE_LEVELS; l++)
-		{
-			double level_l = base_level + (double) l * level_step;
-			di[l] = data->rt.I_phase[i] - level_l;
-			di[l] -= two_pi * rint(di[l] / two_pi);
-		}
-
 		double px[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
 		double py[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
 		double pz[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
 		int crossings[WAVE_LEVELS];
 		memset(crossings, 0, sizeof(crossings));
 
-		for (int e = 0; e < count; e++)
-		{
-			size_t j = (size_t) neighbors[e];
-			if (j == i)
-			{
-				continue;
-			}
-
-			double dj_raw = data->rt.I_phase[j];
-
-			for (int l = 0; l < WAVE_LEVELS; l++)
-			{
-				if (crossings[l] >= WAVE_MAX_CROSSINGS)
-				{
-					continue;
-				}
-				double level_l = base_level + (double) l * level_step;
-				double dj = dj_raw - level_l;
-				dj -= two_pi * rint(dj / two_pi);
-				if (di[l] * dj >= 0.0)
-				{
-					continue;
-				}
-
-			double t = di[l] / (di[l] - dj);
-			double cx = (double) data->rt.pos[i].x + t * ((double) data->rt.pos[j].x - (double) data->rt.pos[i].x);
-			double cy = (double) data->rt.pos[i].y + t * ((double) data->rt.pos[j].y - (double) data->rt.pos[i].y);
-			double cz = (double) data->rt.pos[i].z + t * ((double) data->rt.pos[j].z - (double) data->rt.pos[i].z);
-
-			// 2D-Schnitt: nur Schnittpunkte innerhalb der Scheibe
-			if (!slice_point_visible(data, cz))
-			{
-				continue;
-			}
-
-			px[l][crossings[l]] = cx;
-			py[l][crossings[l]] = cy;
-			pz[l][crossings[l]] = cz;
-			crossings[l]++;
-			}
-		}
-
-		for (int l = 0; l < WAVE_LEVELS && seg < WAVE_MAX_SEGMENTS; l++)
-		{
-			float hue = (float) (((base_level + (double) l * level_step) + iwt_pi()) / two_pi);
-			for (int k = 0; k + 1 < crossings[l] && seg < WAVE_MAX_SEGMENTS; k += 2)
-			{
-				double pa[3] = {px[l][k], py[l][k], pz[l][k]};
-				double pb[3] = {px[l][k + 1], py[l][k + 1], pz[l][k + 1]};
-				wave_emit_segment(data, seg, pa, pb, hue, 0.95f);
-				seg++;
-			}
-		}
+		wave_compute_crossings(data, i, base_level, level_step, two_pi, px, py, pz, crossings);
+		wave_emit_node_segments(data, &seg, base_level, level_step, two_pi, px, py, pz, crossings);
 	}
 
 	data->wave_segment_count = seg;
