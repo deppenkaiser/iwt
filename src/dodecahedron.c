@@ -157,6 +157,8 @@ bool _dodecahedron_generate_from_center(
 	const double s = 2.0 + phi;									  // Skalierungsfaktor (Kap. 6.3)
 	const double psi_rad = 2.0 * (4.0 * atan(1.0)) * (2.0 - phi); // Goldener Winkel
 
+	srand(42); // Fixer Seed fuer Reproduzierbarkeit
+
 	double base_v_raw[20][3];
 	_base_vertices_raw(base_v_raw);
 
@@ -218,9 +220,19 @@ bool _dodecahedron_generate_from_center(
 			generated++;
 		}
 
-		// 12 Kind-Dodekaeder an den Flächenzentren
-		for (int f = 0; f < 12; f++)
+		// 12 Kind-Dodekaeder an den Flächenzentren (zufällige Reihenfolge fuer gleichmaessige Verteilung)
+		int face_order[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+		for (int i = 11; i > 0; i--)
 		{
+			int j = rand() % (i + 1);
+			int tmp = face_order[i];
+			face_order[i] = face_order[j];
+			face_order[j] = tmp;
+		}
+
+		for (int fi = 0; fi < 12; fi++)
+		{
+			int f = face_order[fi];
 			if (queue_tail >= queue_cap)
 			{
 				queue_cap *= 2;
