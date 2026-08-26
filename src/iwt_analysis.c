@@ -11,18 +11,19 @@
  * Simulationsexperimenten (Histogramme, Projektionen, Spektralanalyse).
  * Die Ausgabeverzeichnisse liegen neben der Binaerdatei - analog zum
  * .cache-Muster aus main.c.
+ *
+ * Pfadaufbau ausschliesslich ueber die string-Bibliothek (string_copy/
+ * string_cat mit Groessenargument): keine snprintf-Komposition, keine
+ * Truncations-Warnungen, einheitliches Hausmuster.
  */
 
 #include "iwt_analysis.h"
 
-#include <errno.h>
 #include <epoxy/gl.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <time.h>
 #include <string/string.h>
 
@@ -42,7 +43,7 @@ static void analysis_base_dir(char* out, size_t out_len)
 	string_copy(exe_path_copy, sizeof(exe_path_copy), exe_path);
 
 	const char* base_dir = string_dirname_from_filepath(exe_path_copy);
-	snprintf(out, out_len, "%s", base_dir ? base_dir : ".");
+	string_copy(out, out_len, base_dir ? base_dir : ".");
 }
 
 /*
@@ -57,35 +58,80 @@ static void analysis_timestamp(char* out, size_t out_len)
 }
 
 /*
- * analysis_ensure_dir - Legt ein Verzeichnis an, existiert es bereits wird
- * das toleriert.
+ * analysis_spiegeln - Kippt den Pixelblock vertikal (OpenGL-Ursprung unten)
  */
-static bool analysis_ensure_dir(const char* path)
+static void analysis_spiegeln(GLubyte* pixels, int width, int height,
+	size_t row_bytes)
 {
-	if (mkdir(path, 0755) == 0 || errno == EEXIST)
+	GLubyte* zeile_tmp = malloc(row_bytes);
+	for (int y = 0; y < height / 2; ++y)
 	{
-		return true;
+		GLubyte* oben = pixels + (size_t) y * row_bytes;
+		GLubyte* unten = pixels + (size_t) (height - 1 - y) * row_bytes;
+		memcpy(zeile_tmp, oben, row_bytes);
+		memcpy(oben, unten, row_bytes);
+		memcpy(unten, zeile_tmp, row_bytes);
 	}
+	free(zeile_tmp);
+}
 
-	perror(path);
-	return false;
+/*
+ * analysis_max_helligkeit - Groesster Bytewert im Block; 0 bedeutet
+ * "leerer Framebuffer" und triggert die Selbstheilung unten.
+ */
+static GLubyte analysis_max_helligkeit(const GLubyte* pixels, size_t anzahl)
+{
+	GLubyte m = 0;
+	for (size_t i = 0; i < anzahl; ++i)
+	{
+		if (pixels[i] > m)
+		{
+			m = pixels[i];
+		}
+	}
+	return m;
 }
 
 void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 {
-	char base[STRING_MAXLEN];
-	char stamp[32];
-	char dir_path[STRING_MAXLEN * 2];
-	char file_path[STRING_MAXLEN * 2];
+	string_t base;
+	string_t stamp;
+	string_t file_path;
 
 	analysis_base_dir(base, sizeof(base));
 
-	GLint viewport[4];	glGetIntegerv(GL_VIEWPORT, viewport);
+	/*
+	 * Dimensionen: Der Viewport ist hier unzuverlaessig (GtkGLArea rendert
+	 * intern in ein eigenes FBO und niemand im Code ruft je glViewport auf).
+	 * Wir leiten die Groesse daher vom Widget ab (Breite x Scale-Faktor)
+	 * und nutzen den Viewport nur als Fallback bzw. fuer die Diagnose.
+	 */
+	GLint viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
 
-	const int width = viewport[2];
-	const int height = viewport[3];
+	const int scale = gtk_widget_get_scale_factor(data->gl_area);
+	int width = gtk_widget_get_width(data->gl_area) * scale;
+	int height = gtk_widget_get_height(data->gl_area) * scale;
 
-	GLubyte* pixels = malloc((size_t) width * (size_t) height * 3);
+	GLint read_fbo = 0;
+	glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fbo);
+
+	if (width < 1 || height < 1)
+	{
+		width = viewport[2];
+		height = viewport[3];
+	}
+
+	if (width < 1 || height < 1)
+	{
+		fprintf(stderr, "analysis: Ungueltige Framebuffer-Dimensionen (%dx%d) "
+			"- Screenshot uebersprungen\n", viewport[2], viewport[3]);
+		return;
+	}
+
+	const size_t row_bytes = (size_t) width * 3;
+	const size_t pixel_anzahl = row_bytes * (size_t) height;
+	GLubyte* pixels = malloc(pixel_anzahl);
 	if (!pixels)
 	{
 		fprintf(stderr, "analysis: Speicher fuer Screenshot fehlgeschlagen\n");
@@ -94,19 +140,24 @@ void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+	GLenum fehler_nachher = glGetError();
+	GLubyte hell = analysis_max_helligkeit(pixels, pixel_anzahl);
 
-	// Vertikal spiegeln - OpenGL legt den Ursprung unten links
-	const size_t row_bytes = (size_t) width * 3;
-	GLubyte* row_tmp = malloc(row_bytes);
-	for (int y = 0; y < height / 2; ++y)
+	// Selbstheilung: Wenn der aktuelle Read-Griff leer ist, das Standard-
+	// Framebuffer-Ziel probieren (GtkGLArea-FBO vs. Fensteroberflaeche).
+	if ((hell == 0 || fehler_nachher != GL_NO_ERROR) && read_fbo != 0)
 	{
-		GLubyte* top = pixels + (size_t) y * row_bytes;
-		GLubyte* bottom = pixels + (size_t) (height - 1 - y) * row_bytes;
-		memcpy(row_tmp, top, row_bytes);
-		memcpy(top, bottom, row_bytes);
-		memcpy(bottom, row_tmp, row_bytes);
+		fprintf(stderr, "analysis: Leer/fehlerhaft gelesen (max=%u, err=%u, "
+			"fbo=%u) - wechsle auf Standard-Framebuffer\n",
+			(unsigned) hell, (unsigned) fehler_nachher, (unsigned) read_fbo);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+		memset(pixels, 0, pixel_anzahl);
+		glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+		fehler_nachher = glGetError();
+		hell = analysis_max_helligkeit(pixels, pixel_anzahl);
 	}
-	free(row_tmp);
+
+	analysis_spiegeln(pixels, width, height, row_bytes);
 
 	GdkPixbuf* pixbuf = gdk_pixbuf_new_from_data(pixels, GDK_COLORSPACE_RGB, FALSE,
 		8, width, height, (int) row_bytes, NULL, NULL);
@@ -117,18 +168,24 @@ void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 		return;
 	}
 
-	analysis_timestamp(stamp, sizeof(stamp));
-	snprintf(dir_path, sizeof(dir_path), "%s/shots", base);
-	if (!analysis_ensure_dir(dir_path))
+	// Zielverzeichnis anlegen und Pfad zusammensetzen
+	const char* shots_dir = string_append_directory_to_path_and_create(base, "shots");
+	if (!shots_dir)
 	{
 		g_object_unref(pixbuf);
 		free(pixels);
 		return;
 	}
 
-	snprintf(file_path, sizeof(file_path), "%s/shot_%s.png", dir_path, stamp);
+	analysis_timestamp(stamp, sizeof(stamp));
+	string_copy(file_path, sizeof(file_path), shots_dir);
+	string_cat(file_path, sizeof(file_path), "/shot_");
+	string_cat(file_path, sizeof(file_path), stamp);
+	string_cat(file_path, sizeof(file_path), ".png");
+
 	GError* error = NULL;
-	if (!gdk_pixbuf_save(pixbuf, file_path, "png", &error, NULL))
+	gboolean ok = gdk_pixbuf_save(pixbuf, file_path, "png", &error, NULL);
+	if (!ok)
 	{
 		fprintf(stderr, "analysis: PNG fehlgeschlagen: %s\n",
 			error ? error->message : "?");
@@ -139,8 +196,10 @@ void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 	}
 	else
 	{
-		printf("analysis: Screenshot gespeichert: %s (%dx%d)\n", file_path,
-			width, height);
+		printf("analysis: Screenshot gespeichert: %s (%dx%d, max=%u, "
+			"vp=%dx%d, fbo=%u, err=%u)\n", file_path, width, height,
+			(unsigned) hell, viewport[2], viewport[3],
+			(unsigned) read_fbo, (unsigned) fehler_nachher);
 	}
 
 	g_object_unref(pixbuf);
@@ -149,25 +208,32 @@ void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 
 void iwt_analysis_export_csv(iwt_gui_data_t data)
 {
-	char base[STRING_MAXLEN];
-	char stamp[32];
-	char dir_path[STRING_MAXLEN * 2];
-	char file_path[STRING_MAXLEN * 2];
+	string_t base;
+	string_t stamp;
+	string_t dir_path;
+	string_t file_path;
 
 	analysis_base_dir(base, sizeof(base));
-
 	analysis_timestamp(stamp, sizeof(stamp));
-	snprintf(dir_path, sizeof(dir_path), "%s/experiments/exp_%s", base, stamp);
-	if (!analysis_ensure_dir(dir_path))
+
+	const char* exp_root = string_append_directory_to_path_and_create(
+		base, "experiments");
+	if (!exp_root)
 	{
 		return;
 	}
+
+	string_copy(dir_path, sizeof(dir_path), exp_root);
+	string_cat(dir_path, sizeof(dir_path), "/exp_");
+	string_cat(dir_path, sizeof(dir_path), stamp);
+	string_directory_create(dir_path);
 
 	const iwt_runtime_t rt = &data->rt;
 	const iwt_config_t cfg = &data->cfg;
 
 	// --- spectrum.csv ---------------------------------------------------
-	snprintf(file_path, sizeof(file_path), "%s/spectrum.csv", dir_path);
+	string_copy(file_path, sizeof(file_path), dir_path);
+	string_cat(file_path, sizeof(file_path), "/spectrum.csv");
 	FILE* f = fopen(file_path, "w");
 	if (!f)
 	{
@@ -184,7 +250,8 @@ void iwt_analysis_export_csv(iwt_gui_data_t data)
 	fclose(f);
 
 	// --- clusters.csv ---------------------------------------------------
-	snprintf(file_path, sizeof(file_path), "%s/clusters.csv", dir_path);
+	string_copy(file_path, sizeof(file_path), dir_path);
+	string_cat(file_path, sizeof(file_path), "/clusters.csv");
 	f = fopen(file_path, "w");
 	if (!f)
 	{
@@ -204,7 +271,8 @@ void iwt_analysis_export_csv(iwt_gui_data_t data)
 	fclose(f);
 
 	// --- nodes.csv ------------------------------------------------------
-	snprintf(file_path, sizeof(file_path), "%s/nodes.csv", dir_path);
+	string_copy(file_path, sizeof(file_path), dir_path);
+	string_cat(file_path, sizeof(file_path), "/nodes.csv");
 	f = fopen(file_path, "w");
 	if (!f)
 	{
