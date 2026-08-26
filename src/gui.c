@@ -231,7 +231,10 @@ callback bool gui_application(gui_event_type_t event, gui_application_t core)
 	return is_ok;
 }
 
-static void gui_application_init_cfg(iwt_gui_data_t data)
+/*
+ * gui_init_cfg_defaults - Setzt Standardwerte fuer alle Konfigurationsparameter
+ */
+static void gui_init_cfg_defaults(iwt_gui_data_t data)
 {
 	data->cfg.gamma = 1.0;
 	data->cfg.beta = 1.0;
@@ -254,11 +257,17 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.enable_motion = true;
 	data->mode_2d = true;
 	data->projection_plane = 0;
+}
 
-	/* Umgebungsvariable IWT_CLUSTER_THRESHOLD: Cluster-Erkennungsschwelle
-	 * Hinweis: atof() ist locale-abhaengig (de_DE: Komma als Dezimal).
-	 * Wir nutzen LC_NUMERIC=C temporary, damit der Punkt als Dezimal-
-	 * trenner interpretiert wird. */
+/*
+ * gui_init_cfg_from_env - Liest Konfiguration aus Umgebungsvariablen
+ *
+ * Hinweis: atof() ist locale-abhaengig (de_DE: Komma als Dezimal).
+ * Wir nutzen LC_NUMERIC=C temporary, damit der Punkt als Dezimal-
+ * trenner interpretiert wird.
+ */
+static void gui_init_cfg_from_env(iwt_gui_data_t data)
+{
 	const char* env_thresh = getenv("IWT_CLUSTER_THRESHOLD");
 	if (env_thresh)
 	{
@@ -270,7 +279,6 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 		}
 	}
 
-	/* Umgebungsvariable IWT_MOTION: 1 = Bewegung aktivieren */
 	const char* env_motion = getenv("IWT_MOTION");
 	if (env_motion && strcmp(env_motion, "1") == 0)
 	{
@@ -309,6 +317,13 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 
 	ev2 = getenv("IWT_SLICE_MODE");
 	if (ev2 && strcmp(ev2, "1") == 0) { data->cfg.slice_mode = true; }
+}
+
+static void gui_application_init_cfg(iwt_gui_data_t data)
+{
+	gui_init_cfg_defaults(data);
+	gui_init_cfg_from_env(data);
+
 	data->zoom = 1.0f;
 	data->cam_yaw = 0.785398f;
 	data->cam_pitch = 0.5236f;
