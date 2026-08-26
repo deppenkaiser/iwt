@@ -39,24 +39,20 @@ GLuint gui_shader_create_points_program(void)
         "uniform mat4 u_mvp;\n"
         "uniform float u_size_scale;\n"
         "out vec3 v_color;\n"
-        "out float v_depth;\n"
         "void main()\n"
         "{\n"
         "    v_color = color;\n"
         "    gl_Position = u_mvp * vec4(pos, 1.0);\n"
-        "    v_depth = gl_Position.w;\n"
-        "    gl_PointSize = clamp((300.0 / v_depth) * u_size_scale, 1.0, 200.0);\n"
+        "    gl_PointSize = u_size_scale;\n"
         "}\n";
 
     static const char* fragment_source =
         "#version 150 core\n"
         "in vec3 v_color;\n"
-        "in float v_depth;\n"
         "out vec4 frag_color;\n"
         "void main()\n"
         "{\n"
-        "    float fade = clamp(4.0 / v_depth, 0.75, 1.0);\n"
-        "    frag_color = vec4(v_color * fade, 1.0);\n"
+        "    frag_color = vec4(v_color, 1.0);\n"
         "}\n";
 
     GLuint vs = gui_shader_compile(GL_VERTEX_SHADER, vertex_source);
