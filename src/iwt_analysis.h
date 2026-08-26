@@ -22,4 +22,9 @@ void iwt_analysis_export_csv(iwt_gui_data_t data);
  */
 void iwt_analysis_capture_screenshot(iwt_gui_data_t data);
 
+/*
+ * Erzeugt ein Histogramm fuer das aktuelle Experiment (Hotkey 'h').
+ */
+void iwt_analysis_generate_histogram(iwt_gui_data_t data);
+
 #endif

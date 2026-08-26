@@ -606,6 +606,11 @@ static void gui_main_window_handle_key(iwt_gui_data_t data, gui_event_t e)
 			iwt_analysis_export_csv(data);
 			e->data.key_pressed.handled = TRUE;
 			break;
+		case GDK_KEY_h:
+		case GDK_KEY_H:
+			data->request_histogram = true;
+			e->data.key_pressed.handled = TRUE;
+			break;
 		default:
 			break;
 	}
@@ -758,6 +763,20 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				{
 					iwt_analysis_capture_screenshot(data);
 					data->request_screenshot = false;
+				}
+
+				// Analyse: Histogramm bei Cluster-Aenderung automatisch erzeugen
+				if (data->rt.cluster_count != data->last_cluster_count)
+				{
+					data->request_histogram = true;
+					data->last_cluster_count = data->rt.cluster_count;
+				}
+
+				// Analyse: angefordertes Histogramm erzeugen
+				if (data->request_histogram)
+				{
+					iwt_analysis_generate_histogram(data);
+					data->request_histogram = false;
 				}
 
 				// Statistik-Text aktualisieren (jede Frame, billig: O(Cluster))

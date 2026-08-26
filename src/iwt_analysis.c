@@ -349,3 +349,44 @@ void iwt_analysis_export_csv(iwt_gui_data_t data)
 		setlocale(LC_NUMERIC, alt_locale);
 	}
 }
+
+void iwt_analysis_generate_histogram(iwt_gui_data_t data)
+{
+	string_t base;
+	string_t python_path;
+	string_t script_path;
+	string_t cmd;
+
+	analysis_base_dir(base, sizeof(base));
+	string_copy(python_path, sizeof(python_path), base);
+	string_cat(python_path, sizeof(python_path), "/src/python/analyse.py");
+
+	string_copy(script_path, sizeof(script_path), base);
+	string_cat(script_path, sizeof(script_path), "/build/bin/experiments/");
+
+	// Letztes Experiment finden (neuestes)
+	char find_cmd[1024];
+	snprintf(find_cmd, sizeof(find_cmd), "ls -td %s/exp_* 2>/dev/null | head -1", script_path);
+	FILE* f = popen(find_cmd, "r");
+	if (!f)
+	{
+		return;
+	}
+
+	char latest_exp[512];
+	if (fgets(latest_exp, sizeof(latest_exp), f))
+	{
+		// Newline entfernen
+		size_t len = strlen(latest_exp);
+		if (len > 0 && latest_exp[len - 1] == '\n')
+		{
+			latest_exp[len - 1] = '\0';
+		}
+
+		snprintf(cmd, sizeof(cmd), "python3 \"%s\" \"%s\" --histogram &", python_path, latest_exp);
+		printf("analysis: Erzeuge Histogramm fuer %s\n", latest_exp);
+		system(cmd);
+	}
+
+	pclose(f);
+}

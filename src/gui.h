@@ -52,6 +52,12 @@ typedef struct iwt_gui_data
 	// Analyse: Screenshot im naechsten Render-Durchlauf sichern (F12)
 	bool request_screenshot;
 
+	// Analyse: Histogramm im naechsten Render-Durchlauf erzeugen (h)
+	bool request_histogram;
+
 	// Analyse: automatischer Screenshot nach N Sekunden (--auto-shot, 0 = aus)
 	int auto_shot_delay_s;
+
+	// Analyse: letzte Cluster-Anzahl fuer automatischen Trigger
+	uint32_t last_cluster_count;
 }* iwt_gui_data_t;
