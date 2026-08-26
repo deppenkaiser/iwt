@@ -164,6 +164,7 @@ def erstelle_leistungsspektrum(grid, ausgabe_pfad):
 	Vorgehen: 2D-FFT, Betragsquadrat, dann Mittelung ueber konzentrische
 	Ringe (Wellenzahl k). Das Ergebnis ist mit dem Winkel-Leistungsspektrum
 	des CMB vergleichbar, wenn Skalenachse und Normierung angepasst werden.
+	Gibt (k_mitte, p_mittel) zurueck fuer Textausgabe.
 	"""
 	feld = grid - grid.mean()  # Gleichanteil entfernen (sonst dominiert k=0)
 	spektrum = np.abs(np.fft.fftshift(np.fft.fft2(feld))) ** 2
@@ -194,6 +195,93 @@ def erstelle_leistungsspektrum(grid, ausgabe_pfad):
 	fig.tight_layout()
 	fig.savefig(ausgabe_pfad, dpi=150)
 	plt.close(fig)
+	return k_mitte, p_mittel
+
+
+def spektrum_als_text(k, p, clusters):
+	"""Gibt das radiale Leistungsspektrum als formatierten Text aus.
+
+	Enthaelt: Tabelle, ASCII-Plot, Steigungen, Clustergroessen.
+	Geeignet fuer KI-Konvertierung (kein Bild noetig).
+	"""
+	gueltig = ~np.isnan(p) & (k > 0)
+	k_g = k[gueltig]
+	p_g = p[gueltig]
+
+	print()
+	print("=" * 68)
+	print("  RADIALES LEISTUNGSSPEKTRUM – Textanalyse")
+	print("=" * 68)
+	print()
+
+	# --- Clustergroessen ---
+	groessen = clusters["node_count"].astype(int)
+	groessen = groessen[groessen > 0]
+	print(f"Cluster: {len(groessen)} aktiv, "
+		  f"Groessen: {groessen.min()} .. {groessen.max()} Knoten")
+
+	# --- ASCII-Plot (Log-Log) ---
+	# Normiere P auf 0..59 fuer Plotbreite
+	if p_g.max() > 0:
+		log_p = np.log10(p_g)
+		log_p_min = log_p.min()
+		log_p_max = log_p.max()
+		if log_p_max > log_p_min:
+			norm = (log_p - log_p_min) / (log_p_max - log_p_min) * 59
+		else:
+			norm = np.full_like(log_p, 30.0)
+	else:
+		norm = np.zeros_like(p_g)
+
+	# Reduziere auf 40 Zeilen fuer Uebersicht
+	anzahl_zeilen = min(40, len(k_g))
+	if len(k_g) > anzahl_zeilen:
+		idx = np.linspace(0, len(k_g) - 1, anzahl_zeilen, dtype=int)
+		k_r = k_g[idx]
+		n_r = norm[idx]
+		p_r = p_g[idx]
+	else:
+		k_r = k_g
+		n_r = norm
+		p_r = p_g
+
+	print("ASCII-Plot (log P(k) vs log k):")
+	print(f"{'':>12s} | {'Leistung P(k)':^42s} | k")
+	print(f"{'':>12s} | {'':->42s} |")
+	for i in range(len(k_r)):
+		zeile = int(round(n_r[i]))
+		bar = " " * zeile + "#" + " " * (59 - zeile)
+		p_str = f"{p_r[i]:.1e}"
+		k_str = f"{k_r[i]:.4f}"
+		print(f"  P={p_str:>9s} | {bar} | k={k_str}")
+	print(f"{'':>12s} | {'':->42s} |")
+	print(f"{'':>12s} | k=0{'':>36s}k=max")
+	print()
+
+	# --- Steigungen in drei Bereichen ---
+	print("Steigungen (Potenzgesetz P ~ k^alpha):")
+	for name, lo, hi in [("Grosse Skalen ", 0.001, 0.05),
+						  ("Mittel       ", 0.05, 0.2),
+						  ("Kleine Skalen", 0.2, 0.6)]:
+		gut = (k_g > lo) & (k_g < hi) & (p_g > 0)
+		if np.sum(gut) > 2:
+			log_k = np.log10(k_g[gut])
+			log_p2 = np.log10(p_g[gut])
+			slope, _ = np.polyfit(log_k, log_p2, 1)
+			print(f"  {name} (k={lo:.2f}..{hi:.2f}): alpha = {slope:+.2f}")
+		else:
+			print(f"  {name}: zu wenig Datenpunkte")
+	print()
+
+	# --- Energieverteilung ---
+	total = p_g.sum()
+	for name, lo, hi in [("Grosse Strukturen (k<0.05)", 0, 0.05),
+						  ("Mittlere (0.05..0.2)", 0.05, 0.2),
+						  ("Kleine Strukturen (k>0.2)", 0.2, 1.0)]:
+		anteil = p_g[(k_g > lo) & (k_g < hi)].sum() / total * 100
+		print(f"  {name}: {anteil:.1f}%")
+	print()
+	print("=" * 68)
 
 
 def erstelle_evolution(spektrum_pfad, ausgabe_pfad):
@@ -253,6 +341,8 @@ def main():
 						help="Bildbreite der Projektion in Pixel/Kacheln (Default: 256)")
 	parser.add_argument("--spektrum", action="store_true",
 						help="Zusaetzlich radiales Leistungsspektrum erzeugen")
+	parser.add_argument("--text", action="store_true",
+						help="Leistungsspektrum als Text + ASCII-Plot ausgeben (fuer KI)")
 	args = parser.parse_args()
 
 	ziel = args.verzeichnis or finde_neuesten_export(args.basis)
@@ -275,10 +365,13 @@ def main():
 		os.path.join(ziel, f"projektion_{args.achse}.png"))
 	print(f"Erzeugt: {os.path.join(ziel, f'projektion_{args.achse}.png')}")
 
-	if args.spektrum:
+	if args.spektrum or args.text:
 		spektrum_pfad = os.path.join(ziel, f"spektrum_{args.achse}.png")
-		erstelle_leistungsspektrum(grid, spektrum_pfad)
-		print(f"Erzeugt: {spektrum_pfad}")
+		k, p = erstelle_leistungsspektrum(grid, spektrum_pfad)
+		if args.spektrum:
+			print(f"Erzeugt: {spektrum_pfad}")
+		if args.text:
+			spektrum_als_text(k, p, clusters)
 
 	# Zeitreihe der Cluster-Typen
 	evolution_pfad = os.path.join(ziel, "evolution.png")
