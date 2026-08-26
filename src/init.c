@@ -136,6 +136,11 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->was_member = calloc(cfg->N, sizeof(bool));
 	rt->n_steps = 0;
 
+	// Zeitreihe des Spektrums (wachsendes Array)
+	rt->spectrum_history = NULL;
+	rt->spectrum_history_count = 0;
+	rt->spectrum_history_capacity = 0;
+
 	for (size_t i = 0; i < rt->cluster_capacity; i++)
 	{
 		rt->clusters[i].node_indices = calloc(cfg->N, sizeof(size_t));
@@ -517,6 +522,7 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	_free_memory((void**) &rt->adj_count);
 	_free_memory((void**) &rt->wave_flat);
 	_free_memory((void**) &rt->wave_count);
+	_free_memory((void**) &rt->spectrum_history);
 }
 
 static bool k_cache_load(const iwt_runtime_t rt, const iwt_config_t cfg)

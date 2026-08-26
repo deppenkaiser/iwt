@@ -51,6 +51,7 @@ typedef struct iwt_cluster
 
 typedef struct iwt_spectrum
 {
+	uint64_t step;
 	size_t count_vacuum;
 	size_t count_electron;
 	size_t count_proton;
@@ -101,6 +102,12 @@ typedef struct iwt_runtime
 
 	// Klassifikation der aktuellen Cluster (groessenbasiertes Spektrum)
 	iwt_spectrum_t spectrum;
+
+	// Zeitreihe des Spektrums (wachsendes Array, bei jedem Detektions-
+	// schritt angehaengt, beim Export in spectrum.csv geschrieben)
+	iwt_spectrum_t* spectrum_history;
+	size_t spectrum_history_count;
+	size_t spectrum_history_capacity;
 
 	// Komprimierte Nachbarschaftslisten (Performance): adj_flat[i*STRIDE..]
 	// enthaelt die Knotenindizes der Nachbarn von i, adj_count[i] deren Zahl.

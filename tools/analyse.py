@@ -4,7 +4,7 @@
 # ============================================================================
 #
 # Liest den CSV-Export der Simulation (Taste 'E' in der GUI, siehe
-# src/iwt_analysis.c) und erzeugt daraus drei Artefakte:
+# src/iwt_analysis.c) und erzeugt daraus vier Artefakte:
 #
 #   1. cluster_histogramm.png
 #      Verteilung der Clustergroessen (Knotenanzahl je Cluster).
@@ -22,6 +22,10 @@
 #      Radial gemitteltes Leistungsspektrum (2D-FFT) der Projektion,
 #      doppelt-logarithmisch. Dient dem spaeteren quantitativen Vergleich
 #      mit der Winkel-Leistungsdichte des CMB.
+#
+#   4. evolution.png
+#      Zeitreihe der Cluster-Typen (proton, elektron, vakuum, anderes)
+#      ueber die Simulationsschritte aus spectrum.csv.
 #
 # Aufruf:
 #   python3 tools/analyse.py                          # neuester Export
@@ -192,6 +196,50 @@ def erstelle_leistungsspektrum(grid, ausgabe_pfad):
 	plt.close(fig)
 
 
+def erstelle_evolution(spektrum_pfad, ausgabe_pfad):
+	"""Zeitreihe der Cluster-Typen ueber die Simulationsschritte.
+
+	Liest spectrum.csv (step;vacuum;electron;proton;...) und zeichnet
+	die Anzahl je Typ ueber die Schritte als Liniendiagramm.
+	"""
+	if not os.path.isfile(spektrum_pfad):
+		print("Warnung: Keine spectrum.csv gefunden - Evolution uebersprungen.")
+		return None
+
+	data = np.genfromtxt(spektrum_pfad, delimiter=";", names=True)
+	if data.size == 0:
+		print("Warnung: Leere spectrum.csv - Evolution uebersprungen.")
+		return None
+
+	# Einzelnen Eintrag als Struktur behandeln
+	if data.ndim == 0:
+		data = np.array([data])
+
+	schritte = data["step"]
+	proton = data["proton"]
+	elektron = data["electron"]
+	vakuum = data["vacuum"]
+	anderes = data["other"]
+
+	fig, ax = plt.subplots(figsize=(10, 6))
+	ax.plot(schritte, proton, label="Proton", linewidth=2, color="#3b6ea5")
+	ax.plot(schritte, elektron, label="Elektron", linewidth=2, color="#a53b3b")
+	ax.plot(schritte, anderes, label="Anderes", linewidth=1.5,
+			color="#888888", linestyle="--")
+	ax.plot(schritte, vakuum, label="Vakuum", linewidth=1, color="#cccccc",
+			linestyle=":")
+
+	ax.set_xlabel("Schritt")
+	ax.set_ylabel("Anzahl")
+	ax.set_title("Cluster-Evolution ueber die Simulation")
+	ax.legend()
+	ax.grid(alpha=0.3)
+	fig.tight_layout()
+	fig.savefig(ausgabe_pfad, dpi=150)
+	plt.close(fig)
+	return ausgabe_pfad
+
+
 def main():
 	parser = argparse.ArgumentParser(
 		description="Auswertung eines IWT-Simulationsexports (siehe oben).")
@@ -231,6 +279,13 @@ def main():
 		spektrum_pfad = os.path.join(ziel, f"spektrum_{args.achse}.png")
 		erstelle_leistungsspektrum(grid, spektrum_pfad)
 		print(f"Erzeugt: {spektrum_pfad}")
+
+	# Zeitreihe der Cluster-Typen
+	evolution_pfad = os.path.join(ziel, "evolution.png")
+	spektrum_csv = os.path.join(ziel, "spectrum.csv")
+	erstelle_evolution(spektrum_csv, evolution_pfad)
+	if os.path.isfile(evolution_pfad):
+		print(f"Erzeugt: {evolution_pfad}")
 
 
 if __name__ == "__main__":

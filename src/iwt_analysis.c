@@ -274,12 +274,29 @@ void iwt_analysis_export_csv(iwt_gui_data_t data)
 		return;
 	}
 
-	fprintf(f, "step,vacuum,electron,proton,u_quark,d_quark,other,total\n");
-	fprintf(f, "%llu,%zu,%zu,%zu,%zu,%zu,%zu,%u\n",
-		(unsigned long long) rt->n_steps, rt->spectrum.count_vacuum,
-		rt->spectrum.count_electron, rt->spectrum.count_proton,
-		rt->spectrum.count_u_quark, rt->spectrum.count_d_quark,
-		rt->spectrum.count_other, rt->cluster_count);
+	fprintf(f, "step;vacuum;electron;proton;u_quark;d_quark;other;total\n");
+	for (size_t i = 0; i < rt->spectrum_history_count; ++i)
+	{
+		const iwt_spectrum_t* s = &rt->spectrum_history[i];
+		size_t total = s->count_proton + s->count_electron + s->count_other;
+		fprintf(f, "%llu;%zu;%zu;%zu;%zu;%zu;%zu;%zu\n",
+			(unsigned long long) s->step, s->count_vacuum,
+			s->count_electron, s->count_proton,
+			s->count_u_quark, s->count_d_quark,
+			s->count_other, total);
+	}
+	// Aktuellen Stand noch anhaengen falls er nicht im Puffer liegt
+	if (rt->spectrum_history_count == 0 ||
+		rt->spectrum_history[rt->spectrum_history_count - 1].step != rt->n_steps)
+	{
+		size_t total = rt->spectrum.count_proton + rt->spectrum.count_electron
+					+ rt->spectrum.count_other;
+		fprintf(f, "%llu;%zu;%zu;%zu;%zu;%zu;%zu;%zu\n",
+			(unsigned long long) rt->n_steps, rt->spectrum.count_vacuum,
+			rt->spectrum.count_electron, rt->spectrum.count_proton,
+			rt->spectrum.count_u_quark, rt->spectrum.count_d_quark,
+			rt->spectrum.count_other, total);
+	}
 	fclose(f);
 
 	// --- clusters.csv ---------------------------------------------------

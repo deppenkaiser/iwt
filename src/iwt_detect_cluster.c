@@ -76,6 +76,7 @@ static void detect_classify_spectrum(const iwt_runtime_t rt, const iwt_config_t 
 	}
 
 	rt->spectrum.count_vacuum = cfg->N > clustered ? cfg->N - clustered : 0;
+	rt->spectrum.step = rt->n_steps;
 }
 
 static void flood_fill_process_node(const iwt_runtime_t rt, iwt_cluster_t c, size_t i);
@@ -187,6 +188,17 @@ void iwt_detect_clusters(const iwt_runtime_t rt, const iwt_config_t cfg)
 	detect_update_membership(rt, cfg);
 	iwt_match_clusters(rt, cfg);
 	detect_classify_spectrum(rt, cfg);
+
+	// Spektrum in Zeitreihe puffern (wachsendes Array)
+	if (rt->spectrum_history_count >= rt->spectrum_history_capacity)
+	{
+		size_t neu = rt->spectrum_history_capacity == 0 ? 1024
+					: rt->spectrum_history_capacity * 2;
+		rt->spectrum_history = realloc(rt->spectrum_history,
+			neu * sizeof(iwt_spectrum_t));
+		rt->spectrum_history_capacity = neu;
+	}
+	rt->spectrum_history[rt->spectrum_history_count++] = rt->spectrum;
 
 	// printf im Hot-Path drosseln (stdout-Flush pro Frame ist teuer)
 	static int detect_frame = 0;
