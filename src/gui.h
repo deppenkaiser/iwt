@@ -19,6 +19,7 @@ typedef struct iwt_gui_data
 	GtkWidget* spin_wave_k_min;
 	GtkWidget* spin_extra_levels;
 	GtkWidget* toggle_2d_mode;
+	GtkWidget* spin_projection_plane;
 	GtkTextBuffer* stats_buffer;
 
 	struct iwt_config cfg;

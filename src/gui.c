@@ -112,7 +112,8 @@ enum
 	IWT_CTRL_SLICE_DELTA,
 	IWT_CTRL_WAVE_K_MIN,
 	IWT_CTRL_EXTRA_LEVELS,
-	IWT_CTRL_2D_MODE
+	IWT_CTRL_2D_MODE,
+	IWT_CTRL_PROJECTION_PLANE
 };
 
 static void gui_application_init_cfg(iwt_gui_data_t data);
@@ -470,6 +471,12 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
         "2D-Modus: Orthografische Projektion auf eine Ebene.\n"
         "Wie die PNG-Grafiken der Analyse. Wählbar via Projektionsebene.");
 
+    struct gui_spin_button_configuration proj_plane_cfg = {.alignment = 0.5f, .value = data->projection_plane, .min = 0.0, .max = 2.0, .increment = 1.0, .digits = 0};
+    data->spin_projection_plane = gui_button_spin_create(IWT_CTRL_PROJECTION_PLANE, &proj_plane_cfg, data);
+    gtk_widget_set_tooltip_text(data->spin_projection_plane,
+        "Projektionsebene für 2D-Modus:\n"
+        "0 = XY (von oben), 1 = XZ (von vorne), 2 = YZ (von der Seite).");
+
     struct gui_button_configuration slice_cfg = {.label = "2D-Schnitt", .toggle = true};
     data->toggle_slice = gui_button_create(IWT_CTRL_SLICE_MODE, &slice_cfg, data);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_slice), data->cfg.slice_mode);
@@ -515,6 +522,7 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
     gui_box_append_widget(control_box, label_extra_levels);
     gui_box_append_widget(control_box, data->spin_extra_levels);
     gui_box_append_widget(control_box, data->toggle_2d_mode);
+    gui_box_append_widget(control_box, data->spin_projection_plane);
     gui_box_append_widget(control_box, label_slice_pos);
     gui_box_append_widget(control_box, data->spin_slice_pos);
     gui_box_append_widget(control_box, data->spin_slice_delta);
@@ -715,6 +723,10 @@ static void gui_button_handle_selected(gui_button_t core, iwt_gui_data_t data)
 				printf("Geometrie neu aufgebaut: extra_levels = %d\n", levels);
 			}
 		}
+	}
+	else if (core->id == IWT_CTRL_PROJECTION_PLANE)
+	{
+		data->projection_plane = (int) (gui_button_spin_get_double(core->button) + 0.5);
 	}
 }
 
@@ -1041,10 +1053,41 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count)
 	float aspect = (height > 0) ? (float) width / (float) height : 1.0f;
 
 	float radius = 3.6f * data->zoom;
-	float eye[3] = {
-		radius * cosf(data->cam_pitch) * cosf(data->cam_yaw),
-		radius * sinf(data->cam_pitch),
-		radius * cosf(data->cam_pitch) * sinf(data->cam_yaw)};
+	float eye[3];
+
+	if (data->mode_2d)
+	{
+		// Kamera-Position basierend auf Projektionsebene
+		switch (data->projection_plane)
+		{
+			case 0: // XY - von oben (Z-Achse)
+				eye[0] = 0.0f;
+				eye[1] = 0.0f;
+				eye[2] = radius;
+				break;
+			case 1: // XZ - von vorne (Y-Achse)
+				eye[0] = 0.0f;
+				eye[1] = radius;
+				eye[2] = 0.0f;
+				break;
+			case 2: // YZ - von der Seite (X-Achse)
+				eye[0] = radius;
+				eye[1] = 0.0f;
+				eye[2] = 0.0f;
+				break;
+			default:
+				eye[0] = 0.0f;
+				eye[1] = 0.0f;
+				eye[2] = radius;
+				break;
+		}
+	}
+	else
+	{
+		eye[0] = radius * cosf(data->cam_pitch) * cosf(data->cam_yaw);
+		eye[1] = radius * sinf(data->cam_pitch);
+		eye[2] = radius * cosf(data->cam_pitch) * sinf(data->cam_yaw);
+	}
 	float center[3] = {0.0f, 0.0f, 0.0f};
 	float up[3] = {0.0f, 1.0f, 0.0f};
 
