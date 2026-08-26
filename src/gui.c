@@ -251,7 +251,9 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.slice_delta = 0.25;
 	data->cfg.wave_k_min = 0.55;
 	data->cfg.extra_levels = 0;
-	data->cfg.enable_motion = false;
+	data->cfg.enable_motion = true;
+	data->mode_2d = true;
+	data->projection_plane = 0;
 
 	/* Umgebungsvariable IWT_CLUSTER_THRESHOLD: Cluster-Erkennungsschwelle
 	 * Hinweis: atof() ist locale-abhaengig (de_DE: Komma als Dezimal).
