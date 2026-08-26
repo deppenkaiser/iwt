@@ -51,4 +51,7 @@ typedef struct iwt_gui_data
 
 	// Analyse: Screenshot im naechsten Render-Durchlauf sichern (F12)
 	bool request_screenshot;
+
+	// Analyse: automatischer Screenshot nach N Sekunden (--auto-shot, 0 = aus)
+	int auto_shot_delay_s;
 }* iwt_gui_data_t;

@@ -147,21 +147,34 @@ void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 	}
 
 	/*
-	 * GLES-Kompatibilitaet: Der Kontext kann ein GLES-Kontext sein - dort
-	 * ist GL_RGB + GL_UNSIGNED_BYTE beim Lesen nicht zulaessig
-	 * (GL_INVALID_ENUM). GL_RGBA + GL_UNSIGNED_BYTE ist dagegen immer
-	 * gueltig; der Alphakanal wird anschliessend auf opak gesetzt, da
-	 * GdkPixbuf nicht-praeultipliziertes RGBA erwartet.
+	 * GLES-Kompatibilitaet + saubere Fehlerlage:
+	 * Der Kontext kann ein GLES-Kontext sein - dort ist die erlaubte
+	 * Format-/Typkombination beim Lesen beschraenkt (GL_INVALID_ENUM).
+	 * Wichtig: glGetError arbeitet wie eine Queue - ohne vorheriges
+	 * Leeren wuerde hier ein ALTFEHLER frueherer Aufrufe gemeldet statt
+	 * des Status unseres Reads.
 	 */
+	unsigned int altfehler = 0;
+	while (glGetError() != GL_NO_ERROR)
+	{
+		++altfehler;
+	}
+
 	glPixelStorei(GL_PACK_ALIGNMENT, 4);
 	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 	const GLenum fehler_nachher = glGetError();
 	if (fehler_nachher != GL_NO_ERROR)
 	{
-		fprintf(stderr, "analysis: glReadPixels fehlgeschlagen (err=%u) "
-			"- Screenshot uebersprungen\n", (unsigned) fehler_nachher);
+		fprintf(stderr, "analysis: glReadPixels fehlgeschlagen (err=%u, "
+			"%u Altfehler verworfen) - Screenshot uebersprungen\n",
+			(unsigned) fehler_nachher, altfehler);
 		free(pixels);
 		return;
+	}
+	if (altfehler > 0)
+	{
+		printf("analysis: %u vorbestehende GL-Fehler verworfen "
+			"(Queueschmutz aus frueheren Aufrufen)\n", altfehler);
 	}
 
 	for (size_t i = 0; i < pixel_anzahl; i += 4)

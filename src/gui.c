@@ -315,6 +315,18 @@ static bool gui_application_startup(iwt_gui_data_t data)
 }
 
 /*
+ * gui_auto_shot_timeout - Timer-Callback fuer automatischen Screenshot
+ * (--auto-shot <sekunden>). Wird einmalig nach Ablauf der Frist ausgeloest.
+ */
+static void gui_auto_shot_timeout(gpointer user_data)
+{
+	iwt_gui_data_t data = user_data;
+	data->request_screenshot = true;
+	printf("analysis: Auto-Screenshot ausgeloest nach %d s\n",
+		data->auto_shot_delay_s);
+}
+
+/*
  * gui_application_activate - UI Aufbau
  *
  * Erstellt OpenGL-Fläche, Steuer-Widgets und Hauptfenster.
@@ -466,6 +478,12 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
 
     data->window = gui_main_window_create(core->app, 800, 800, data, false, true);
     gtk_window_set_child(GTK_WINDOW(data->window), main_box);
+
+    if (data->auto_shot_delay_s > 0)
+    {
+        g_timeout_add_once((guint) (data->auto_shot_delay_s * 1000),
+            gui_auto_shot_timeout, data);
+    }
 
     return true;
 }
