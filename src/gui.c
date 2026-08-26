@@ -52,6 +52,7 @@
  */
 #include "gui.h"
 #include "init.h"
+#include "iwt_analysis.h"
 #include "iwt_kernel.h"
 #include "iwt_detect_cluster.h"
 #include "gui_math.h"
@@ -511,6 +512,15 @@ static void gui_main_window_handle_key(iwt_gui_data_t data, gui_event_t e)
 		case GDK_KEY_Down:
 			gui_main_window_handle_key_down(data, e);
 			break;
+		case GDK_KEY_F12:
+			data->request_screenshot = true;
+			e->data.key_pressed.handled = TRUE;
+			break;
+		case GDK_KEY_e:
+		case GDK_KEY_E:
+			iwt_analysis_export_csv(data);
+			e->data.key_pressed.handled = TRUE;
+			break;
 		default:
 			break;
 	}
@@ -657,6 +667,13 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				size_t cluster_draw_count = gui_gl_update_clusters(data);
 				gui_gl_update_waves(data);
 				gui_gl_draw(data, cluster_draw_count);
+
+				// Analyse: angeforderten Screenshot im GL-Kontext sichern
+				if (data->request_screenshot)
+				{
+					iwt_analysis_capture_screenshot(data);
+					data->request_screenshot = false;
+				}
 
 				// Statistik-Text aktualisieren (jede Frame, billig: O(Cluster))
 				if (data->stats_buffer)

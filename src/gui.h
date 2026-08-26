@@ -48,4 +48,7 @@ typedef struct iwt_gui_data
 	double drag_last_y;
 
 	int iter;
+
+	// Analyse: Screenshot im naechsten Render-Durchlauf sichern (F12)
+	bool request_screenshot;
 }* iwt_gui_data_t;

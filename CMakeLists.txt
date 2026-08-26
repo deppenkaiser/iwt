@@ -4,6 +4,7 @@ project(iwt LANGUAGES C)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(PkgConfig REQUIRED)
+pkg_check_modules(GDKPIXBUF REQUIRED IMPORTED_TARGET gdk-pixbuf-2.0)
 
 add_compile_definitions(_POSIX_C_SOURCE=200809L)
 
@@ -31,6 +32,7 @@ target_sources(iwt PRIVATE
 	src/iwt.c
 	src/init.c
 	src/dodecahedron.c
+	src/iwt_analysis.c
 )
 
 target_include_directories(iwt PRIVATE
@@ -44,4 +46,5 @@ target_link_libraries(iwt
 		gui
 		vector
 		m
+		PkgConfig::GDKPIXBUF
 )
