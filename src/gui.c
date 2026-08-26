@@ -398,26 +398,12 @@ static void gui_auto_shot_timeout(gpointer user_data)
 }
 
 /*
- * gui_application_activate - UI Aufbau
+ * gui_create_control_widgets - Erstellt alle Steuer-Widgets
  *
- * Erstellt OpenGL-Fläche, Steuer-Widgets und Hauptfenster.
+ * Erzeugt Toggle-Buttons und Spin-Buttons fuer die Parametersteuerung.
  */
-static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data)
+static void gui_create_control_widgets(iwt_gui_data_t data)
 {
-    data->gl_area = gui_gl_create(data);
-    GtkWidget* gl_frame = gui_frame_create("IWT Live View", data->gl_area);
-    gtk_widget_set_vexpand(gl_frame, TRUE);
-    gtk_widget_set_hexpand(gl_frame, TRUE);
-
-    GtkEventController* scroll_controller = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
-    g_signal_connect(scroll_controller, "scroll", G_CALLBACK(gui_input_on_scroll), data);
-    gtk_widget_add_controller(data->gl_area, scroll_controller);
-
-    GtkGesture* drag_gesture = gtk_gesture_drag_new();
-    g_signal_connect(drag_gesture, "drag-begin", G_CALLBACK(gui_input_on_drag_begin), data);
-    g_signal_connect(drag_gesture, "drag-update", G_CALLBACK(gui_input_on_drag_update), data);
-    gtk_widget_add_controller(data->gl_area, GTK_EVENT_CONTROLLER(drag_gesture));
-
     struct gui_button_configuration motion_cfg = {.label = "Bewegung aktiv", .toggle = true};
     data->toggle_motion = gui_button_create(IWT_CTRL_MOTION, &motion_cfg, data);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_motion), data->cfg.enable_motion);
@@ -504,7 +490,49 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
         "Kopplungs-Schwelle des Wellen-Kantennetzes.\n"
         "Kleiner = Konturen reichen weiter in den Zwischenraum\n"
         "(schwerer Schweif von K ~ d^-(3-D)).");
+}
 
+/*
+ * gui_create_stats_view - Erstellt die Live-Statistik-Anzeige
+ *
+ * Monospace-TextView in Scroll-Flaeche fuer Spektrum und Histogramm.
+ */
+static GtkWidget* gui_create_stats_view(iwt_gui_data_t data)
+{
+    data->stats_buffer = gtk_text_buffer_new(NULL);
+    GtkWidget* stats_view = gtk_text_view_new_with_buffer(data->stats_buffer);
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(stats_view), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(stats_view), FALSE);
+    gtk_text_view_set_left_margin(GTK_TEXT_VIEW(stats_view), 8);
+    gtk_text_view_set_top_margin(GTK_TEXT_VIEW(stats_view), 4);
+
+    GtkCssProvider* stats_css = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(stats_css,
+        ".stats-label { font-family: monospace; font-size: 11px; }");
+    gtk_style_context_add_provider_for_display(
+        gtk_widget_get_display(stats_view),
+        GTK_STYLE_PROVIDER(stats_css),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(stats_css);
+    gtk_widget_add_css_class(stats_view, "stats-label");
+
+    GtkWidget* stats_scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(stats_scroll),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(stats_scroll), stats_view);
+    gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(stats_scroll), 150);
+    gtk_widget_set_hexpand(stats_scroll, TRUE);
+
+    return stats_scroll;
+}
+
+/*
+ * gui_create_control_box - Erstellt die horizontale Steuerleiste
+ *
+ * Fuegt alle Widgets in die richtige Reihenfolge ein.
+ */
+static GtkWidget* gui_create_control_box(iwt_gui_data_t data)
+{
     GtkWidget* label_beta = gtk_label_new("Bohm-Kopplung:");
     GtkWidget* label_gamma = gtk_label_new("Fraktale Verstärkung:");
     GtkWidget* label_threshold = gtk_label_new("Cluster-Schwelle:");
@@ -530,36 +558,37 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
     gui_box_append_widget(control_box, data->spin_slice_delta);
     gui_box_append_widget(control_box, data->spin_wave_k_min);
 
+    return control_box;
+}
+
+/*
+ * gui_application_activate - UI Aufbau
+ *
+ * Erstellt OpenGL-Fläche, Steuer-Widgets und Hauptfenster.
+ */
+static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data)
+{
+    data->gl_area = gui_gl_create(data);
+    GtkWidget* gl_frame = gui_frame_create("IWT Live View", data->gl_area);
+    gtk_widget_set_vexpand(gl_frame, TRUE);
+    gtk_widget_set_hexpand(gl_frame, TRUE);
+
+    GtkEventController* scroll_controller = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
+    g_signal_connect(scroll_controller, "scroll", G_CALLBACK(gui_input_on_scroll), data);
+    gtk_widget_add_controller(data->gl_area, scroll_controller);
+
+    GtkGesture* drag_gesture = gtk_gesture_drag_new();
+    g_signal_connect(drag_gesture, "drag-begin", G_CALLBACK(gui_input_on_drag_begin), data);
+    g_signal_connect(drag_gesture, "drag-update", G_CALLBACK(gui_input_on_drag_update), data);
+    gtk_widget_add_controller(data->gl_area, GTK_EVENT_CONTROLLER(drag_gesture));
+
+    gui_create_control_widgets(data);
+    GtkWidget* control_box = gui_create_control_box(data);
+    GtkWidget* stats_scroll = gui_create_stats_view(data);
+
     GtkWidget* main_box = gui_box_vertical_create(4);
     gui_box_append_widget(main_box, control_box);
-
-    // Live-Statistik (Spektrum + Histogramm) als Monospace-TextView in
-    // einer Scroll-Flaeche - GtkTextView rendert Mehrzeiliges zuverlaessig.
-    data->stats_buffer = gtk_text_buffer_new(NULL);
-    GtkWidget* stats_view = gtk_text_view_new_with_buffer(data->stats_buffer);
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(stats_view), FALSE);
-    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(stats_view), FALSE);
-    gtk_text_view_set_left_margin(GTK_TEXT_VIEW(stats_view), 8);
-    gtk_text_view_set_top_margin(GTK_TEXT_VIEW(stats_view), 4);
-
-    GtkCssProvider* stats_css = gtk_css_provider_new();
-    gtk_css_provider_load_from_string(stats_css,
-        ".stats-label { font-family: monospace; font-size: 11px; }");
-    gtk_style_context_add_provider_for_display(
-        gtk_widget_get_display(stats_view),
-        GTK_STYLE_PROVIDER(stats_css),
-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-    g_object_unref(stats_css);
-    gtk_widget_add_css_class(stats_view, "stats-label");
-
-    GtkWidget* stats_scroll = gtk_scrolled_window_new();
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(stats_scroll),
-                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(stats_scroll), stats_view);
-    gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(stats_scroll), 150);
-    gtk_widget_set_hexpand(stats_scroll, TRUE);
     gui_box_append_widget(main_box, stats_scroll);
-
     gui_box_append_widget(main_box, gl_frame);
 
     data->window = gui_main_window_create(core->app, 800, 800, data, false, true);
