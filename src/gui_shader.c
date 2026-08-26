@@ -45,7 +45,7 @@ GLuint gui_shader_create_points_program(void)
         "    v_color = color;\n"
         "    gl_Position = u_mvp * vec4(pos, 1.0);\n"
         "    v_depth = gl_Position.w;\n"
-        "    gl_PointSize = clamp((300.0 / v_depth) * u_size_scale, 1.0, 80.0);\n"
+        "    gl_PointSize = clamp((300.0 / v_depth) * u_size_scale, 1.0, 200.0);\n"
         "}\n";
 
     static const char* fragment_source =
