@@ -339,8 +339,6 @@ def main():
 						help="Projektionsachse (Default: z)")
 	parser.add_argument("--aufloesung", type=int, default=256,
 						help="Bildbreite der Projektion in Pixel/Kacheln (Default: 256)")
-	parser.add_argument("--spektrum", action="store_true",
-						help="Zusaetzlich radiales Leistungsspektrum erzeugen")
 	parser.add_argument("--text", action="store_true",
 						help="Leistungsspektrum als Text + ASCII-Plot ausgeben (fuer KI)")
 	args = parser.parse_args()
@@ -365,13 +363,11 @@ def main():
 		os.path.join(ziel, f"projektion_{args.achse}.png"))
 	print(f"Erzeugt: {os.path.join(ziel, f'projektion_{args.achse}.png')}")
 
-	if args.spektrum or args.text:
-		spektrum_pfad = os.path.join(ziel, f"spektrum_{args.achse}.png")
-		k, p = erstelle_leistungsspektrum(grid, spektrum_pfad)
-		if args.spektrum:
-			print(f"Erzeugt: {spektrum_pfad}")
-		if args.text:
-			spektrum_als_text(k, p, clusters)
+	spektrum_pfad = os.path.join(ziel, f"spektrum_{args.achse}.png")
+	k, p = erstelle_leistungsspektrum(grid, spektrum_pfad)
+	print(f"Erzeugt: {spektrum_pfad}")
+	if args.text:
+		spektrum_als_text(k, p, clusters)
 
 	# Zeitreihe der Cluster-Typen
 	evolution_pfad = os.path.join(ziel, "evolution.png")
