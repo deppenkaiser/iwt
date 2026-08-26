@@ -233,8 +233,8 @@ def spektrum_als_text(k, p, clusters):
 	else:
 		norm = np.zeros_like(p_g)
 
-	# Reduziere auf 40 Zeilen fuer Uebersicht
-	anzahl_zeilen = min(40, len(k_g))
+	# Reduziere auf 80 Zeilen fuer Detail
+	anzahl_zeilen = min(80, len(k_g))
 	if len(k_g) > anzahl_zeilen:
 		idx = np.linspace(0, len(k_g) - 1, anzahl_zeilen, dtype=int)
 		k_r = k_g[idx]
