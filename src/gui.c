@@ -413,11 +413,9 @@ static void gui_auto_shot_timeout(gpointer user_data)
 }
 
 /*
- * gui_create_control_widgets - Erstellt alle Steuer-Widgets
- *
- * Erzeugt Toggle-Buttons und Spin-Buttons fuer die Parametersteuerung.
+ * gui_create_toggle_widgets - Erstellt Toggle-Buttons
  */
-static void gui_create_control_widgets(iwt_gui_data_t data)
+static void gui_create_toggle_widgets(iwt_gui_data_t data)
 {
     struct gui_button_configuration motion_cfg = {.label = "Bewegung aktiv", .toggle = true};
     data->toggle_motion = gui_button_create(IWT_CTRL_MOTION, &motion_cfg, data);
@@ -427,6 +425,35 @@ static void gui_create_control_widgets(iwt_gui_data_t data)
         "Berechnet die Weber-Kraft zwischen Clustern (DSTT-Drift).\n"
         "Theorie: Kap. 8");
 
+    struct gui_button_configuration waves_cfg = {.label = "EM-Wellen", .toggle = true};
+    data->toggle_waves = gui_button_create(IWT_CTRL_SHOW_WAVES, &waves_cfg, data);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_waves), data->cfg.show_waves);
+    gtk_widget_set_tooltip_text(data->toggle_waves,
+        "EM-Wellen-Overlay: Aequipotenziallinien des Phasenfeldes.\n"
+        "Farbe = Potentialwert, mehrere Niveaus gleichzeitig.\n"
+        "Theorie: Dispersion omega ~ k^(D/3), Kap. 11, Anhang E");
+
+    struct gui_button_configuration mode_2d_cfg = {.label = "2D-Modus", .toggle = true};
+    data->toggle_2d_mode = gui_button_create(IWT_CTRL_2D_MODE, &mode_2d_cfg, data);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_2d_mode), data->mode_2d);
+    gtk_widget_set_tooltip_text(data->toggle_2d_mode,
+        "2D-Modus: Orthografische Projektion auf eine Ebene.\n"
+        "Wie die PNG-Grafiken der Analyse. Wählbar via Projektionsebene.");
+
+    struct gui_button_configuration slice_cfg = {.label = "2D-Schnitt", .toggle = true};
+    data->toggle_slice = gui_button_create(IWT_CTRL_SLICE_MODE, &slice_cfg, data);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_slice), data->cfg.slice_mode);
+    gtk_widget_set_tooltip_text(data->toggle_slice,
+        "2D-Schnitt: Konturen nur in einer duennen Scheibe bei z=Schnitt-\n"
+        "Position; Knoten ausserhalb werden abgedunkelt. Kamera frontal\n"
+        "drehen (Drag) fuer echte 2D-Ansicht.");
+}
+
+/*
+ * gui_create_spin_widgets - Erstellt Spin-Buttons
+ */
+static void gui_create_spin_widgets(iwt_gui_data_t data)
+{
     struct gui_spin_button_configuration beta_cfg = {.alignment = 0.5f, .value = data->cfg.beta, .min = 0.0, .max = 10.0, .increment = 0.01, .digits = 3};
     data->spin_beta = gui_button_spin_create(IWT_CTRL_BETA, &beta_cfg, data);
     gtk_widget_set_tooltip_text(data->spin_beta,
@@ -451,14 +478,6 @@ static void gui_create_control_widgets(iwt_gui_data_t data)
         "Niedrige Werte → größere Cluster (mehr Verbindungen).\n"
         "Theorie: Kap. 2, Axiom 4");
 
-    struct gui_button_configuration waves_cfg = {.label = "EM-Wellen", .toggle = true};
-    data->toggle_waves = gui_button_create(IWT_CTRL_SHOW_WAVES, &waves_cfg, data);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_waves), data->cfg.show_waves);
-    gtk_widget_set_tooltip_text(data->toggle_waves,
-        "EM-Wellen-Overlay: Aequipotenziallinien des Phasenfeldes.\n"
-        "Farbe = Potentialwert, mehrere Niveaus gleichzeitig.\n"
-        "Theorie: Dispersion omega ~ k^(D/3), Kap. 11, Anhang E");
-
     struct gui_spin_button_configuration extra_levels_cfg = {.alignment = 0.5f, .value = data->cfg.extra_levels, .min = 0.0, .max = 3.0, .increment = 1.0, .digits = 0};
     data->spin_extra_levels = gui_button_spin_create(IWT_CTRL_EXTRA_LEVELS, &extra_levels_cfg, data);
     gtk_widget_set_tooltip_text(data->spin_extra_levels,
@@ -467,26 +486,11 @@ static void gui_create_control_widgets(iwt_gui_data_t data)
         "1 = 12 Wurzel-Dodekaeder, 2/3 = grobere Skalen.\n"
         "Baut die Geometrie sofort neu. Theorie: Kap. 6");
 
-    struct gui_button_configuration mode_2d_cfg = {.label = "2D-Modus", .toggle = true};
-    data->toggle_2d_mode = gui_button_create(IWT_CTRL_2D_MODE, &mode_2d_cfg, data);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_2d_mode), data->mode_2d);
-    gtk_widget_set_tooltip_text(data->toggle_2d_mode,
-        "2D-Modus: Orthografische Projektion auf eine Ebene.\n"
-        "Wie die PNG-Grafiken der Analyse. Wählbar via Projektionsebene.");
-
     struct gui_spin_button_configuration proj_plane_cfg = {.alignment = 0.5f, .value = data->projection_plane, .min = 0.0, .max = 2.0, .increment = 1.0, .digits = 0};
     data->spin_projection_plane = gui_button_spin_create(IWT_CTRL_PROJECTION_PLANE, &proj_plane_cfg, data);
     gtk_widget_set_tooltip_text(data->spin_projection_plane,
         "Projektionsebene für 2D-Modus:\n"
         "0 = XY (von oben), 1 = XZ (von vorne), 2 = YZ (von der Seite).");
-
-    struct gui_button_configuration slice_cfg = {.label = "2D-Schnitt", .toggle = true};
-    data->toggle_slice = gui_button_create(IWT_CTRL_SLICE_MODE, &slice_cfg, data);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_slice), data->cfg.slice_mode);
-    gtk_widget_set_tooltip_text(data->toggle_slice,
-        "2D-Schnitt: Konturen nur in einer duennen Scheibe bei z=Schnitt-\n"
-        "Position; Knoten ausserhalb werden abgedunkelt. Kamera frontal\n"
-        "drehen (Drag) fuer echte 2D-Ansicht.");
 
     struct gui_spin_button_configuration slice_pos_cfg = {.alignment = 0.5f, .value = data->cfg.slice_pos, .min = -4.0, .max = 4.0, .increment = 0.05, .digits = 2};
     data->spin_slice_pos = gui_button_spin_create(IWT_CTRL_SLICE_POS, &slice_pos_cfg, data);
@@ -505,6 +509,17 @@ static void gui_create_control_widgets(iwt_gui_data_t data)
         "Kopplungs-Schwelle des Wellen-Kantennetzes.\n"
         "Kleiner = Konturen reichen weiter in den Zwischenraum\n"
         "(schwerer Schweif von K ~ d^-(3-D)).");
+}
+
+/*
+ * gui_create_control_widgets - Erstellt alle Steuer-Widgets
+ *
+ * Erzeugt Toggle-Buttons und Spin-Buttons fuer die Parametersteuerung.
+ */
+static void gui_create_control_widgets(iwt_gui_data_t data)
+{
+    gui_create_toggle_widgets(data);
+    gui_create_spin_widgets(data);
 }
 
 /*
