@@ -147,9 +147,9 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
  *          durch den Phasenraum (Frontenzug).
  */
 
-#define WAVE_LEVELS 24
-#define WAVE_MARCH_FRAMES 240
-#define WAVE_MAX_SEGMENTS 120000
+#define WAVE_LEVELS 48
+#define WAVE_MARCH_FRAMES 480
+#define WAVE_MAX_SEGMENTS 240000
 #define WAVE_MAX_CROSSINGS 32
 
 static bool slice_point_visible(const iwt_gui_data_t data, double z)
