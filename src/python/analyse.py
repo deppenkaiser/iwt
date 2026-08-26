@@ -245,8 +245,8 @@ def main():
 		description="Auswertung eines IWT-Simulationsexports (siehe oben).")
 	parser.add_argument("verzeichnis", nargs="?", default=None,
 						help="Exportverzeichnis (Standard: neuestes unter bin/experiments)")
-	parser.add_argument("--basis", default=os.path.join(os.path.dirname(__file__), "..", "bin"),
-						help="Basisverzeichnis mit experiments/ (Standard: bin/)")
+	parser.add_argument("--basis", default=os.path.join(os.path.dirname(__file__), "..", "..", "build", "bin"),
+						help="Basisverzeichnis mit experiments/ (Standard: build/bin/)")
 	parser.add_argument("--achse", default="z", choices=["x", "y", "z"],
 						help="Projektionsachse (Default: z)")
 	parser.add_argument("--aufloesung", type=int, default=256,
