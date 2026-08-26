@@ -76,17 +76,25 @@ static void analysis_spiegeln(GLubyte* pixels, int width, int height,
 }
 
 /*
- * analysis_max_helligkeit - Groesster Bytewert im Block; 0 bedeutet
- * "leerer Framebuffer" und triggert die Selbstheilung unten.
+ * analysis_max_helligkeit - Groesster Farbwert (Alpha ausgenommen) im
+ * RGBA-Block; 0 bedeutet "leerer Framebuffer".
  */
 static GLubyte analysis_max_helligkeit(const GLubyte* pixels, size_t anzahl)
 {
 	GLubyte m = 0;
-	for (size_t i = 0; i < anzahl; ++i)
+	for (size_t i = 0; i < anzahl; i += 4)
 	{
 		if (pixels[i] > m)
 		{
 			m = pixels[i];
+		}
+		if (pixels[i + 1] > m)
+		{
+			m = pixels[i + 1];
+		}
+		if (pixels[i + 2] > m)
+		{
+			m = pixels[i + 2];
 		}
 	}
 	return m;
@@ -129,7 +137,7 @@ void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 		return;
 	}
 
-	const size_t row_bytes = (size_t) width * 3;
+	const size_t row_bytes = (size_t) width * 4;
 	const size_t pixel_anzahl = row_bytes * (size_t) height;
 	GLubyte* pixels = malloc(pixel_anzahl);
 	if (!pixels)
@@ -138,28 +146,34 @@ void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 		return;
 	}
 
-	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-	GLenum fehler_nachher = glGetError();
-	GLubyte hell = analysis_max_helligkeit(pixels, pixel_anzahl);
-
-	// Selbstheilung: Wenn der aktuelle Read-Griff leer ist, das Standard-
-	// Framebuffer-Ziel probieren (GtkGLArea-FBO vs. Fensteroberflaeche).
-	if ((hell == 0 || fehler_nachher != GL_NO_ERROR) && read_fbo != 0)
+	/*
+	 * GLES-Kompatibilitaet: Der Kontext kann ein GLES-Kontext sein - dort
+	 * ist GL_RGB + GL_UNSIGNED_BYTE beim Lesen nicht zulaessig
+	 * (GL_INVALID_ENUM). GL_RGBA + GL_UNSIGNED_BYTE ist dagegen immer
+	 * gueltig; der Alphakanal wird anschliessend auf opak gesetzt, da
+	 * GdkPixbuf nicht-praeultipliziertes RGBA erwartet.
+	 */
+	glPixelStorei(GL_PACK_ALIGNMENT, 4);
+	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	const GLenum fehler_nachher = glGetError();
+	if (fehler_nachher != GL_NO_ERROR)
 	{
-		fprintf(stderr, "analysis: Leer/fehlerhaft gelesen (max=%u, err=%u, "
-			"fbo=%u) - wechsle auf Standard-Framebuffer\n",
-			(unsigned) hell, (unsigned) fehler_nachher, (unsigned) read_fbo);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-		memset(pixels, 0, pixel_anzahl);
-		glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-		fehler_nachher = glGetError();
-		hell = analysis_max_helligkeit(pixels, pixel_anzahl);
+		fprintf(stderr, "analysis: glReadPixels fehlgeschlagen (err=%u) "
+			"- Screenshot uebersprungen\n", (unsigned) fehler_nachher);
+		free(pixels);
+		return;
 	}
+
+	for (size_t i = 0; i < pixel_anzahl; i += 4)
+	{
+		pixels[i + 3] = 255;
+	}
+
+	const GLubyte hell = analysis_max_helligkeit(pixels, pixel_anzahl);
 
 	analysis_spiegeln(pixels, width, height, row_bytes);
 
-	GdkPixbuf* pixbuf = gdk_pixbuf_new_from_data(pixels, GDK_COLORSPACE_RGB, FALSE,
+	GdkPixbuf* pixbuf = gdk_pixbuf_new_from_data(pixels, GDK_COLORSPACE_RGB, TRUE,
 		8, width, height, (int) row_bytes, NULL, NULL);
 	if (!pixbuf)
 	{
