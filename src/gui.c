@@ -272,6 +272,39 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	{
 		data->cfg.enable_motion = true;
 	}
+
+	/* Umgebungsvariablen fuer GUI-Parameter (doppelte Klammer noetig) */
+	{
+		const char* alt = setlocale(LC_NUMERIC, "C");
+		const char* ev;
+
+		ev = getenv("IWT_GAMMA");
+		if (ev) { data->cfg.gamma = atof(ev); }
+		ev = getenv("IWT_BETA");
+		if (ev) { data->cfg.beta = atof(ev); }
+		ev = getenv("IWT_KAPPA");
+		if (ev) { data->cfg.kappa = atof(ev); }
+		ev = getenv("IWT_PHASE_DT");
+		if (ev) { data->cfg.phase_dt = atof(ev); }
+		ev = getenv("IWT_WAVE_K_MIN");
+		if (ev) { data->cfg.wave_k_min = atof(ev); }
+		ev = getenv("IWT_SLICE_POS");
+		if (ev) { data->cfg.slice_pos = atof(ev); }
+		ev = getenv("IWT_SLICE_DELTA");
+		if (ev) { data->cfg.slice_delta = atof(ev); }
+
+		if (alt) { setlocale(LC_NUMERIC, alt); }
+	}
+
+	const char* ev2;
+	ev2 = getenv("IWT_EXTRA_LEVELS");
+	if (ev2) { data->cfg.extra_levels = atoi(ev2); }
+
+	ev2 = getenv("IWT_SHOW_WAVES");
+	if (ev2 && strcmp(ev2, "0") == 0) { data->cfg.show_waves = false; }
+
+	ev2 = getenv("IWT_SLICE_MODE");
+	if (ev2 && strcmp(ev2, "1") == 0) { data->cfg.slice_mode = true; }
 	data->zoom = 1.0f;
 	data->cam_yaw = 0.785398f;
 	data->cam_pitch = 0.5236f;
@@ -324,6 +357,14 @@ static bool gui_application_startup(iwt_gui_data_t data)
 	printf("DT              = %.12e\n", data->cfg.DT);
 	printf("cluster_thresh  = %.6f\n", data->cfg.cluster_threshold);
 	printf("enable_motion   = %s\n", data->cfg.enable_motion ? "ja" : "nein");
+	printf("gamma           = %.6f\n", data->cfg.gamma);
+	printf("beta            = %.6f\n", data->cfg.beta);
+	printf("kappa           = %.6f\n", data->cfg.kappa);
+	printf("phase_dt        = %.6f\n", data->cfg.phase_dt);
+	printf("extra_levels    = %d\n", data->cfg.extra_levels);
+	printf("wave_k_min      = %.6f\n", data->cfg.wave_k_min);
+	printf("show_waves      = %s\n", data->cfg.show_waves ? "ja" : "nein");
+	printf("slice_mode      = %s\n", data->cfg.slice_mode ? "ja" : "nein");
 	printf("========================================\n\n");
 
 	is_ok = gui_application_init_runtime(data);
