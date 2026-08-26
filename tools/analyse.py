@@ -69,7 +69,7 @@ def lade_csv(pfad):
 	"""Laedt eine Export-CSV als strukturiertes NumPy-Array (mit Spaltennamen)."""
 	if not os.path.isfile(pfad):
 		sys.exit(f"Fehler: Datei fehlt: {pfad}")
-	return np.genfromtxt(pfad, delimiter=",", names=True)
+	return np.genfromtxt(pfad, delimiter=";", names=True)
 
 
 def erstelle_histogramm(clusters, ausgabe_pfad):

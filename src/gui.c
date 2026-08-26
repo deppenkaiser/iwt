@@ -322,7 +322,8 @@ static void gui_auto_shot_timeout(gpointer user_data)
 {
 	iwt_gui_data_t data = user_data;
 	data->request_screenshot = true;
-	printf("analysis: Auto-Screenshot ausgeloest nach %d s\n",
+	iwt_analysis_export_csv(data);
+	printf("analysis: Auto-Screenshot + CSV-Export ausgeloest nach %d s\n",
 		data->auto_shot_delay_s);
 }
 

@@ -21,6 +21,7 @@
 
 #include <epoxy/gl.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -235,6 +236,11 @@ void iwt_analysis_capture_screenshot(iwt_gui_data_t data)
 
 void iwt_analysis_export_csv(iwt_gui_data_t data)
 {
+	/* LC_NUMERIC auf C setzen, damit %.9e immer Punkt als Dezimaltrenner
+	 * liefert (ansonsten waere auf de_DE das Komma waehle, was Pandas
+	 * als Feldtrenner interpretieren wuerde). */
+	const char* alt_locale = setlocale(LC_NUMERIC, "C");
+
 	string_t base;
 	string_t stamp;
 	string_t dir_path;
@@ -286,11 +292,11 @@ void iwt_analysis_export_csv(iwt_gui_data_t data)
 		return;
 	}
 
-	fprintf(f, "id,type,node_count,mass,charge,phase,x,y,z,vx,vy,vz\n");
+	fprintf(f, "id;type;node_count;mass;charge;phase;x;y;z;vx;vy;vz\n");
 	for (uint32_t i = 0; i < rt->cluster_count; ++i)
 	{
 		const struct iwt_cluster* c = &rt->clusters[i];
-		fprintf(f, "%d,%d,%zu,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e\n",
+		fprintf(f, "%d;%d;%zu;%.9e;%.9e;%.9e;%.9e;%.9e;%.9e;%.9e;%.9e;%.9e\n",
 			c->id, c->type, c->node_count, c->mass, c->charge, c->phase,
 			(double) c->pos.x, (double) c->pos.y, (double) c->pos.z,
 			(double) c->vel.x, (double) c->vel.y, (double) c->vel.z);
@@ -307,11 +313,11 @@ void iwt_analysis_export_csv(iwt_gui_data_t data)
 		return;
 	}
 
-	fprintf(f, "idx,x,y,z,i_real,i_imag,rho,mass,charge\n");
+	fprintf(f, "idx;x;y;z;i_real;i_imag;rho;mass;charge\n");
 	for (size_t i = 0; i < cfg->N; ++i)
 	{
 		const double rho = rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i];
-		fprintf(f, "%zu,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e\n", i,
+		fprintf(f, "%zu;%.9e;%.9e;%.9e;%.9e;%.9e;%.9e;%.9e;%.9e\n", i,
 			(double) rt->pos[i].x, (double) rt->pos[i].y,
 			(double) rt->pos[i].z, rt->I_real[i], rt->I_imag[i], rho,
 			rt->mass[i], rt->charge[i]);
@@ -320,4 +326,9 @@ void iwt_analysis_export_csv(iwt_gui_data_t data)
 
 	printf("analysis: Export nach %s (%u Cluster, %zu Knoten, Schritt %llu)\n",
 		dir_path, rt->cluster_count, cfg->N, (unsigned long long) rt->n_steps);
+
+	if (alt_locale)
+	{
+		setlocale(LC_NUMERIC, alt_locale);
+	}
 }
