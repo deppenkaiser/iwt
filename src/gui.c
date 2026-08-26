@@ -111,7 +111,8 @@ enum
 	IWT_CTRL_SLICE_POS,
 	IWT_CTRL_SLICE_DELTA,
 	IWT_CTRL_WAVE_K_MIN,
-	IWT_CTRL_EXTRA_LEVELS
+	IWT_CTRL_EXTRA_LEVELS,
+	IWT_CTRL_2D_MODE
 };
 
 static void gui_application_init_cfg(iwt_gui_data_t data);
@@ -462,6 +463,13 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
         "1 = 12 Wurzel-Dodekaeder, 2/3 = grobere Skalen.\n"
         "Baut die Geometrie sofort neu. Theorie: Kap. 6");
 
+    struct gui_button_configuration mode_2d_cfg = {.label = "2D-Modus", .toggle = true};
+    data->toggle_2d_mode = gui_button_create(IWT_CTRL_2D_MODE, &mode_2d_cfg, data);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_2d_mode), data->mode_2d);
+    gtk_widget_set_tooltip_text(data->toggle_2d_mode,
+        "2D-Modus: Orthografische Projektion auf eine Ebene.\n"
+        "Wie die PNG-Grafiken der Analyse. Wählbar via Projektionsebene.");
+
     struct gui_button_configuration slice_cfg = {.label = "2D-Schnitt", .toggle = true};
     data->toggle_slice = gui_button_create(IWT_CTRL_SLICE_MODE, &slice_cfg, data);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(data->toggle_slice), data->cfg.slice_mode);
@@ -506,6 +514,7 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
     gui_box_append_widget(control_box, data->spin_cluster_threshold);
     gui_box_append_widget(control_box, label_extra_levels);
     gui_box_append_widget(control_box, data->spin_extra_levels);
+    gui_box_append_widget(control_box, data->toggle_2d_mode);
     gui_box_append_widget(control_box, label_slice_pos);
     gui_box_append_widget(control_box, data->spin_slice_pos);
     gui_box_append_widget(control_box, data->spin_slice_delta);
@@ -659,6 +668,10 @@ static void gui_button_handle_toggled(gui_button_t core, gui_event_t e, iwt_gui_
 	else if (core->id == IWT_CTRL_SLICE_MODE)
 	{
 		data->cfg.slice_mode = e->data.b_toggled.active;
+	}
+	else if (core->id == IWT_CTRL_2D_MODE)
+	{
+		data->mode_2d = e->data.b_toggled.active;
 	}
 }
 
@@ -1037,7 +1050,18 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count)
 
 	float view[16], proj[16], mvp[16];
 	gui_math_mat4_look_at(view, eye, center, up);
-	gui_math_mat4_perspective(proj, 0.785398f, aspect, 0.1f, 200.0f);
+
+	if (data->mode_2d)
+	{
+		// Orthografische Projektion fuer 2D-Modus
+		float ortho_size = 3.0f * data->zoom;
+		gui_math_mat4_ortho(proj, -ortho_size * aspect, ortho_size * aspect,
+			-ortho_size, ortho_size, -100.0f, 100.0f);
+	}
+	else
+	{
+		gui_math_mat4_perspective(proj, 0.785398f, aspect, 0.1f, 200.0f);
+	}
 	gui_math_mat4_mul(mvp, proj, view);
 
 	glUniformMatrix4fv(data->gl_u_mvp, 1, GL_FALSE, mvp);

@@ -51,6 +51,18 @@ void gui_math_mat4_perspective(float* m, float fovy_rad, float aspect, float zne
     m[14] = (2.0f * zfar * znear) / (znear - zfar);
 }
 
+void gui_math_mat4_ortho(float* m, float left, float right, float bottom, float top, float znear, float zfar)
+{
+    for (int i = 0; i < 16; i++) m[i] = 0.0f;
+    m[0] = 2.0f / (right - left);
+    m[5] = 2.0f / (top - bottom);
+    m[10] = -2.0f / (zfar - znear);
+    m[12] = -(right + left) / (right - left);
+    m[13] = -(top + bottom) / (top - bottom);
+    m[14] = -(zfar + znear) / (zfar - znear);
+    m[15] = 1.0f;
+}
+
 void gui_math_mat4_look_at(float* m, const float* eye, const float* center, const float* up)
 {
     float f[3], s[3], u[3];

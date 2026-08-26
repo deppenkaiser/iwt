@@ -18,6 +18,7 @@ typedef struct iwt_gui_data
 	GtkWidget* spin_slice_delta;
 	GtkWidget* spin_wave_k_min;
 	GtkWidget* spin_extra_levels;
+	GtkWidget* toggle_2d_mode;
 	GtkTextBuffer* stats_buffer;
 
 	struct iwt_config cfg;
@@ -60,4 +61,8 @@ typedef struct iwt_gui_data
 
 	// Analyse: letzte Cluster-Anzahl fuer automatischen Trigger
 	uint32_t last_cluster_count;
+
+	// 2D/3D Modus
+	bool mode_2d;
+	int projection_plane; // 0=XY, 1=XZ, 2=YZ
 }* iwt_gui_data_t;
