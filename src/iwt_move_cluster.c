@@ -160,7 +160,10 @@ private void _iwt_update_cluster_velocities(const iwt_runtime_t rt, double dt)
 		if (mag > GUIDANCE_EPSILON)
 		{
 			struct vector_3d dir = vector_multiply_scalar(&grad, (cld) (1.0 / mag));
-			cl->vel = vector_multiply_scalar(&dir, (cld) vmax);
+			/* Massenskalierung: leichtere Cluster schneller, schwerere langsamer.
+			 * v = vmax / sqrt(mass), +1.0 verhindert Division durch Null. */
+			double mass_factor = 1.0 / sqrt(cl->mass + 1.0);
+			cl->vel = vector_multiply_scalar(&dir, (cld) (vmax * mass_factor));
 		}
 		else
 		{
