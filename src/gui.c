@@ -147,9 +147,9 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
  *          durch den Phasenraum (Frontenzug).
  */
 
-#define WAVE_LEVELS 48
-#define WAVE_MARCH_FRAMES 480
-#define WAVE_MAX_SEGMENTS 240000
+#define WAVE_LEVELS 64
+#define WAVE_MARCH_FRAMES 640
+#define WAVE_MAX_SEGMENTS 320000
 #define WAVE_MAX_CROSSINGS 32
 
 static bool slice_point_visible(const iwt_gui_data_t data, double z)
@@ -248,7 +248,7 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.slice_pos = 0.0;
 	data->cfg.slice_delta = 0.25;
 	data->cfg.wave_k_min = 0.55;
-	data->cfg.extra_levels = 1;
+	data->cfg.extra_levels = 0;
 	data->cfg.enable_motion = false;
 
 	/* Umgebungsvariable IWT_CLUSTER_THRESHOLD: Cluster-Erkennungsschwelle
