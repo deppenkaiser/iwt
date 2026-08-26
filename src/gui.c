@@ -59,6 +59,7 @@
 #include "gui_shader.h"
 #include "gui_input.h"
 #include <api/api.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -249,6 +250,28 @@ static void gui_application_init_cfg(iwt_gui_data_t data)
 	data->cfg.wave_k_min = 0.55;
 	data->cfg.extra_levels = 1;
 	data->cfg.enable_motion = false;
+
+	/* Umgebungsvariable IWT_CLUSTER_THRESHOLD: Cluster-Erkennungsschwelle
+	 * Hinweis: atof() ist locale-abhaengig (de_DE: Komma als Dezimal).
+	 * Wir nutzen LC_NUMERIC=C temporary, damit der Punkt als Dezimal-
+	 * trenner interpretiert wird. */
+	const char* env_thresh = getenv("IWT_CLUSTER_THRESHOLD");
+	if (env_thresh)
+	{
+		const char* alt = setlocale(LC_NUMERIC, "C");
+		data->cfg.cluster_threshold = atof(env_thresh);
+		if (alt)
+		{
+			setlocale(LC_NUMERIC, alt);
+		}
+	}
+
+	/* Umgebungsvariable IWT_MOTION: 1 = Bewegung aktivieren */
+	const char* env_motion = getenv("IWT_MOTION");
+	if (env_motion && strcmp(env_motion, "1") == 0)
+	{
+		data->cfg.enable_motion = true;
+	}
 	data->zoom = 1.0f;
 	data->cam_yaw = 0.785398f;
 	data->cam_pitch = 0.5236f;
@@ -299,6 +322,8 @@ static bool gui_application_startup(iwt_gui_data_t data)
 	printf("seed            = %u\n", data->cfg.seed);
 	printf("\n=== Abgeleitete Simulationsparameter ===\n");
 	printf("DT              = %.12e\n", data->cfg.DT);
+	printf("cluster_thresh  = %.6f\n", data->cfg.cluster_threshold);
+	printf("enable_motion   = %s\n", data->cfg.enable_motion ? "ja" : "nein");
 	printf("========================================\n\n");
 
 	is_ok = gui_application_init_runtime(data);
