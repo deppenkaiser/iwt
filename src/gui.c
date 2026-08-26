@@ -150,7 +150,7 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
 #define WAVE_LEVELS 64
 #define WAVE_MARCH_FRAMES 640
 #define WAVE_MAX_SEGMENTS 320000
-#define WAVE_MAX_CROSSINGS 32
+#define WAVE_MAX_CROSSINGS 4
 
 static bool slice_point_visible(const iwt_gui_data_t data, double z)
 {
