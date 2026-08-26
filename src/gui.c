@@ -1089,7 +1089,31 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count)
 		eye[2] = radius * cosf(data->cam_pitch) * sinf(data->cam_yaw);
 	}
 	float center[3] = {0.0f, 0.0f, 0.0f};
-	float up[3] = {0.0f, 1.0f, 0.0f};
+	float up[3];
+
+	if (data->mode_2d)
+	{
+		// Up-Vektor passt sich an Projektionsebene an
+		switch (data->projection_plane)
+		{
+			case 0: // XY - Y ist oben
+				up[0] = 0.0f; up[1] = 1.0f; up[2] = 0.0f;
+				break;
+			case 1: // XZ - Z ist oben (Kamera schaut von Y)
+				up[0] = 0.0f; up[1] = 0.0f; up[2] = -1.0f;
+				break;
+			case 2: // YZ - Y ist oben (Kamera schaut von X)
+				up[0] = 0.0f; up[1] = 1.0f; up[2] = 0.0f;
+				break;
+			default:
+				up[0] = 0.0f; up[1] = 1.0f; up[2] = 0.0f;
+				break;
+		}
+	}
+	else
+	{
+		up[0] = 0.0f; up[1] = 1.0f; up[2] = 0.0f;
+	}
 
 	float view[16], proj[16], mvp[16];
 	gui_math_mat4_look_at(view, eye, center, up);
