@@ -8,6 +8,7 @@
 #include <ocl/ocl.h>
 #include <stdio.h>
 #include <string/string.h>
+#include <time.h>
 
 /**
  * iwt_kernel.c - IWT Kernel-Funktionen (Simulations-Pipeline)
@@ -331,30 +332,57 @@ bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg)
 	}
 
 	typedef bool (*step_fn)(const iwt_runtime_t, const iwt_config_t);
-	step_fn steps[] = {
-		frozen_generate_uncertainty_cpu,   // Gleichung (P.3), Term 4
-		frozen_run_apply_fluctuations,	   // Gleichung (P.3), Term 4
-		frozen_run_apply_redshift_damping, // Anhang Q (Energiesenke)
-		run_flux_calculation,			   // Gleichung (P.3), Term 1+3
-		run_q_calculation,				   // Gleichung (P.3), Term 2
-		run_update_info,				   // Gleichung (P.3)
-		run_compute_mass_charge			   // Kap. 3.3
+	typedef struct { const char* name; step_fn fn; } named_step_t;
+	named_step_t steps[] = {
+		{"uncertainty", frozen_generate_uncertainty_cpu},   // Gleichung (P.3), Term 4
+		{"apply_fluct", frozen_run_apply_fluctuations},	    // Gleichung (P.3), Term 4
+		{"redshift",    frozen_run_apply_redshift_damping}, // Anhang Q (Energiesenke)
+		{"flux",        run_flux_calculation},			    // Gleichung (P.3), Term 1+3
+		{"q",           run_q_calculation},				    // Gleichung (P.3), Term 2
+		{"update_info", run_update_info},				    // Gleichung (P.3)
+		{"mass_charge", run_compute_mass_charge}		    // Kap. 3.3
 	};
 
+	struct timespec _ts0, _ts1;
 	for (size_t s = 0; s < sizeof(steps) / sizeof(steps[0]); s++)
 	{
-		if (!steps[s](rt, cfg))
+		clock_gettime(CLOCK_MONOTONIC, &_ts0);
+		if (!steps[s].fn(rt, cfg))
 		{
 			return false;
+		}
+		clock_gettime(CLOCK_MONOTONIC, &_ts1);
+		double _dt = (double)(_ts1.tv_sec - _ts0.tv_sec) * 1000.0 + (double)(_ts1.tv_nsec - _ts0.tv_nsec) / 1e6;
+		if (rt->n_steps % 30 == 0)
+		{
+			fprintf(stderr, "[kprof] %s = %.2f ms\n", steps[s].name, _dt);
 		}
 	}
 
 	// Cluster-Erkennung (Kap. 2, Axiom 4) und Bewegung (Kap. 8)
-	iwt_detect_clusters(rt, cfg);
-	iwt_move_clusters(rt, cfg, cfg->DT);
+	{
+		clock_gettime(CLOCK_MONOTONIC, &_ts0);
+		iwt_detect_clusters(rt, cfg);
+		iwt_move_clusters(rt, cfg, cfg->DT);
+		clock_gettime(CLOCK_MONOTONIC, &_ts1);
+		double _dt = (double)(_ts1.tv_sec - _ts0.tv_sec) * 1000.0 + (double)(_ts1.tv_nsec - _ts0.tv_nsec) / 1e6;
+		if (rt->n_steps % 30 == 0)
+		{
+			fprintf(stderr, "[kprof] clusters = %.2f ms\n", _dt);
+		}
+	}
 
 	// Einmaliger GPU-Sync am Frame-Ende (statt clFinish nach jedem Kernel)
-	ocl_finish_frame(&rt->ocl);
+	{
+		clock_gettime(CLOCK_MONOTONIC, &_ts0);
+		ocl_finish_frame(&rt->ocl);
+		clock_gettime(CLOCK_MONOTONIC, &_ts1);
+		double _dt = (double)(_ts1.tv_sec - _ts0.tv_sec) * 1000.0 + (double)(_ts1.tv_nsec - _ts0.tv_nsec) / 1e6;
+		if (rt->n_steps % 30 == 0)
+		{
+			fprintf(stderr, "[kprof] finish = %.2f ms\n", _dt);
+		}
+	}
 
 	return true;
 }

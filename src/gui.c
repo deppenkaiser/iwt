@@ -843,7 +843,9 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			break;
 		case GE_GL_RENDER:
 			{
+				double t0 = (double) g_get_monotonic_time() / 1e3;
 				run_simulation_step(&data->rt, &data->cfg);
+				double t1 = (double) g_get_monotonic_time() / 1e3;
 				data->iter++;
 
 				// FPS messen (exponentiell glaetten)
@@ -864,9 +866,20 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				}
 
 				gui_gl_update_points(data);
+				double t2 = (double) g_get_monotonic_time() / 1e3;
 				size_t cluster_draw_count = gui_gl_update_clusters(data);
+				double t3 = (double) g_get_monotonic_time() / 1e3;
 				gui_gl_update_waves(data);
+				double t4 = (double) g_get_monotonic_time() / 1e3;
 				gui_gl_draw(data, cluster_draw_count);
+				double t5 = (double) g_get_monotonic_time() / 1e3;
+
+				// TEMP-PROFIL: Zeiten je Phase in ms, nur Mitteilung ueber einige Frames
+				if (data->iter % 30 == 0)
+				{
+					fprintf(stderr, "[prof] sim=%.2fms points=%.2fms clusters=%.2fms waves=%.2fms draw=%.2fms\n",
+							t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4);
+				}
 
 				// Analyse: angeforderten Screenshot im GL-Kontext sichern
 				if (data->request_screenshot)
