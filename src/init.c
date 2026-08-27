@@ -495,8 +495,13 @@ static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->wave_pos_z_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 	rt->wave_flat_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * IWT_WAVE_STRIDE * sizeof(int), NULL);
 	rt->wave_count_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(int), NULL);
+	rt->wave_points_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE,
+		(size_t) cfg->N * IWT_WAVE_LEVELS * IWT_WAVE_MAX_CROSSINGS * 3 * sizeof(double), NULL);
+	rt->wave_counts_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE,
+		(size_t) cfg->N * IWT_WAVE_LEVELS * sizeof(int), NULL);
+	rt->wave_offsets_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE,
+		(size_t) cfg->N * IWT_WAVE_LEVELS * sizeof(int), NULL);
 	rt->wave_segments_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, (size_t) IWT_WAVE_MAX_SEGMENTS * 12 * sizeof(float), NULL);
-	rt->wave_counter_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, sizeof(unsigned int), NULL);
 
 	void* gpu_ptrs[] = {
 		rt->I_real_gpu, rt->I_imag_gpu, rt->I_prev_real_gpu, rt->I_prev_imag_gpu,
@@ -506,7 +511,8 @@ static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
 		rt->xi_real_gpu, rt->xi_imag_gpu, rt->uncertainty_gpu,
 		rt->wave_pos_x_gpu, rt->wave_pos_y_gpu, rt->wave_pos_z_gpu,
 		rt->wave_flat_gpu, rt->wave_count_gpu,
-		rt->wave_segments_gpu, rt->wave_counter_gpu};
+		rt->wave_points_gpu, rt->wave_counts_gpu, rt->wave_offsets_gpu,
+		rt->wave_segments_gpu};
 
 	return all_ptrs_valid(gpu_ptrs, sizeof(gpu_ptrs) / sizeof(gpu_ptrs[0]));
 }
@@ -664,6 +670,8 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
 	_free_gpu_memory(&rt->wave_pos_z_gpu);
 	_free_gpu_memory(&rt->wave_flat_gpu);
 	_free_gpu_memory(&rt->wave_count_gpu);
+	_free_gpu_memory(&rt->wave_points_gpu);
+	_free_gpu_memory(&rt->wave_counts_gpu);
+	_free_gpu_memory(&rt->wave_offsets_gpu);
 	_free_gpu_memory(&rt->wave_segments_gpu);
-	_free_gpu_memory(&rt->wave_counter_gpu);
 }

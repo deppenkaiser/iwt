@@ -38,6 +38,9 @@ typedef struct iwt_gui_data
 	double* wave_pos_y;
 	double* wave_pos_z;
 
+	// GPU-Wellen: Host-Spiegel der Crossing-Counts für Prefix-Sum
+	int* wave_counts_host;
+
 	GLuint gl_program;
 	GLint gl_u_mvp;
 	GLint gl_u_size_scale;

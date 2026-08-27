@@ -650,6 +650,8 @@ static bool gui_application_shutdown(iwt_gui_data_t data)
 	data->wave_pos_y = NULL;
 	free(data->wave_pos_z);
 	data->wave_pos_z = NULL;
+	free(data->wave_counts_host);
+	data->wave_counts_host = NULL;
 	return true;
 }
 
@@ -953,6 +955,7 @@ static void gui_gl_realize(iwt_gui_data_t data)
 	data->wave_pos_x = malloc(data->cfg.N * sizeof(double));
 	data->wave_pos_y = malloc(data->cfg.N * sizeof(double));
 	data->wave_pos_z = malloc(data->cfg.N * sizeof(double));
+	data->wave_counts_host = malloc((size_t) data->cfg.N * WAVE_LEVELS * sizeof(int));
 
 	glGenVertexArrays(1, &data->gl_vao_wave);
 	glGenBuffers(1, &data->gl_vbo_wave);
@@ -1065,61 +1068,116 @@ static size_t gui_gl_update_waves(iwt_gui_data_t data)
 		return 0;
 	}
 
-	cl_kernel kernel = ocl_get_kernel(&data->rt.ocl, OCL_KERNEL_IWT_WAVE_SEGMENTS);
-	if (!kernel)
-	{
-		return 0;
-	}
-
-	unsigned int zero = 0;
-	clEnqueueWriteBuffer(data->rt.ocl.queue, data->rt.wave_counter_gpu, CL_TRUE, 0,
-		sizeof(unsigned int), &zero, 0, NULL, NULL);
-
 	int N_int = (int) N;
 	unsigned int stride_u = (unsigned int) IWT_WAVE_STRIDE;
 	int levels = (int) WAVE_LEVELS;
 	int max_cross = (int) WAVE_MAX_CROSSINGS;
 	unsigned int slice_mode = data->cfg.slice_mode ? 1u : 0u;
 
-	clSetKernelArg(kernel, 0, sizeof(cl_mem), &data->rt.I_phase_gpu);
-	clSetKernelArg(kernel, 1, sizeof(cl_mem), &data->rt.wave_pos_x_gpu);
-	clSetKernelArg(kernel, 2, sizeof(cl_mem), &data->rt.wave_pos_y_gpu);
-	clSetKernelArg(kernel, 3, sizeof(cl_mem), &data->rt.wave_pos_z_gpu);
-	clSetKernelArg(kernel, 4, sizeof(cl_mem), &data->rt.wave_flat_gpu);
-	clSetKernelArg(kernel, 5, sizeof(cl_mem), &data->rt.wave_count_gpu);
-	clSetKernelArg(kernel, 6, sizeof(cl_mem), &data->rt.wave_counter_gpu);
-	clSetKernelArg(kernel, 7, sizeof(cl_mem), &data->rt.wave_segments_gpu);
-	clSetKernelArg(kernel, 8, sizeof(int), &N_int);
-	clSetKernelArg(kernel, 9, sizeof(unsigned int), &stride_u);
-	clSetKernelArg(kernel, 10, sizeof(int), &levels);
-	clSetKernelArg(kernel, 11, sizeof(int), &max_cross);
-	clSetKernelArg(kernel, 12, sizeof(double), &base_level);
-	clSetKernelArg(kernel, 13, sizeof(double), &level_step);
-	clSetKernelArg(kernel, 14, sizeof(double), &two_pi);
-	clSetKernelArg(kernel, 15, sizeof(unsigned int), &slice_mode);
-	clSetKernelArg(kernel, 16, sizeof(double), &data->cfg.slice_pos);
-	clSetKernelArg(kernel, 17, sizeof(double), &data->cfg.slice_delta);
 
-	size_t global = N * (size_t) WAVE_LEVELS;
-	ocl_enqueue_kernel(&data->rt.ocl, kernel, global, 0);
-	ocl_finish_frame(&data->rt.ocl);
-
-	unsigned int seg_count = 0;
-	if (clEnqueueReadBuffer(data->rt.ocl.queue, data->rt.wave_counter_gpu, CL_TRUE, 0,
-			sizeof(unsigned int), &seg_count, 0, NULL, NULL) != CL_SUCCESS)
+	// ---- Pass 1: Crossing-Punkte + Zaehler berechnen (2D-Range N x LEVELS) ----
+	cl_kernel kcount = ocl_get_kernel(&data->rt.ocl, OCL_KERNEL_IWT_WAVE_COUNT_POINTS);
+	if (!kcount)
 	{
 		return 0;
 	}
 
-	if (seg_count > WAVE_MAX_SEGMENTS)
-	{
-		seg_count = WAVE_MAX_SEGMENTS;
-	}
+	clSetKernelArg(kcount, 0, sizeof(cl_mem), &data->rt.I_phase_gpu);
+	clSetKernelArg(kcount, 1, sizeof(cl_mem), &data->rt.wave_pos_x_gpu);
+	clSetKernelArg(kcount, 2, sizeof(cl_mem), &data->rt.wave_pos_y_gpu);
+	clSetKernelArg(kcount, 3, sizeof(cl_mem), &data->rt.wave_pos_z_gpu);
+	clSetKernelArg(kcount, 4, sizeof(cl_mem), &data->rt.wave_flat_gpu);
+	clSetKernelArg(kcount, 5, sizeof(cl_mem), &data->rt.wave_count_gpu);
+	clSetKernelArg(kcount, 6, sizeof(cl_mem), &data->rt.wave_counts_gpu);
+	clSetKernelArg(kcount, 7, sizeof(cl_mem), &data->rt.wave_points_gpu);
+	clSetKernelArg(kcount, 8, sizeof(int), &N_int);
+	clSetKernelArg(kcount, 9, sizeof(int), &levels);
+	clSetKernelArg(kcount, 10, sizeof(int), &max_cross);
+	clSetKernelArg(kcount, 11, sizeof(unsigned int), &stride_u);
+	clSetKernelArg(kcount, 12, sizeof(double), &base_level);
+	clSetKernelArg(kcount, 13, sizeof(double), &level_step);
+	clSetKernelArg(kcount, 14, sizeof(double), &two_pi);
+	clSetKernelArg(kcount, 15, sizeof(unsigned int), &slice_mode);
+	clSetKernelArg(kcount, 16, sizeof(double), &data->cfg.slice_pos);
+	clSetKernelArg(kcount, 17, sizeof(double), &data->cfg.slice_delta);
 
-	if (seg_count > 0 && clEnqueueReadBuffer(data->rt.ocl.queue, data->rt.wave_segments_gpu,
-			CL_TRUE, 0, (size_t) seg_count * 12 * sizeof(float), data->wave_buffer, 0, NULL, NULL) != CL_SUCCESS)
+	size_t gcount[2] = {N, (size_t) WAVE_LEVELS};
+	if (clEnqueueNDRangeKernel(data->rt.ocl.queue, kcount, 2, NULL, gcount, NULL, 0, NULL, NULL) != CL_SUCCESS)
 	{
 		return 0;
+	}
+
+	// Zaehler zuruecklesen und Prefix-Summe fuer Emit-Offsets bilden
+	size_t nslots = N * (size_t) WAVE_LEVELS;
+	if (clEnqueueReadBuffer(data->rt.ocl.queue, data->rt.wave_counts_gpu, CL_TRUE, 0,
+			nslots * sizeof(int), data->wave_counts_host, 0, NULL, NULL) != CL_SUCCESS)
+	{
+		return 0;
+	}
+
+	// Prefix-Summe in-place: wave_counts_host wird zur Offset-Tabelle
+	unsigned int total = 0;
+	for (size_t s = 0; s < nslots; s++)
+	{
+		int c = data->wave_counts_host[s];
+		int nseg = (c >= 2) ? ((c - 1) / 2) : 0;
+		if (total + (unsigned int) nseg > (unsigned int) WAVE_MAX_SEGMENTS)
+		{
+			data->wave_counts_host[s] = (int) total;
+			total = (unsigned int) WAVE_MAX_SEGMENTS;
+		}
+		else
+		{
+			data->wave_counts_host[s] = (int) total;
+			total += (unsigned int) nseg;
+		}
+	}
+
+	unsigned int seg_count = total;
+	if (seg_count > (unsigned int) WAVE_MAX_SEGMENTS)
+	{
+		seg_count = (unsigned int) WAVE_MAX_SEGMENTS;
+	}
+
+	// Offsets auf die GPU laden
+	if (clEnqueueWriteBuffer(data->rt.ocl.queue, data->rt.wave_offsets_gpu, CL_TRUE, 0,
+			nslots * sizeof(int), data->wave_counts_host, 0, NULL, NULL) != CL_SUCCESS)
+	{
+		return 0;
+	}
+
+	if (seg_count > 0)
+	{
+		// ---- Pass 2: Segmente emittieren (2D-Range N x LEVELS) ----
+		cl_kernel kemit = ocl_get_kernel(&data->rt.ocl, OCL_KERNEL_IWT_WAVE_EMIT);
+		if (!kemit)
+		{
+			return 0;
+		}
+
+		clSetKernelArg(kemit, 0, sizeof(cl_mem), &data->rt.wave_counts_gpu);
+		clSetKernelArg(kemit, 1, sizeof(cl_mem), &data->rt.wave_points_gpu);
+		clSetKernelArg(kemit, 2, sizeof(cl_mem), &data->rt.wave_offsets_gpu);
+		clSetKernelArg(kemit, 3, sizeof(cl_mem), &data->rt.wave_segments_gpu);
+		clSetKernelArg(kemit, 4, sizeof(int), &levels);
+		clSetKernelArg(kemit, 5, sizeof(int), &max_cross);
+		clSetKernelArg(kemit, 6, sizeof(double), &base_level);
+		clSetKernelArg(kemit, 7, sizeof(double), &level_step);
+		clSetKernelArg(kemit, 8, sizeof(double), &two_pi);
+
+		size_t gemit[2] = {N, (size_t) WAVE_LEVELS};
+		if (clEnqueueNDRangeKernel(data->rt.ocl.queue, kemit, 2, NULL, gemit, NULL, 0, NULL, NULL) != CL_SUCCESS)
+		{
+			return 0;
+		}
+
+		ocl_finish_frame(&data->rt.ocl);
+
+		if (clEnqueueReadBuffer(data->rt.ocl.queue, data->rt.wave_segments_gpu,
+				CL_TRUE, 0, (size_t) seg_count * 12 * sizeof(float), data->wave_buffer, 0, NULL, NULL) != CL_SUCCESS)
+		{
+			return 0;
+		}
 	}
 
 	data->wave_segment_count = seg_count;

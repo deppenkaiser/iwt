@@ -152,8 +152,10 @@ typedef struct iwt_runtime
 	cl_mem wave_pos_z_gpu;
 	cl_mem wave_flat_gpu;
 	cl_mem wave_count_gpu;
+	cl_mem wave_points_gpu;
+	cl_mem wave_counts_gpu;
+	cl_mem wave_offsets_gpu;
 	cl_mem wave_segments_gpu;
-	cl_mem wave_counter_gpu;
 
 	struct ocl_core ocl;
 }* iwt_runtime_t;
