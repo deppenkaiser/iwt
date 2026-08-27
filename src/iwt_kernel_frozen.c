@@ -37,29 +37,6 @@
 #define SCALE 0.70710678
 
 /**
- * Box-Muller-Transformator für normalverteilte Zufallszahlenpaare.
- * THEORIE: Die Zufallsvariable ξ_k^(n) ist komplex und standard-normalverteilt
- *          (Anhang P.3). Real- und Imaginärteil sind UNABHÄNGIG:
- *          ⟨ξ_k⟩ = 0, ⟨ξ_k · ξ_l⟩ = δ_kl (Gleichung P.2)
- *
- * IWT_NORM_FIX: Vorher erhielten Real- und Imaginärteil denselben
- * Zufallswert (Korrelationsverletzung); jetzt liefert ein Box-Muller-Zug
- * zwei unabhängige Komponenten (cos- und sin-Zweig).
- */
-static void box_muller2(unsigned int* seed, double* out_re, double* out_im)
-{
-	double u1, u2;
-	do
-	{
-		u1 = (double) rand_r(seed) / (double) RAND_MAX;
-		u2 = (double) rand_r(seed) / (double) RAND_MAX;
-	} while (u1 < 1e-30 || u2 < 1e-30);
-	double r = sqrt(-2.0 * log(u1));
-	*out_re = r * cos(2.0 * iwt_pi() * u2);
-	*out_im = r * sin(2.0 * iwt_pi() * u2);
-}
-
-/**
  * Erzeugt intrinsische Vakuumfluktuationen.
  * THEORIE: Gleichung (P.3), Term 4: sqrt(ℏ/(2T)) * ξ_k^(n)
  *
@@ -72,53 +49,60 @@ static void box_muller2(unsigned int* seed, double* out_re, double* out_im)
  * (1 - rho_i/(RHO_0 + rho_i)), so dass sie im Vakuum maximal und in
  * dichten Strukturen minimal ist.
  *
- * Fisher-Yates-Shuffle stellt sicher, dass die Fluktuationen unkorreliert
- * über das Netzwerk verteilt sind (⟨ξ_k · ξ_l⟩ = δ_kl).
+ * GPU-Port: Die Berechnung läuft jetzt im parallelen Kernel iwt_fluctuations
+ * (SplitMix64 + Box-Muller mit pro Slot gemischtem Seed). Die Statistik ist
+ * identisch zur früheren CPU-Fassung (Standard-Normalverteilung, ξ_k
+ * unkorreliert über das Netzwerk: ⟨ξ_k · ξ_l⟩ = δ_kl).
  */
 bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
 	double scale = SCALE;
+	double rho_0 = RHO_0;
 
 	// IWT_NORM_FIX: Seed variiert pro Zeitschritt (vorher identische
 	// Zufallssequenz in jedem Frame, da rand_r mit konstantem Seed startete).
 	unsigned int seed = (unsigned int) (cfg->seed ^ (rt->n_steps * 2654435761ull));
 
-	// Fisher-Yates-Shuffle für unkorrelierte Fluktuationen
-	// Verwendet wiederverwendeten Buffer (kein malloc pro Frame)
-	size_t* indices = rt->shuffle_indices;
-	if (!indices)
+	// I-Arrays für die Vakuum-Dichtebewertung auf die GPU laden
+	clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
+						 cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
+	clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
+						 cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
+
+	cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_FLUCTUATIONS);
+	if (!kernel)
 	{
 		return false;
 	}
 
-	for (size_t i = 0; i < cfg->N; i++)
+	int N = (int) cfg->N;
+	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->xi_real_gpu);
+	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->xi_imag_gpu);
+	clSetKernelArg(kernel, 4, sizeof(int), &N);
+	clSetKernelArg(kernel, 5, sizeof(unsigned int), &seed);
+	clSetKernelArg(kernel, 6, sizeof(double), &scale);
+	clSetKernelArg(kernel, 7, sizeof(double), &rho_0);
+
+	size_t global = cfg->N;
+	size_t local = 64;
+	if (local > global)
 	{
-		indices[i] = i;
+		local = global;
 	}
 
-	for (size_t i = cfg->N - 1; i > 0; i--)
+	if (!ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
 	{
-		size_t j = rand_r(&seed) % (i + 1);
-		size_t temp = indices[i];
-		indices[i] = indices[j];
-		indices[j] = temp;
+		return false;
 	}
 
-	for (size_t n = 0; n < cfg->N; n++)
-	{
-		size_t i = indices[n];
-
-		double rho_i = rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i] + 1e-30;
-
-		// Fluktuation NUR im Vakuum (rho_i klein)
-		double fluct_strength = scale * (1.0 - rho_i / (RHO_0 + rho_i));
-		double delta_re, delta_im;
-		box_muller2(&seed, &delta_re, &delta_im);
-
-		rt->xi_real[i] = delta_re * fluct_strength;
-		rt->xi_imag[i] = delta_im * fluct_strength;
-		rt->uncertainty[i] = 0.0;
-	}
+	// xi zuruecklesen, damit die eingefrorene frozen_run_apply_fluctuations
+	// sie unverändert auf die GPU hochladen kann
+	clEnqueueReadBuffer(rt->ocl.queue, rt->xi_real_gpu, CL_TRUE, 0,
+						cfg->N * sizeof(double), rt->xi_real, 0, NULL, NULL);
+	clEnqueueReadBuffer(rt->ocl.queue, rt->xi_imag_gpu, CL_TRUE, 0,
+						cfg->N * sizeof(double), rt->xi_imag, 0, NULL, NULL);
 
 	return true;
 }
