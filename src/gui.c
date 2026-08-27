@@ -950,6 +950,24 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 				pthread_mutex_unlock(&data->gpu_mutex);
 
 				data->iter++;
+
+				// FPS messen (exponentiell glaetten)
+				{
+					double now = (double) g_get_monotonic_time() / 1e6;
+					if (data->fps_last_time > 0.0)
+					{
+						double dt = now - data->fps_last_time;
+						if (dt > 0.0 && dt < 1.0)
+						{
+							double inst_fps = 1.0 / dt;
+							data->fps_smooth = (data->fps_smooth <= 0.0)
+								? inst_fps
+								: 0.9 * data->fps_smooth + 0.1 * inst_fps;
+						}
+					}
+					data->fps_last_time = now;
+				}
+
 				gui_gl_update_points(data);
 				size_t cluster_draw_count = gui_gl_update_clusters(data);
 				gui_gl_update_waves(data);
@@ -984,7 +1002,12 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 					{
 						data->stats_update_counter = 0;
 						char buf[2048];
-						iwt_format_stats(&data->rt, buf, sizeof(buf));
+						size_t off = 0;
+						if (data->fps_smooth > 0.0)
+						{
+							off = (size_t) snprintf(buf, sizeof(buf), "FPS: %.1f\n\n", data->fps_smooth);
+						}
+						iwt_format_stats(&data->rt, buf + off, sizeof(buf) - off);
 						gtk_text_buffer_set_text(data->stats_buffer, buf, -1);
 					}
 				}

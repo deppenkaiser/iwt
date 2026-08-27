@@ -74,6 +74,10 @@ typedef struct iwt_gui_data
 	// Performance: Stats-Text-Update throttling (jede N. Frame)
 	int stats_update_counter;
 
+	// Performance: FPS-Messung (exponentiell geglaettet)
+	double fps_smooth;
+	double fps_last_time;
+
 	// 2D/3D Modus
 	bool mode_2d;
 	int projection_plane; // 0=XY, 1=XZ, 2=YZ
