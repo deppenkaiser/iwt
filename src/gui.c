@@ -646,6 +646,14 @@ static bool gui_application_shutdown(iwt_gui_data_t data)
 	data->cluster_points_buffer = NULL;
 	free(data->wave_buffer);
 	data->wave_buffer = NULL;
+	free(data->wave_px);
+	data->wave_px = NULL;
+	free(data->wave_py);
+	data->wave_py = NULL;
+	free(data->wave_pz);
+	data->wave_pz = NULL;
+	free(data->wave_crossings);
+	data->wave_crossings = NULL;
 	return true;
 }
 
