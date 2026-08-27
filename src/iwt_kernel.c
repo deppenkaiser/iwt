@@ -361,5 +361,8 @@ bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg)
 	iwt_detect_clusters(rt, cfg);
 	iwt_move_clusters(rt, cfg, cfg->DT);
 
+	// Einmaliger GPU-Sync am Frame-Ende (statt clFinish nach jedem Kernel)
+	ocl_finish_frame(&rt->ocl);
+
 	return true;
 }
