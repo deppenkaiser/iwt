@@ -180,10 +180,10 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
  *          durch den Phasenraum (Frontenzug).
  */
 
-#define WAVE_LEVELS 32
-#define WAVE_MARCH_FRAMES 320
-#define WAVE_MAX_SEGMENTS 320000
-#define WAVE_MAX_CROSSINGS 4
+#define WAVE_LEVELS IWT_WAVE_LEVELS
+#define WAVE_MARCH_FRAMES IWT_WAVE_MARCH_FRAMES
+#define WAVE_MAX_SEGMENTS IWT_WAVE_MAX_SEGMENTS
+#define WAVE_MAX_CROSSINGS IWT_WAVE_MAX_CROSSINGS
 
 static bool slice_point_visible(const iwt_gui_data_t data, double z)
 {
@@ -192,39 +192,6 @@ static bool slice_point_visible(const iwt_gui_data_t data, double z)
 		return true;
 	}
 	return fabs(z - data->cfg.slice_pos) <= data->cfg.slice_delta;
-}
-
-static void wave_hsv_to_rgb(float h, float s, float v, float* out_rgb)
-{
-	float i = floorf(h * 6.0f);
-	float f = h * 6.0f - i;
-	float p = v * (1.0f - s);
-	float q = v * (1.0f - f * s);
-	float t = v * (1.0f - (1.0f - f) * s);
-	switch (((int) i) % 6)
-	{
-		case 0: out_rgb[0] = v; out_rgb[1] = t; out_rgb[2] = p; break;
-		case 1: out_rgb[0] = q; out_rgb[1] = v; out_rgb[2] = p; break;
-		case 2: out_rgb[0] = p; out_rgb[1] = v; out_rgb[2] = t; break;
-		case 3: out_rgb[0] = p; out_rgb[1] = q; out_rgb[2] = v; break;
-		case 4: out_rgb[0] = t; out_rgb[1] = p; out_rgb[2] = v; break;
-		default: out_rgb[0] = v; out_rgb[1] = p; out_rgb[2] = q; break;
-	}
-}
-
-static void wave_emit_segment(iwt_gui_data_t data, size_t seg,
-							  const double* pa, const double* pb,
-							  float hue, float val)
-{
-	float rgb[3];
-	wave_hsv_to_rgb(hue, 0.85f, val, rgb);
-
-	float* v0 = &data->wave_buffer[seg * 12 + 0];
-	float* v1 = &data->wave_buffer[seg * 12 + 6];
-	v0[0] = (float) pa[0]; v0[1] = (float) pa[1]; v0[2] = (float) pa[2];
-	v1[0] = (float) pb[0]; v1[1] = (float) pb[1]; v1[2] = (float) pb[2];
-	v0[3] = rgb[0]; v0[4] = rgb[1]; v0[5] = rgb[2];
-	v1[3] = rgb[0]; v1[4] = rgb[1]; v1[5] = rgb[2];
 }
 
 static void gui_main_window_handle_key_left(iwt_gui_data_t data, gui_event_t e);
@@ -677,14 +644,12 @@ static bool gui_application_shutdown(iwt_gui_data_t data)
 	data->cluster_points_buffer = NULL;
 	free(data->wave_buffer);
 	data->wave_buffer = NULL;
-	free(data->wave_px);
-	data->wave_px = NULL;
-	free(data->wave_py);
-	data->wave_py = NULL;
-	free(data->wave_pz);
-	data->wave_pz = NULL;
-	free(data->wave_crossings);
-	data->wave_crossings = NULL;
+	free(data->wave_pos_x);
+	data->wave_pos_x = NULL;
+	free(data->wave_pos_y);
+	data->wave_pos_y = NULL;
+	free(data->wave_pos_z);
+	data->wave_pos_z = NULL;
 	return true;
 }
 
@@ -984,12 +949,10 @@ static void gui_gl_realize(iwt_gui_data_t data)
 	data->wave_buffer = malloc(WAVE_MAX_SEGMENTS * 2 * 6 * sizeof(float));
 	data->wave_segment_count = 0;
 
-	// Wave-Berechnungs-Buffer (einmal allokiert)
-	data->wave_work_size = (size_t) data->cfg.N * WAVE_LEVELS * WAVE_MAX_CROSSINGS;
-	data->wave_px = malloc(data->wave_work_size * sizeof(double));
-	data->wave_py = malloc(data->wave_work_size * sizeof(double));
-	data->wave_pz = malloc(data->wave_work_size * sizeof(double));
-	data->wave_crossings = calloc((size_t) data->cfg.N * WAVE_LEVELS, sizeof(int));
+	// GPU-Wellen: temporäre Positions-Arrays (einmal allokiert)
+	data->wave_pos_x = malloc(data->cfg.N * sizeof(double));
+	data->wave_pos_y = malloc(data->cfg.N * sizeof(double));
+	data->wave_pos_z = malloc(data->cfg.N * sizeof(double));
 
 	glGenVertexArrays(1, &data->gl_vao_wave);
 	glGenBuffers(1, &data->gl_vbo_wave);
@@ -1067,100 +1030,6 @@ static size_t gui_gl_update_clusters(iwt_gui_data_t data)
 	return cluster_draw_count;
 }
 
-/*
- * wave_compute_crossings - Berechnet Schnittpunkte fuer einen Knoten
- *
- * Fuer jeden Knoten i werden die Schnittpunkte der Phasenfilme mit den
- * Kanten zu den Nachbarn berechnet.
- */
-static void wave_compute_crossings(iwt_gui_data_t data, size_t i, double base_level,
-    double level_step, double two_pi, double px[][WAVE_MAX_CROSSINGS],
-    double py[][WAVE_MAX_CROSSINGS], double pz[][WAVE_MAX_CROSSINGS], int crossings[])
-{
-	// Early-Exit: Knoten außerhalb der Sichtebene überspringen
-	if (!slice_point_visible(data, (double) data->rt.pos[i].z))
-	{
-		return;
-	}
-
-	int count = data->rt.wave_count[i];
-	const int* neighbors = &data->rt.wave_flat[i * IWT_WAVE_STRIDE];
-
-	// Differenz der Knotenphase zu allen Niveaus vorberechnen
-	double di[WAVE_LEVELS];
-	for (int l = 0; l < WAVE_LEVELS; l++)
-	{
-		double level_l = base_level + (double) l * level_step;
-		di[l] = data->rt.I_phase[i] - level_l;
-		di[l] -= two_pi * rint(di[l] / two_pi);
-	}
-
-	for (int e = 0; e < count; e++)
-	{
-		size_t j = (size_t) neighbors[e];
-		if (j == i)
-		{
-			continue;
-		}
-
-		double dj_raw = data->rt.I_phase[j];
-
-		for (int l = 0; l < WAVE_LEVELS; l++)
-		{
-			if (crossings[l] >= WAVE_MAX_CROSSINGS)
-			{
-				continue;
-			}
-			double level_l = base_level + (double) l * level_step;
-			double dj = dj_raw - level_l;
-			dj -= two_pi * rint(dj / two_pi);
-			if (di[l] * dj >= 0.0)
-			{
-				continue;
-			}
-
-			double t = di[l] / (di[l] - dj);
-			double cx = (double) data->rt.pos[i].x + t * ((double) data->rt.pos[j].x - (double) data->rt.pos[i].x);
-			double cy = (double) data->rt.pos[i].y + t * ((double) data->rt.pos[j].y - (double) data->rt.pos[i].y);
-			double cz = (double) data->rt.pos[i].z + t * ((double) data->rt.pos[j].z - (double) data->rt.pos[i].z);
-
-			// 2D-Schnitt: nur Schnittpunkte innerhalb der Scheibe
-			if (!slice_point_visible(data, cz))
-			{
-				continue;
-			}
-
-			px[l][crossings[l]] = cx;
-			py[l][crossings[l]] = cy;
-			pz[l][crossings[l]] = cz;
-			crossings[l]++;
-		}
-	}
-}
-
-/*
- * wave_emit_node_segments - Emittiert Segmente fuer einen Knoten
- *
- * Erzeugt die Linien-Segmente aus den berechneten Schnittpunkten.
- */
-static void wave_emit_node_segments(iwt_gui_data_t data, size_t* seg,
-    double base_level, double level_step, double two_pi,
-    double px[][WAVE_MAX_CROSSINGS], double py[][WAVE_MAX_CROSSINGS],
-    double pz[][WAVE_MAX_CROSSINGS], int crossings[])
-{
-	for (int l = 0; l < WAVE_LEVELS && *seg < WAVE_MAX_SEGMENTS; l++)
-	{
-		float hue = (float) (((base_level + (double) l * level_step) + iwt_pi()) / two_pi);
-		for (int k = 0; k + 1 < crossings[l] && *seg < WAVE_MAX_SEGMENTS; k += 2)
-		{
-			double pa[3] = {px[l][k], py[l][k], pz[l][k]};
-			double pb[3] = {px[l][k + 1], py[l][k + 1], pz[l][k + 1]};
-			wave_emit_segment(data, *seg, pa, pb, hue, 0.95f);
-			(*seg)++;
-		}
-	}
-}
-
 static size_t gui_gl_update_waves(iwt_gui_data_t data)
 {
 	data->wave_segment_count = 0;
@@ -1176,24 +1045,85 @@ static size_t gui_gl_update_waves(iwt_gui_data_t data)
 	// Gemeinsamer Frontenzug: Basis-Niveau wandert langsam
 	double base_level = -iwt_pi() + level_step * (((double) ((long long) data->iter % WAVE_MARCH_FRAMES)) / (double) WAVE_MARCH_FRAMES);
 
-	size_t seg = 0;
-
-	for (size_t i = 0; i < N && seg < WAVE_MAX_SEGMENTS; i++)
+	// Aktuelle Knotenpositionen (x,y,z getrennt) für den GPU-Kernel aufbereiten
+	for (size_t i = 0; i < N; i++)
 	{
-		// Pre-allocated Buffer verwenden (kein VLA)
-		size_t base = i * WAVE_LEVELS * WAVE_MAX_CROSSINGS;
-		double (*px)[WAVE_MAX_CROSSINGS] = (double (*)[WAVE_MAX_CROSSINGS]) &data->wave_px[base];
-		double (*py)[WAVE_MAX_CROSSINGS] = (double (*)[WAVE_MAX_CROSSINGS]) &data->wave_py[base];
-		double (*pz)[WAVE_MAX_CROSSINGS] = (double (*)[WAVE_MAX_CROSSINGS]) &data->wave_pz[base];
-		int* crossings = &data->wave_crossings[i * WAVE_LEVELS];
-		memset(crossings, 0, WAVE_LEVELS * sizeof(int));
-
-		wave_compute_crossings(data, i, base_level, level_step, two_pi, px, py, pz, crossings);
-		wave_emit_node_segments(data, &seg, base_level, level_step, two_pi, px, py, pz, crossings);
+		data->wave_pos_x[i] = data->rt.pos[i].x;
+		data->wave_pos_y[i] = data->rt.pos[i].y;
+		data->wave_pos_z[i] = data->rt.pos[i].z;
 	}
 
-	data->wave_segment_count = seg;
-	return seg;
+	cl_int err;
+	err = clEnqueueWriteBuffer(data->rt.ocl.queue, data->rt.wave_pos_x_gpu, CL_TRUE, 0,
+		N * sizeof(double), data->wave_pos_x, 0, NULL, NULL);
+	err |= clEnqueueWriteBuffer(data->rt.ocl.queue, data->rt.wave_pos_y_gpu, CL_TRUE, 0,
+		N * sizeof(double), data->wave_pos_y, 0, NULL, NULL);
+	err |= clEnqueueWriteBuffer(data->rt.ocl.queue, data->rt.wave_pos_z_gpu, CL_TRUE, 0,
+		N * sizeof(double), data->wave_pos_z, 0, NULL, NULL);
+	if (err != CL_SUCCESS)
+	{
+		return 0;
+	}
+
+	cl_kernel kernel = ocl_get_kernel(&data->rt.ocl, OCL_KERNEL_IWT_WAVE_SEGMENTS);
+	if (!kernel)
+	{
+		return 0;
+	}
+
+	unsigned int zero = 0;
+	clEnqueueWriteBuffer(data->rt.ocl.queue, data->rt.wave_counter_gpu, CL_TRUE, 0,
+		sizeof(unsigned int), &zero, 0, NULL, NULL);
+
+	int N_int = (int) N;
+	unsigned int stride_u = (unsigned int) IWT_WAVE_STRIDE;
+	int levels = (int) WAVE_LEVELS;
+	int max_cross = (int) WAVE_MAX_CROSSINGS;
+	unsigned int slice_mode = data->cfg.slice_mode ? 1u : 0u;
+
+	clSetKernelArg(kernel, 0, sizeof(cl_mem), &data->rt.I_phase_gpu);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &data->rt.wave_pos_x_gpu);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &data->rt.wave_pos_y_gpu);
+	clSetKernelArg(kernel, 3, sizeof(cl_mem), &data->rt.wave_pos_z_gpu);
+	clSetKernelArg(kernel, 4, sizeof(cl_mem), &data->rt.wave_flat_gpu);
+	clSetKernelArg(kernel, 5, sizeof(cl_mem), &data->rt.wave_count_gpu);
+	clSetKernelArg(kernel, 6, sizeof(cl_mem), &data->rt.wave_counter_gpu);
+	clSetKernelArg(kernel, 7, sizeof(cl_mem), &data->rt.wave_segments_gpu);
+	clSetKernelArg(kernel, 8, sizeof(int), &N_int);
+	clSetKernelArg(kernel, 9, sizeof(unsigned int), &stride_u);
+	clSetKernelArg(kernel, 10, sizeof(int), &levels);
+	clSetKernelArg(kernel, 11, sizeof(int), &max_cross);
+	clSetKernelArg(kernel, 12, sizeof(double), &base_level);
+	clSetKernelArg(kernel, 13, sizeof(double), &level_step);
+	clSetKernelArg(kernel, 14, sizeof(double), &two_pi);
+	clSetKernelArg(kernel, 15, sizeof(unsigned int), &slice_mode);
+	clSetKernelArg(kernel, 16, sizeof(double), &data->cfg.slice_pos);
+	clSetKernelArg(kernel, 17, sizeof(double), &data->cfg.slice_delta);
+
+	size_t global = N * (size_t) WAVE_LEVELS;
+	ocl_enqueue_kernel(&data->rt.ocl, kernel, global, 0);
+	ocl_finish_frame(&data->rt.ocl);
+
+	unsigned int seg_count = 0;
+	if (clEnqueueReadBuffer(data->rt.ocl.queue, data->rt.wave_counter_gpu, CL_TRUE, 0,
+			sizeof(unsigned int), &seg_count, 0, NULL, NULL) != CL_SUCCESS)
+	{
+		return 0;
+	}
+
+	if (seg_count > WAVE_MAX_SEGMENTS)
+	{
+		seg_count = WAVE_MAX_SEGMENTS;
+	}
+
+	if (seg_count > 0 && clEnqueueReadBuffer(data->rt.ocl.queue, data->rt.wave_segments_gpu,
+			CL_TRUE, 0, (size_t) seg_count * 12 * sizeof(float), data->wave_buffer, 0, NULL, NULL) != CL_SUCCESS)
+	{
+		return 0;
+	}
+
+	data->wave_segment_count = seg_count;
+	return seg_count;
 }
 
 static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count)

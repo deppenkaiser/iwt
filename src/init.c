@@ -441,7 +441,18 @@ void iwt_recompute_adjacency(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 bool initialize_gpu_data(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-	return allocate_gpu_buffers(rt, cfg);
+	if (!allocate_gpu_buffers(rt, cfg))
+	{
+		return false;
+	}
+
+	// Statische Wellen-Kantennetz-Daten (wave_flat/wave_count) auf die GPU laden
+	cl_int err1 = clEnqueueWriteBuffer(rt->ocl.queue, rt->wave_flat_gpu, CL_TRUE, 0,
+		(size_t) cfg->N * IWT_WAVE_STRIDE * sizeof(int), rt->wave_flat, 0, NULL, NULL);
+	cl_int err2 = clEnqueueWriteBuffer(rt->ocl.queue, rt->wave_count_gpu, CL_TRUE, 0,
+		cfg->N * sizeof(int), rt->wave_count, 0, NULL, NULL);
+
+	return err1 == CL_SUCCESS && err2 == CL_SUCCESS;
 }
 
 bool iwt_rebuild_geometry(const iwt_runtime_t rt, const iwt_config_t cfg)
@@ -478,12 +489,24 @@ static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->xi_imag_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 	rt->uncertainty_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
+	// GPU-Wellen-Visualisierung
+	rt->wave_pos_x_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->wave_pos_y_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->wave_pos_z_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->wave_flat_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * IWT_WAVE_STRIDE * sizeof(int), NULL);
+	rt->wave_count_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(int), NULL);
+	rt->wave_segments_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, (size_t) IWT_WAVE_MAX_SEGMENTS * 12 * sizeof(float), NULL);
+	rt->wave_counter_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, sizeof(unsigned int), NULL);
+
 	void* gpu_ptrs[] = {
 		rt->I_real_gpu, rt->I_imag_gpu, rt->I_prev_real_gpu, rt->I_prev_imag_gpu,
 		rt->I_phase_gpu, rt->I_phase_prev_gpu,
 		rt->K_gpu, rt->sumJ_gpu, rt->Q_gpu,
 		rt->mass_gpu, rt->charge_gpu,
-		rt->xi_real_gpu, rt->xi_imag_gpu, rt->uncertainty_gpu};
+		rt->xi_real_gpu, rt->xi_imag_gpu, rt->uncertainty_gpu,
+		rt->wave_pos_x_gpu, rt->wave_pos_y_gpu, rt->wave_pos_z_gpu,
+		rt->wave_flat_gpu, rt->wave_count_gpu,
+		rt->wave_segments_gpu, rt->wave_counter_gpu};
 
 	return all_ptrs_valid(gpu_ptrs, sizeof(gpu_ptrs) / sizeof(gpu_ptrs[0]));
 }
@@ -636,4 +659,11 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
 	_free_gpu_memory(&rt->xi_real_gpu);
 	_free_gpu_memory(&rt->xi_imag_gpu);
 	_free_gpu_memory(&rt->uncertainty_gpu);
+	_free_gpu_memory(&rt->wave_pos_x_gpu);
+	_free_gpu_memory(&rt->wave_pos_y_gpu);
+	_free_gpu_memory(&rt->wave_pos_z_gpu);
+	_free_gpu_memory(&rt->wave_flat_gpu);
+	_free_gpu_memory(&rt->wave_count_gpu);
+	_free_gpu_memory(&rt->wave_segments_gpu);
+	_free_gpu_memory(&rt->wave_counter_gpu);
 }

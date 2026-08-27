@@ -33,12 +33,10 @@ typedef struct iwt_gui_data
 	float* wave_buffer;
 	size_t wave_segment_count;
 
-	// Wave-Berechnungs-Buffer (einmal allokiert, pro Frame wiederverwendet)
-	double* wave_px;
-	double* wave_py;
-	double* wave_pz;
-	int* wave_crossings;
-	size_t wave_work_size;
+	// GPU-Wellen: temporäre Positions-Arrays (einmal allokiert)
+	double* wave_pos_x;
+	double* wave_pos_y;
+	double* wave_pos_z;
 
 	GLuint gl_program;
 	GLint gl_u_mvp;

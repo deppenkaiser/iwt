@@ -17,6 +17,12 @@
 // Entsprechend fuer das erweiterte Wellen-Kantennetz (schwerer Schweif)
 #define IWT_WAVE_STRIDE 32
 
+// EM-Wellenfront-Visualisierung (geteilt zwischen gui.c und GPU-Kernel)
+#define IWT_WAVE_LEVELS 32
+#define IWT_WAVE_MAX_CROSSINGS 4
+#define IWT_WAVE_MAX_SEGMENTS 320000
+#define IWT_WAVE_MARCH_FRAMES 320
+
 typedef struct iwt_cluster
 {
 	int id;
@@ -139,6 +145,15 @@ typedef struct iwt_runtime
 	cl_mem xi_real_gpu;
 	cl_mem xi_imag_gpu;
 	cl_mem uncertainty_gpu;
+
+	// GPU-Wellen-Visualisierung (EM-Wellenfront-Segmente)
+	cl_mem wave_pos_x_gpu;
+	cl_mem wave_pos_y_gpu;
+	cl_mem wave_pos_z_gpu;
+	cl_mem wave_flat_gpu;
+	cl_mem wave_count_gpu;
+	cl_mem wave_segments_gpu;
+	cl_mem wave_counter_gpu;
 
 	struct ocl_core ocl;
 }* iwt_runtime_t;
