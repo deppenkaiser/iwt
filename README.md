@@ -1,5 +1,9 @@
 # iwt
 
+> **Hinweis für die nächste KI:** Aktueller GPU-Performance- und Optimierungsstand
+> s. **`PROJECT_STATUS.md`** (Performance-Messung, Engpass-Analyse, abgeschlossene
+> Optimierungen, Konventionen). Die README unten dokumentiert Theorie/Numerik.
+
 ## Formatierung:
 BasedOnStyle: LLVM
 BreakBeforeBraces: Allman
