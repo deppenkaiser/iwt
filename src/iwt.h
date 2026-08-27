@@ -142,6 +142,11 @@ typedef struct iwt_runtime
 	cl_mem K_gpu;
 	cl_mem sumJ_gpu;
 	cl_mem Q_gpu;
+	// Dichte-Vorabberechnung (O(N)-Kernel): rho_vec = |I|²,
+	// rho_norm = rho_vec/(sum_abs_sq+eps), sqrt_rho = sqrt(rho_norm)
+	cl_mem rho_vec_gpu;
+	cl_mem rho_norm_gpu;
+	cl_mem sqrt_rho_gpu;
 	cl_mem xi_real_gpu;
 	cl_mem xi_imag_gpu;
 	cl_mem uncertainty_gpu;

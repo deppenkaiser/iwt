@@ -124,18 +124,17 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 	double Q_min = 1e-6;
 	double thresh = cfg->cluster_threshold;
 
-	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
-	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
+	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->rho_norm_gpu);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->sqrt_rho_gpu);
 	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->K_gpu);
 	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->Q_gpu);
 	clSetKernelArg(kernel, 4, sizeof(int), &N);
-	clSetKernelArg(kernel, 5, sizeof(double), &sum_abs_sq_val);
-	clSetKernelArg(kernel, 6, sizeof(double), &hbar);
-	clSetKernelArg(kernel, 7, sizeof(double), &m);
-	clSetKernelArg(kernel, 8, sizeof(double), &beta);
-	clSetKernelArg(kernel, 9, sizeof(double), &epsilon);
-	clSetKernelArg(kernel, 10, sizeof(double), &Q_min);
-	clSetKernelArg(kernel, 11, sizeof(double), &thresh);
+	clSetKernelArg(kernel, 5, sizeof(double), &hbar);
+	clSetKernelArg(kernel, 6, sizeof(double), &m);
+	clSetKernelArg(kernel, 7, sizeof(double), &beta);
+	clSetKernelArg(kernel, 8, sizeof(double), &epsilon);
+	clSetKernelArg(kernel, 9, sizeof(double), &Q_min);
+	clSetKernelArg(kernel, 10, sizeof(double), &thresh);
 
 	size_t global = cfg->N;
 	size_t local = get_local_size(global);
@@ -148,6 +147,46 @@ bool run_q_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 	clEnqueueReadBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE, 0,
 						cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
 	sanitize_q_array(rt->Q, cfg->N, Q_min);
+	return true;
+}
+
+/**
+ * Dichte-Vorabberechnung vor der O(N²)-Phase.
+ * Theorie: rho_k = |I_k|²/S (Kap. 3.3); die Dichten werden einmalig pro
+ * Knoten berechnet (O(N)) und von iwt_flux / iwt_q aus rho_vec_gpu,
+ * rho_norm_gpu und sqrt_rho_gpu gelesen. Grund: Die O(N²)-Schleifen sind
+ * FP64-rechenbegrenzt, nicht bandbreitenbegrenzt (README.md, "Numerische
+ * Skalierung"); das Precompute entfernt ~N² FP64-sqrt/div aus der inneren
+ * Schleife, ohne die Rundung zu aendern (bitidentische Semantik).
+ */
+bool run_precompute(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_PRECOMPUTE);
+	if (!kernel_valid(kernel))
+	{
+		return false;
+	}
+
+	double sum_abs_sq_val = sum_abs_sq(rt, cfg);
+
+	int N = (int) cfg->N;
+
+	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->rho_vec_gpu);
+	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->rho_norm_gpu);
+	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->sqrt_rho_gpu);
+	clSetKernelArg(kernel, 5, sizeof(int), &N);
+	clSetKernelArg(kernel, 6, sizeof(double), &sum_abs_sq_val);
+
+	size_t global = cfg->N;
+	size_t local = get_local_size(global);
+
+	if (!ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
+	{
+		return false;
+	}
+
 	return true;
 }
 
@@ -169,6 +208,7 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 	}
 
 	// I-Arrays sind bereits auf dem Device (nach GPU-Redshift-Damping)
+	// die Dichte-Vektoren kommen aus run_precompute (rho_vec_gpu)
 	// Q muss hochgeladen werden (Vorheriger Frame)
 	clEnqueueWriteBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE, 0,
 						 cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
@@ -186,16 +226,15 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 	double gamma = cfg->gamma;
 	double kappa = cfg->kappa;
 
-	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
-	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
-	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
-	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->Q_gpu);
-	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->K_gpu);
-	clSetKernelArg(kernel, 5, sizeof(cl_mem), &rt->sumJ_gpu);
-	clSetKernelArg(kernel, 6, sizeof(int), &N);
-	clSetKernelArg(kernel, 7, sizeof(double), &DT);
-	clSetKernelArg(kernel, 8, sizeof(double), &gamma);
-	clSetKernelArg(kernel, 9, sizeof(double), &kappa);
+	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_phase_gpu);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->Q_gpu);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->rho_vec_gpu);
+	clSetKernelArg(kernel, 3, sizeof(cl_mem), &rt->K_gpu);
+	clSetKernelArg(kernel, 4, sizeof(cl_mem), &rt->sumJ_gpu);
+	clSetKernelArg(kernel, 5, sizeof(int), &N);
+	clSetKernelArg(kernel, 6, sizeof(double), &DT);
+	clSetKernelArg(kernel, 7, sizeof(double), &gamma);
+	clSetKernelArg(kernel, 8, sizeof(double), &kappa);
 
 	size_t global = cfg->N;
 	size_t local = get_local_size(global);
@@ -337,6 +376,7 @@ bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg)
 		{"uncertainty", frozen_generate_uncertainty_cpu},   // Gleichung (P.3), Term 4
 		{"apply_fluct", frozen_run_apply_fluctuations},	    // Gleichung (P.3), Term 4
 		{"redshift",    frozen_run_apply_redshift_damping}, // Anhang Q (Energiesenke)
+		{"precompute",  run_precompute},				    // O(N)-Dichtevorabberechnung (IWT_NORM)
 		{"flux",        run_flux_calculation},			    // Gleichung (P.3), Term 1+3
 		{"q",           run_q_calculation},				    // Gleichung (P.3), Term 2
 		{"update_info", run_update_info},				    // Gleichung (P.3)

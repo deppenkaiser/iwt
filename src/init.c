@@ -482,6 +482,11 @@ static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->sumJ_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_WRITE_ONLY, cfg->N * sizeof(double), NULL);
 	rt->Q_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
+	// Dichte-Vorabberechnung (O(N)-Kernel, siehe run_precompute)
+	rt->rho_vec_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->rho_norm_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+	rt->sqrt_rho_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
+
 	rt->mass_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 	rt->charge_gpu = ocl_create_buffer(&rt->ocl, OCL_BUF_READ_WRITE, cfg->N * sizeof(double), NULL);
 
@@ -507,6 +512,7 @@ static bool allocate_gpu_buffers(const iwt_runtime_t rt, const iwt_config_t cfg)
 		rt->I_real_gpu, rt->I_imag_gpu, rt->I_prev_real_gpu, rt->I_prev_imag_gpu,
 		rt->I_phase_gpu, rt->I_phase_prev_gpu,
 		rt->K_gpu, rt->sumJ_gpu, rt->Q_gpu,
+		rt->rho_vec_gpu, rt->rho_norm_gpu, rt->sqrt_rho_gpu,
 		rt->mass_gpu, rt->charge_gpu,
 		rt->xi_real_gpu, rt->xi_imag_gpu, rt->uncertainty_gpu,
 		rt->wave_pos_x_gpu, rt->wave_pos_y_gpu, rt->wave_pos_z_gpu,
@@ -660,6 +666,9 @@ void deinitialize_gpu_data(const iwt_runtime_t rt)
 	_free_gpu_memory(&rt->K_gpu);
 	_free_gpu_memory(&rt->sumJ_gpu);
 	_free_gpu_memory(&rt->Q_gpu);
+	_free_gpu_memory(&rt->rho_vec_gpu);
+	_free_gpu_memory(&rt->rho_norm_gpu);
+	_free_gpu_memory(&rt->sqrt_rho_gpu);
 	_free_gpu_memory(&rt->mass_gpu);
 	_free_gpu_memory(&rt->charge_gpu);
 	_free_gpu_memory(&rt->xi_real_gpu);
