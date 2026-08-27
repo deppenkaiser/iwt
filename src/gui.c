@@ -149,8 +149,8 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count);
  *          durch den Phasenraum (Frontenzug).
  */
 
-#define WAVE_LEVELS 64
-#define WAVE_MARCH_FRAMES 640
+#define WAVE_LEVELS 32
+#define WAVE_MARCH_FRAMES 320
 #define WAVE_MAX_SEGMENTS 320000
 #define WAVE_MAX_CROSSINGS 4
 
@@ -865,12 +865,17 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 					data->request_histogram = false;
 				}
 
-				// Statistik-Text aktualisieren (jede Frame, billig: O(Cluster))
+				// Statistik-Text aktualisieren (throttled: jede 10. Frame)
 				if (data->stats_buffer)
 				{
-					char buf[2048];
-					iwt_format_stats(&data->rt, buf, sizeof(buf));
-					gtk_text_buffer_set_text(data->stats_buffer, buf, -1);
+					data->stats_update_counter++;
+					if (data->stats_update_counter >= 10)
+					{
+						data->stats_update_counter = 0;
+						char buf[2048];
+						iwt_format_stats(&data->rt, buf, sizeof(buf));
+						gtk_text_buffer_set_text(data->stats_buffer, buf, -1);
+					}
 				}
 			}
 			break;
@@ -916,6 +921,13 @@ static void gui_gl_realize(iwt_gui_data_t data)
 
 	data->wave_buffer = malloc(WAVE_MAX_SEGMENTS * 2 * 6 * sizeof(float));
 	data->wave_segment_count = 0;
+
+	// Wave-Berechnungs-Buffer (einmal allokiert)
+	data->wave_work_size = (size_t) data->cfg.N * WAVE_LEVELS * WAVE_MAX_CROSSINGS;
+	data->wave_px = malloc(data->wave_work_size * sizeof(double));
+	data->wave_py = malloc(data->wave_work_size * sizeof(double));
+	data->wave_pz = malloc(data->wave_work_size * sizeof(double));
+	data->wave_crossings = calloc((size_t) data->cfg.N * WAVE_LEVELS, sizeof(int));
 
 	glGenVertexArrays(1, &data->gl_vao_wave);
 	glGenBuffers(1, &data->gl_vbo_wave);
@@ -1003,6 +1015,12 @@ static void wave_compute_crossings(iwt_gui_data_t data, size_t i, double base_le
     double level_step, double two_pi, double px[][WAVE_MAX_CROSSINGS],
     double py[][WAVE_MAX_CROSSINGS], double pz[][WAVE_MAX_CROSSINGS], int crossings[])
 {
+	// Early-Exit: Knoten außerhalb der Sichtebene überspringen
+	if (!slice_point_visible(data, (double) data->rt.pos[i].z))
+	{
+		return;
+	}
+
 	int count = data->rt.wave_count[i];
 	const int* neighbors = &data->rt.wave_flat[i * IWT_WAVE_STRIDE];
 
@@ -1100,11 +1118,13 @@ static size_t gui_gl_update_waves(iwt_gui_data_t data)
 
 	for (size_t i = 0; i < N && seg < WAVE_MAX_SEGMENTS; i++)
 	{
-		double px[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
-		double py[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
-		double pz[WAVE_LEVELS][WAVE_MAX_CROSSINGS];
-		int crossings[WAVE_LEVELS];
-		memset(crossings, 0, sizeof(crossings));
+		// Pre-allocated Buffer verwenden (kein VLA)
+		size_t base = i * WAVE_LEVELS * WAVE_MAX_CROSSINGS;
+		double (*px)[WAVE_MAX_CROSSINGS] = (double (*)[WAVE_MAX_CROSSINGS]) &data->wave_px[base];
+		double (*py)[WAVE_MAX_CROSSINGS] = (double (*)[WAVE_MAX_CROSSINGS]) &data->wave_py[base];
+		double (*pz)[WAVE_MAX_CROSSINGS] = (double (*)[WAVE_MAX_CROSSINGS]) &data->wave_pz[base];
+		int* crossings = &data->wave_crossings[i * WAVE_LEVELS];
+		memset(crossings, 0, WAVE_LEVELS * sizeof(int));
 
 		wave_compute_crossings(data, i, base_level, level_step, two_pi, px, py, pz, crossings);
 		wave_emit_node_segments(data, &seg, base_level, level_step, two_pi, px, py, pz, crossings);

@@ -114,6 +114,9 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->wave_flat = calloc((size_t) cfg->N * IWT_WAVE_STRIDE, sizeof(int));
 	rt->wave_count = calloc(cfg->N, sizeof(int));
 
+	// Fisher-Yates Shuffle Buffer (einmal allokiert, pro Frame wiederverwendet)
+	rt->shuffle_indices = malloc(cfg->N * sizeof(size_t));
+
 	rt->mass = calloc(cfg->N, sizeof(double));
 	rt->charge = calloc(cfg->N, sizeof(double));
 
@@ -522,6 +525,7 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	_free_memory((void**) &rt->adj_count);
 	_free_memory((void**) &rt->wave_flat);
 	_free_memory((void**) &rt->wave_count);
+	_free_memory((void**) &rt->shuffle_indices);
 	_free_memory((void**) &rt->spectrum_history);
 }
 

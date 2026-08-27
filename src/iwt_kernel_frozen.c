@@ -84,7 +84,8 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 	unsigned int seed = (unsigned int) (cfg->seed ^ (rt->n_steps * 2654435761ull));
 
 	// Fisher-Yates-Shuffle für unkorrelierte Fluktuationen
-	size_t* indices = malloc(cfg->N * sizeof(size_t));
+	// Verwendet wiederverwendeten Buffer (kein malloc pro Frame)
+	size_t* indices = rt->shuffle_indices;
 	if (!indices)
 	{
 		return false;
@@ -119,7 +120,6 @@ bool frozen_generate_uncertainty_cpu(const iwt_runtime_t rt, const iwt_config_t 
 		rt->uncertainty[i] = 0.0;
 	}
 
-	free(indices);
 	return true;
 }
 

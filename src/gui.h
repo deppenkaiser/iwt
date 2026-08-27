@@ -33,6 +33,13 @@ typedef struct iwt_gui_data
 	float* wave_buffer;
 	size_t wave_segment_count;
 
+	// Wave-Berechnungs-Buffer (einmal allokiert, pro Frame wiederverwendet)
+	double* wave_px;
+	double* wave_py;
+	double* wave_pz;
+	int* wave_crossings;
+	size_t wave_work_size;
+
 	GLuint gl_program;
 	GLint gl_u_mvp;
 	GLint gl_u_size_scale;
@@ -62,6 +69,9 @@ typedef struct iwt_gui_data
 
 	// Analyse: letzte Cluster-Anzahl fuer automatischen Trigger
 	uint32_t last_cluster_count;
+
+	// Performance: Stats-Text-Update throttling (jede N. Frame)
+	int stats_update_counter;
 
 	// 2D/3D Modus
 	bool mode_2d;

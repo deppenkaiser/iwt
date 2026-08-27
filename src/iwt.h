@@ -119,6 +119,9 @@ typedef struct iwt_runtime
 	int* wave_flat;
 	int* wave_count;
 
+	// Fisher-Yates Shuffle Buffer (einmal allokiert, pro Frame wiederverwendet)
+	size_t* shuffle_indices;
+
 	// Nachbarschafts-Adjazenz (K-Matrix-Schwellwert), N*N, statisch
 	bool* adjacency;
 
