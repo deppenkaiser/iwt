@@ -365,8 +365,10 @@ void iwt_analysis_generate_histogram(iwt_gui_data_t data)
 	string_cat(script_path, sizeof(script_path), "/build/bin/experiments/");
 
 	// Letztes Experiment finden (neuestes)
-	char find_cmd[1024];
-	snprintf(find_cmd, sizeof(find_cmd), "ls -td %s/exp_* 2>/dev/null | head -1", script_path);
+	string_t find_cmd;
+	string_copy(find_cmd, sizeof(find_cmd), "ls -td ");
+	string_cat(find_cmd, sizeof(find_cmd), script_path);
+	string_cat(find_cmd, sizeof(find_cmd), "/exp_* 2>/dev/null | head -1");
 	FILE* f = popen(find_cmd, "r");
 	if (!f)
 	{
@@ -383,7 +385,11 @@ void iwt_analysis_generate_histogram(iwt_gui_data_t data)
 			latest_exp[len - 1] = '\0';
 		}
 
-		snprintf(cmd, sizeof(cmd), "python3 \"%s\" \"%s\" --histogram &", python_path, latest_exp);
+		string_copy(cmd, sizeof(cmd), "python3 \"");
+		string_cat(cmd, sizeof(cmd), python_path);
+		string_cat(cmd, sizeof(cmd), "\" \"");
+		string_cat(cmd, sizeof(cmd), latest_exp);
+		string_cat(cmd, sizeof(cmd), "\" --histogram &");
 		printf("analysis: Erzeuge Histogramm fuer %s\n", latest_exp);
 		system(cmd);
 	}
