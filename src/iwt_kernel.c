@@ -167,12 +167,8 @@ bool run_flux_calculation(const iwt_runtime_t rt, const iwt_config_t cfg)
 		return false;
 	}
 
-	clEnqueueWriteBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
-						 cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
-	clEnqueueWriteBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
-						 cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
-	clEnqueueWriteBuffer(rt->ocl.queue, rt->I_phase_gpu, CL_TRUE, 0,
-						 cfg->N * sizeof(double), rt->I_phase, 0, NULL, NULL);
+	// I-Arrays sind bereits auf dem Device (nach GPU-Redshift-Damping)
+	// Q muss hochgeladen werden (Vorheriger Frame)
 	clEnqueueWriteBuffer(rt->ocl.queue, rt->Q_gpu, CL_TRUE, 0,
 						 cfg->N * sizeof(double), rt->Q, 0, NULL, NULL);
 

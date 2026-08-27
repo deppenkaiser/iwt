@@ -216,20 +216,45 @@ bool frozen_run_apply_fluctuations(const iwt_runtime_t rt, const iwt_config_t cf
  */
 bool frozen_run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_t cfg)
 {
-	double alpha_0 = ALPHA_0;
-	double alpha_min = ALPHA_MIN;
-
-	for (size_t i = 0; i < cfg->N; i++)
+	cl_kernel kernel = ocl_get_kernel(&rt->ocl, OCL_KERNEL_IWT_REDSHIFT_DAMPING);
+	if (!kernel)
 	{
-		double rho_i = rt->I_real[i] * rt->I_real[i] + rt->I_imag[i] * rt->I_imag[i] + 1e-30;
-		double anti_rho = 1.0 / rho_i;
-
-		// Energiesenke NUR in Strukturen (rho_i groß)
-		double alpha = alpha_0 * (anti_rho / (1.0 + anti_rho)) + alpha_min;
-
-		rt->I_real[i] *= (1.0 - alpha);
-		rt->I_imag[i] *= (1.0 - alpha);
+		return false;
 	}
+
+	// I-Arrays sind bereits auf dem Device (nach frozen_run_apply_fluctuations)
+	int N = (int) cfg->N;
+	double l0 = cfg->l0;
+	double D = cfg->D;
+	double L_Q0 = 2.0e46;  // Korrelationslänge des Q-Feldes (Kap. 12, Anhang J)
+	double delta = 1.0;    // Kopplungskonstante (iwt_kernel.c)
+
+	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
+	clSetKernelArg(kernel, 3, sizeof(int), &N);
+	clSetKernelArg(kernel, 4, sizeof(double), &l0);
+	clSetKernelArg(kernel, 5, sizeof(double), &D);
+	clSetKernelArg(kernel, 6, sizeof(double), &L_Q0);
+	clSetKernelArg(kernel, 7, sizeof(double), &delta);
+
+	size_t global = cfg->N;
+	size_t local = 64;
+	if (local > global)
+	{
+		local = global;
+	}
+
+	if (!ocl_enqueue_kernel(&rt->ocl, kernel, global, local))
+	{
+		return false;
+	}
+
+	// Readback fuer sum_abs_sq in run_q_calculation (benötigt Host-I)
+	clEnqueueReadBuffer(rt->ocl.queue, rt->I_real_gpu, CL_TRUE, 0,
+						cfg->N * sizeof(double), rt->I_real, 0, NULL, NULL);
+	clEnqueueReadBuffer(rt->ocl.queue, rt->I_imag_gpu, CL_TRUE, 0,
+						cfg->N * sizeof(double), rt->I_imag, 0, NULL, NULL);
 
 	return true;
 }
