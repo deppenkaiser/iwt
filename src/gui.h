@@ -85,4 +85,8 @@ typedef struct iwt_gui_data
 	volatile bool gpu_ready;      // GPU hat Arbeit abgeschlossen
 	volatile bool gpu_start;      // Signal: GPU kann starten
 	volatile bool shutdown;       // Worker-Thread beenden
+
+	// Throttling: Adjacency Recompute (debounced)
+	guint adj_recompute_source;   // GLib-Timeout-ID für Debounce
+	bool adj_recompute_pending;   // Neuberechnung ausstehend
 }* iwt_gui_data_t;

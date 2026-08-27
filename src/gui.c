@@ -106,6 +106,36 @@ static void* gpu_worker_thread(void* arg)
 }
 
 /*
+ * adj_recompute_timeout - Debounce-Callback für Adjacency-Neuberechnung
+ * Wird 100ms nach der letzten Wertänderung aufgerufen.
+ */
+static gboolean adj_recompute_timeout(gpointer user_data)
+{
+	iwt_gui_data_t data = (iwt_gui_data_t) user_data;
+	if (data->adj_recompute_pending)
+	{
+		iwt_recompute_adjacency(&data->rt, &data->cfg);
+		data->adj_recompute_pending = false;
+	}
+	data->adj_recompute_source = 0;
+	return G_SOURCE_REMOVE;
+}
+
+/*
+ * schedule_adj_recompute - Plant eine debounced Adjacency-Neuberechnung
+ * Setzt bei jedem Aufruf den Timer zurück (100ms).
+ */
+static void schedule_adj_recompute(iwt_gui_data_t data)
+{
+	data->adj_recompute_pending = true;
+	if (data->adj_recompute_source > 0)
+	{
+		g_source_remove(data->adj_recompute_source);
+	}
+	data->adj_recompute_source = g_timeout_add(100, adj_recompute_timeout, data);
+}
+
+/*
  * Detaillierte Modul-Dokumentation zur Erhöhung der Wartbarkeit und
  * des Comment-Ratio. Diese Sektion beschreibt Architektur, Datenfluss
  * und wichtige Invarianten des GUI-Moduls.
@@ -821,7 +851,7 @@ static void gui_button_handle_selected(gui_button_t core, iwt_gui_data_t data)
 	else if (core->id == IWT_CTRL_CLUSTER_THRESHOLD)
 	{
 		data->cfg.cluster_threshold = gui_button_spin_get_double(core->button);
-		iwt_recompute_adjacency(&data->rt, &data->cfg);
+		schedule_adj_recompute(data);
 	}
 	else if (core->id == IWT_CTRL_SLICE_POS)
 	{
@@ -834,7 +864,7 @@ static void gui_button_handle_selected(gui_button_t core, iwt_gui_data_t data)
 	else if (core->id == IWT_CTRL_WAVE_K_MIN)
 	{
 		data->cfg.wave_k_min = gui_button_spin_get_double(core->button);
-		iwt_recompute_adjacency(&data->rt, &data->cfg);
+		schedule_adj_recompute(data);
 	}
 	else if (core->id == IWT_CTRL_EXTRA_LEVELS)
 	{
