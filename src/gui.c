@@ -973,9 +973,9 @@ static void gui_gl_update_cluster_point(iwt_gui_data_t data, size_t idx, iwt_clu
 	if (cl->external)
 	{
 		// Externe Cluster (Mitglieder aus >= 2 Zellen, Dualnetz) violett
-		data->cluster_points_buffer[idx * 6 + 0] = 0.85f * brightness;
-		data->cluster_points_buffer[idx * 6 + 1] = 0.35f * brightness;
-		data->cluster_points_buffer[idx * 6 + 2] = brightness;
+		data->cluster_points_buffer[idx * 6 + 3] = 0.85f * brightness;
+		data->cluster_points_buffer[idx * 6 + 4] = 0.35f * brightness;
+		data->cluster_points_buffer[idx * 6 + 5] = brightness;
 		return;
 	}
 
