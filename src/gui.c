@@ -1035,6 +1035,14 @@ static size_t gui_gl_update_clusters(iwt_gui_data_t data)
 
 static size_t gui_gl_update_waves(iwt_gui_data_t data)
 {
+	// Throttling: Wellen-Neuberechnung nur jede N. Frame (reduziert synchrone
+	// PCIe-Transfers ~1,2MB + 2MB + 2MB pro Frame). Die Basis-Niveaus wandern
+	// langsam (IWT_WAVE_MARCH_FRAMES), sodass der visuelle Unterschied minimal ist.
+	if ((data->iter & 1) != 0)
+	{
+		return data->wave_segment_count;
+	}
+
 	data->wave_segment_count = 0;
 	if (!data->cfg.show_waves)
 	{
