@@ -120,6 +120,10 @@ static bool allocate_host_arrays(const iwt_runtime_t rt, const iwt_config_t cfg)
 	rt->mass = calloc(cfg->N, sizeof(double));
 	rt->charge = calloc(cfg->N, sizeof(double));
 
+	// Double-Buffered Masse/Ladung (fuer Pipeline-Parallelismus)
+	rt->mass_prev = calloc(cfg->N, sizeof(double));
+	rt->charge_prev = calloc(cfg->N, sizeof(double));
+
 	// Anhang P: Intrinsische Unschärfe aus diskreter Zeit
 	rt->xi_real = calloc(cfg->N, sizeof(double));
 	rt->xi_imag = calloc(cfg->N, sizeof(double));
@@ -504,6 +508,8 @@ void deinitialize_host_data(const iwt_runtime_t rt)
 	_free_memory((void**) &rt->adjacency);
 	_free_memory((void**) &rt->mass);
 	_free_memory((void**) &rt->charge);
+	_free_memory((void**) &rt->mass_prev);
+	_free_memory((void**) &rt->charge_prev);
 	_free_memory((void**) &rt->xi_real);
 	_free_memory((void**) &rt->xi_imag);
 	_free_memory((void**) &rt->uncertainty);

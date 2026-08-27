@@ -358,3 +358,68 @@ bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg)
 
 	return true;
 }
+
+/**
+ * GPU-Pipeline: Führt alle OpenCL-Kernels aus (ohne Cluster-Erkennung).
+ * Wird vom Worker-Thread aufgerufen.
+ */
+bool run_gpu_pipeline(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	rt->n_steps++;
+
+	// Speichere vorherigen Zustand für die Weber-Kraft (Kap. 3.4)
+	for (size_t i = 0; i < cfg->N; i++)
+	{
+		rt->I_prev_real[i] = rt->I_real[i];
+		rt->I_prev_imag[i] = rt->I_imag[i];
+		rt->I_phase_prev[i] = rt->I_phase[i];
+	}
+
+	typedef bool (*step_fn)(const iwt_runtime_t, const iwt_config_t);
+	step_fn steps[] = {
+		frozen_generate_uncertainty_cpu,   // Gleichung (P.3), Term 4
+		frozen_run_apply_fluctuations,	   // Gleichung (P.3), Term 4
+		frozen_run_apply_redshift_damping, // Anhang Q (Energiesenke)
+		run_flux_calculation,			   // Gleichung (P.3), Term 1+3
+		run_q_calculation,				   // Gleichung (P.3), Term 2
+		run_update_info,				   // Gleichung (P.3)
+		run_compute_mass_charge			   // Kap. 3.3
+	};
+
+	for (size_t s = 0; s < sizeof(steps) / sizeof(steps[0]); s++)
+	{
+		if (!steps[s](rt, cfg))
+		{
+			return false;
+		}
+	}
+
+	// GPU-Sync
+	ocl_finish_frame(&rt->ocl);
+
+	// Masse/Ladung in Double-Buffer kopieren (fuer naechsten Frame)
+	memcpy(rt->mass_prev, rt->mass, cfg->N * sizeof(double));
+	memcpy(rt->charge_prev, rt->charge, cfg->N * sizeof(double));
+
+	return true;
+}
+
+/**
+ * CPU-Cluster-Arbeit: Erkennt und bewegt Cluster.
+ * Verwendet mass_prev/charge_prev (vom vorherigen Frame).
+ */
+void run_cpu_cluster_work(const iwt_runtime_t rt, const iwt_config_t cfg)
+{
+	// Temporäre Pointer-Switch: mass/charge zeigen auf prev für die Detektion
+	double* mass_save = rt->mass;
+	double* charge_save = rt->charge;
+	((iwt_runtime_t) rt)->mass = rt->mass_prev;
+	((iwt_runtime_t) rt)->charge = rt->charge_prev;
+
+	iwt_detect_clusters(rt, cfg);
+	iwt_move_clusters(rt, cfg, cfg->DT);
+
+	// Pointer zurücksetzen
+	((iwt_runtime_t) rt)->mass = mass_save;
+	((iwt_runtime_t) rt)->charge = charge_save;
+}

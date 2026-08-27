@@ -2,6 +2,7 @@
 
 #include "iwt.h"
 #include <gui/gui.h>
+#include <pthread.h>
 
 typedef struct iwt_gui_data
 {
@@ -76,4 +77,12 @@ typedef struct iwt_gui_data
 	// 2D/3D Modus
 	bool mode_2d;
 	int projection_plane; // 0=XY, 1=XZ, 2=YZ
+
+	// Multithreading: GPU-Worker + CPU-Cluster-Pipeline
+	pthread_t gpu_thread;
+	pthread_mutex_t gpu_mutex;
+	pthread_cond_t gpu_cond;
+	volatile bool gpu_ready;      // GPU hat Arbeit abgeschlossen
+	volatile bool gpu_start;      // Signal: GPU kann starten
+	volatile bool shutdown;       // Worker-Thread beenden
 }* iwt_gui_data_t;
