@@ -1216,22 +1216,6 @@ static void gui_gl_draw(iwt_gui_data_t data, size_t cluster_draw_count)
 	glBindBuffer(GL_ARRAY_BUFFER, data->gl_vbo_clusters);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr) (cluster_draw_count * 6 * sizeof(float)), data->cluster_points_buffer);
 	glBindVertexArray(data->gl_vao_clusters);
-
-	// Debug: Cluster-Positionen und Farben ausgeben
-	static int dbg = 0;
-	if (cluster_draw_count > 0 && dbg < 5)
-	{
-		fprintf(stderr, "CLUSTERS draw=%zu | ", cluster_draw_count);
-		for (size_t i = 0; i < cluster_draw_count && i < 4; i++)
-		{
-			float* p = &data->cluster_points_buffer[i * 6];
-			fprintf(stderr, "[%zu] pos=(%.3f,%.3f,%.3f) col=(%.3f,%.3f,%.3f) | ",
-				i, p[0], p[1], p[2], p[3], p[4], p[5]);
-		}
-		fprintf(stderr, "\n");
-		dbg++;
-	}
-
 	glDrawArrays(GL_POINTS, 0, (GLsizei) cluster_draw_count);
 
 	if (data->wave_segment_count > 0)
