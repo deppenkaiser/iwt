@@ -970,27 +970,14 @@ static void gui_gl_update_cluster_point(iwt_gui_data_t data, size_t idx, iwt_clu
 		brightness *= 0.2f;
 	}
 
-	if (cl->external)
-	{
-		// Externe Cluster (Mitglieder aus >= 2 Zellen, Dualnetz) violett
-		data->cluster_points_buffer[idx * 6 + 3] = 0.85f * brightness;
-		data->cluster_points_buffer[idx * 6 + 4] = 0.35f * brightness;
-		data->cluster_points_buffer[idx * 6 + 5] = brightness;
-		return;
-	}
-
-	if (charge_norm > 0.0f)
-	{
-		data->cluster_points_buffer[idx * 6 + 3] = brightness;
-		data->cluster_points_buffer[idx * 6 + 4] = 0.0f;
-		data->cluster_points_buffer[idx * 6 + 5] = 0.0f;
-	}
-	else
-	{
-		data->cluster_points_buffer[idx * 6 + 3] = 0.0f;
-		data->cluster_points_buffer[idx * 6 + 4] = 0.0f;
-		data->cluster_points_buffer[idx * 6 + 5] = brightness;
-	}
+	// Ladungsbasierte Farbkodierung: blau ← neutral (weiss) → rot
+	// charge_norm: -1.0 (max negativ) bis +1.0 (max positiv), 0.0 = neutral
+	float w = 1.0f - fabsf(charge_norm);  // Weiss-Anteil bei Ladung ~ 0
+	float r = charge_norm > 0.0f ? fabsf(charge_norm) : 0.0f;
+	float b = charge_norm < 0.0f ? fabsf(charge_norm) : 0.0f;
+	data->cluster_points_buffer[idx * 6 + 3] = brightness * (w + r);
+	data->cluster_points_buffer[idx * 6 + 4] = brightness * w;
+	data->cluster_points_buffer[idx * 6 + 5] = brightness * (w + b);
 }
 
 static size_t gui_gl_update_clusters(iwt_gui_data_t data)
