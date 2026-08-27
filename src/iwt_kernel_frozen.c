@@ -224,19 +224,15 @@ bool frozen_run_apply_redshift_damping(const iwt_runtime_t rt, const iwt_config_
 
 	// I-Arrays sind bereits auf dem Device (nach frozen_run_apply_fluctuations)
 	int N = (int) cfg->N;
-	double l0 = cfg->l0;
-	double D = cfg->D;
-	double L_Q0 = 2.0e46;  // Korrelationslänge des Q-Feldes (Kap. 12, Anhang J)
-	double delta = 1.0;    // Kopplungskonstante (iwt_kernel.c)
+	double alpha_0 = ALPHA_0;
+	double alpha_min = ALPHA_MIN;
 
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &rt->I_real_gpu);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &rt->I_imag_gpu);
 	clSetKernelArg(kernel, 2, sizeof(cl_mem), &rt->I_phase_gpu);
 	clSetKernelArg(kernel, 3, sizeof(int), &N);
-	clSetKernelArg(kernel, 4, sizeof(double), &l0);
-	clSetKernelArg(kernel, 5, sizeof(double), &D);
-	clSetKernelArg(kernel, 6, sizeof(double), &L_Q0);
-	clSetKernelArg(kernel, 7, sizeof(double), &delta);
+	clSetKernelArg(kernel, 4, sizeof(double), &alpha_0);
+	clSetKernelArg(kernel, 5, sizeof(double), &alpha_min);
 
 	size_t global = cfg->N;
 	size_t local = 64;

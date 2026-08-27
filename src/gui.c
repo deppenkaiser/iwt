@@ -68,44 +68,6 @@
 #include <pthread.h>
 
 /*
- * GPU-Worker-Thread für Pipeline-Parallelismus.
- * Führt die GPU-Pipeline aus und signalisiert Abschluss.
- */
-static void* gpu_worker_thread(void* arg)
-{
-	iwt_gui_data_t data = (iwt_gui_data_t) arg;
-
-	pthread_mutex_lock(&data->gpu_mutex);
-	while (!data->shutdown)
-	{
-		// Warte auf Start-Signal
-		while (!data->gpu_start && !data->shutdown)
-		{
-			pthread_cond_wait(&data->gpu_cond, &data->gpu_mutex);
-		}
-
-		if (data->shutdown)
-		{
-			break;
-		}
-
-		data->gpu_start = false;
-		pthread_mutex_unlock(&data->gpu_mutex);
-
-		// GPU-Pipeline ausführen
-		run_gpu_pipeline(&data->rt, &data->cfg);
-
-		// Signalisiere Abschluss
-		pthread_mutex_lock(&data->gpu_mutex);
-		data->gpu_ready = true;
-		pthread_cond_signal(&data->gpu_cond);
-	}
-
-	pthread_mutex_unlock(&data->gpu_mutex);
-	return NULL;
-}
-
-/*
  * adj_recompute_timeout - Debounce-Callback für Adjacency-Neuberechnung
  * Wird 100ms nach der letzten Wertänderung aufgerufen.
  */
@@ -460,14 +422,6 @@ static bool gui_application_startup(iwt_gui_data_t data)
 	if (is_ok)
 	{
 		gui_application_clear_arrays(data);
-
-		// Multithreading initialisieren
-		pthread_mutex_init(&data->gpu_mutex, NULL);
-		pthread_cond_init(&data->gpu_cond, NULL);
-		data->gpu_ready = false;
-		data->gpu_start = false;
-		data->shutdown = false;
-		pthread_create(&data->gpu_thread, NULL, gpu_worker_thread, data);
 	}
 	else
 	{
@@ -712,15 +666,6 @@ static bool gui_application_activate(gui_application_t core, iwt_gui_data_t data
 
 static bool gui_application_shutdown(iwt_gui_data_t data)
 {
-	// GPU-Worker-Thread beenden
-	data->shutdown = true;
-	pthread_mutex_lock(&data->gpu_mutex);
-	pthread_cond_signal(&data->gpu_cond);
-	pthread_mutex_unlock(&data->gpu_mutex);
-	pthread_join(data->gpu_thread, NULL);
-	pthread_mutex_destroy(&data->gpu_mutex);
-	pthread_cond_destroy(&data->gpu_cond);
-
 	deinitialize_gpu_data(&data->rt);
 	deinitialize_host_data(&data->rt);
 	ocl_deinitialize(&data->rt.ocl);
@@ -931,24 +876,7 @@ callback void gui_gl(gui_gl_t core, gui_event_t e)
 			break;
 		case GE_GL_RENDER:
 			{
-				// Multithreading: GPU-Pipeline starten, CPU-Cluster parallel
-				pthread_mutex_lock(&data->gpu_mutex);
-				data->gpu_ready = false;
-				data->gpu_start = true;
-				pthread_cond_signal(&data->gpu_cond);
-				pthread_mutex_unlock(&data->gpu_mutex);
-
-				// CPU: Cluster-Erkennung für vorherigen Frame (parallel zur GPU)
-				run_cpu_cluster_work(&data->rt, &data->cfg);
-
-				// Warte auf GPU-Abschluss
-				pthread_mutex_lock(&data->gpu_mutex);
-				while (!data->gpu_ready)
-				{
-					pthread_cond_wait(&data->gpu_cond, &data->gpu_mutex);
-				}
-				pthread_mutex_unlock(&data->gpu_mutex);
-
+				run_simulation_step(&data->rt, &data->cfg);
 				data->iter++;
 
 				// FPS messen (exponentiell glaetten)

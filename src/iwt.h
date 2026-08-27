@@ -125,10 +125,6 @@ typedef struct iwt_runtime
 	// Nachbarschafts-Adjazenz (K-Matrix-Schwellwert), N*N, statisch
 	bool* adjacency;
 
-	// Double-Buffered Masse/Ladung (fuer Pipeline-Parallelismus)
-	double* mass_prev;
-	double* charge_prev;
-
 	cl_mem mass_gpu;
 	cl_mem charge_gpu;
 	cl_mem I_real_gpu;

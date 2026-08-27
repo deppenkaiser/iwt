@@ -50,13 +50,6 @@ bool run_compute_mass_charge(const iwt_runtime_t rt, const iwt_config_t cfg);
 bool run_simulation_step(const iwt_runtime_t rt, const iwt_config_t cfg);
 
 // ============================================================================
-// GPU-PIPELINE (ohne Cluster-Erkennung, für Multithreading)
-// ============================================================================
-
-bool run_gpu_pipeline(const iwt_runtime_t rt, const iwt_config_t cfg);
-void run_cpu_cluster_work(const iwt_runtime_t rt, const iwt_config_t cfg);
-
-// ============================================================================
 // HAUPTSIMULATION
 // ============================================================================
 
