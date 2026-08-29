@@ -4,6 +4,10 @@
 > s. **`PROJECT_STATUS.md`** (Performance-Messung, Engpass-Analyse, abgeschlossene
 > Optimierungen, Konventionen). Die README unten dokumentiert Theorie/Numerik.
 
+## Wiki
+
+Dokumentation: [iwt – Referenzprojekt der Modul-Architektur](https://czybor.i234.me/wiki/sw-module/iwt/) (Quartz-Wiki)
+
 ## Formatierung:
 BasedOnStyle: LLVM
 BreakBeforeBraces: Allman
