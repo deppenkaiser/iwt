@@ -1,2 +1,4 @@
 build
 *.tex
+.cache
+compile_commands.json
